@@ -29,21 +29,22 @@ interface ApiResponse {
 
 const StarknetAgent = () => {
   const [input, setInput] = useState("");
-  const [responses, setResponses] = useState<AgentResponse[]>([]);
+  // Now we only store a single response instead of an array
+  const [currentResponse, setCurrentResponse] = useState<AgentResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const typeResponse = (response: AgentResponse, index: number) => {
+  const typeResponse = (response: AgentResponse) => {
     const text = response.text;
     let currentIndex = 0;
 
     const typingInterval = setInterval(() => {
-      setResponses((prevResponses) => {
-        const newResponses = [...prevResponses];
-        const currentResponse = { ...newResponses[index] };
-        currentResponse.text = text.slice(0, currentIndex + 1);
-        currentResponse.isTyping = currentIndex < text.length - 1;
-        newResponses[index] = currentResponse;
-        return newResponses;
+      setCurrentResponse((prevResponse) => {
+        if (!prevResponse) return prevResponse;
+        return {
+          ...prevResponse,
+          text: text.slice(0, currentIndex + 1),
+          isTyping: currentIndex < text.length - 1,
+        };
       });
 
       currentIndex++;
@@ -65,7 +66,7 @@ const StarknetAgent = () => {
       isTyping: true,
     };
 
-    setResponses((prev) => [...prev, newResponse]);
+    setCurrentResponse(newResponse);
 
     try {
       const response = await fetch("/api/agent/request", {
@@ -80,18 +81,13 @@ const StarknetAgent = () => {
       });
 
       const data: ApiResponse = await response.json();
-
-      // Get the text from the first output item
       const responseText = data.data.output[0].text.trim();
-      typeResponse({ ...newResponse, text: responseText }, responses.length);
+      typeResponse({ ...newResponse, text: responseText });
     } catch (error) {
-      typeResponse(
-        {
-          ...newResponse,
-          text: "Sorry, there was an error processing your request.",
-        },
-        responses.length,
-      );
+      typeResponse({
+        ...newResponse,
+        text: "Sorry, there was an error processing your request.",
+      });
       console.error("Error:", error);
     } finally {
       setIsLoading(false);
@@ -105,8 +101,10 @@ const StarknetAgent = () => {
         {/* Header */}
         <div className="flex items-center gap-3 md:gap-4">
           <Image
-            src="https://pbs.twimg.com/profile_images/1656626983617323010/xzIYc6hK_400x400.png"
+            src="/api/placeholder/32/32"
             alt="Starknet Logo"
+            width={32}
+            height={32}
             className="w-8 h-8 md:w-10 md:h-10 rounded-full"
           />
           <h1 className="text-xl md:text-2xl font-semibold text-white">
@@ -141,22 +139,17 @@ const StarknetAgent = () => {
               </Button>
             </form>
 
-            {/* Response History */}
-            <div className="space-y-2 md:space-y-3">
-              {responses.map((response) => (
-                <Alert
-                  key={response.timestamp}
-                  className="bg-neutral-800 border-neutral-700"
-                >
-                  <AlertDescription className="text-xs md:text-sm text-neutral-200 font-mono break-words">
-                    {response.text}
-                    {response.isTyping && (
-                      <span className="animate-pulse">▋</span>
-                    )}
-                  </AlertDescription>
-                </Alert>
-              ))}
-            </div>
+            {/* Single Response Display */}
+            {currentResponse && (
+              <Alert className="bg-neutral-800 border-neutral-700">
+                <AlertDescription className="text-xs md:text-sm text-neutral-200 font-mono break-words">
+                  {currentResponse.text}
+                  {currentResponse.isTyping && (
+                    <span className="animate-pulse">▋</span>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
           </CardContent>
         </Card>
       </div>
