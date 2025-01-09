@@ -1,7 +1,8 @@
-"use client"
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import React, { useState } from "react";
+import Image from "next/image";
+import { Send, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,16 +28,16 @@ interface ApiResponse {
 }
 
 const StarknetAgent = () => {
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [responses, setResponses] = useState<AgentResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const typeResponse = (response: AgentResponse, index: number) => {
     const text = response.text;
     let currentIndex = 0;
-    
+
     const typingInterval = setInterval(() => {
-      setResponses(prevResponses => {
+      setResponses((prevResponses) => {
         const newResponses = [...prevResponses];
         const currentResponse = { ...newResponses[index] };
         currentResponse.text = text.slice(0, currentIndex + 1);
@@ -57,41 +58,44 @@ const StarknetAgent = () => {
     if (!input.trim()) return;
 
     setIsLoading(true);
-    
+
     const newResponse = {
-      text: '',
+      text: "",
       timestamp: Date.now(),
-      isTyping: true
+      isTyping: true,
     };
 
-    setResponses(prev => [...prev, newResponse]);
-    
+    setResponses((prev) => [...prev, newResponse]);
+
     try {
-      const response = await fetch('/api/agent/request', {
-        method: 'POST',
+      const response = await fetch("/api/agent/request", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': 'test'
+          "Content-Type": "application/json",
+          "x-api-key": "test",
         },
         body: JSON.stringify({
-          request: input
-        })
+          request: input,
+        }),
       });
 
       const data: ApiResponse = await response.json();
-      
+
       // Get the text from the first output item
       const responseText = data.data.output[0].text.trim();
       typeResponse({ ...newResponse, text: responseText }, responses.length);
     } catch (error) {
-      typeResponse({ 
-        ...newResponse, 
-        text: 'Sorry, there was an error processing your request.' 
-      }, responses.length);
-      console.error('Error:', error);
+      typeResponse(
+        {
+          ...newResponse,
+          text: "Sorry, there was an error processing your request.",
+        },
+        responses.length,
+      );
+      console.error("Error:", error);
     } finally {
       setIsLoading(false);
-      setInput('');
+      setInput("");
     }
   };
 
@@ -100,12 +104,14 @@ const StarknetAgent = () => {
       <div className="w-full max-w-lg flex flex-col gap-4 md:gap-8">
         {/* Header */}
         <div className="flex items-center gap-3 md:gap-4">
-          <img 
+          <Image
             src="https://pbs.twimg.com/profile_images/1656626983617323010/xzIYc6hK_400x400.png"
-            alt="Starknet Logo" 
+            alt="Starknet Logo"
             className="w-8 h-8 md:w-10 md:h-10 rounded-full"
           />
-          <h1 className="text-xl md:text-2xl font-semibold text-white">Starknet Agent</h1>
+          <h1 className="text-xl md:text-2xl font-semibold text-white">
+            Starknet Agent
+          </h1>
         </div>
 
         {/* Main Interface */}
@@ -121,7 +127,7 @@ const StarknetAgent = () => {
                 placeholder="Type your request..."
                 disabled={isLoading}
               />
-              <Button 
+              <Button
                 type="submit"
                 size="sm"
                 className="absolute right-2 top-1/2 -translate-y-1/2 hover:scale-110 transition-all"
@@ -138,13 +144,11 @@ const StarknetAgent = () => {
             {/* Response History */}
             <div className="space-y-2 md:space-y-3">
               {responses.map((response) => (
-                <Alert 
-                  key={response.timestamp} 
+                <Alert
+                  key={response.timestamp}
                   className="bg-neutral-800 border-neutral-700"
                 >
-                  <AlertDescription 
-                    className="text-xs md:text-sm text-neutral-200 font-mono break-words"
-                  >
+                  <AlertDescription className="text-xs md:text-sm text-neutral-200 font-mono break-words">
                     {response.text}
                     {response.isTyping && (
                       <span className="animate-pulse">▋</span>

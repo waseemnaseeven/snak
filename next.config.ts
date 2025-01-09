@@ -2,16 +2,16 @@ import type { NextConfig } from "next";
 
 const nextConfig = {
   images: {
-    domains: ['pbs.twimg.com', 'kasar.io', 'github.com'],
+    domains: ["pbs.twimg.com", "kasar.io", "github.com"],
   },
   async rewrites() {
     return [
       {
-        source: '/api/:path*',
-        destination: 'http://localhost:3001/api/:path*'
-      }
-    ]
-  }
-}
+        source: "/api/:path*",
+        destination: "http://localhost:3001/api/:path*",
+      },
+    ];
+  },
+};
 
 export default nextConfig;

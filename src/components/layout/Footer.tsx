@@ -1,7 +1,7 @@
-import React from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { BsTelegram, BsTwitter, BsGithub } from 'react-icons/bs';
+import React from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { BsTelegram, BsTwitter, BsGithub } from "react-icons/bs";
 
 const Footer = () => {
   return (
@@ -11,16 +11,16 @@ const Footer = () => {
           {/* Column 1 - KasarLabs Logo and Terms */}
           <div className="flex flex-col space-y-4">
             <div className="w-[125px]">
-              <Image 
+              <Image
                 src="https://github.com/KasarLabs/brand/blob/main/kasar/logo/KasarWhiteLogo.png?raw=true"
-                width={125} 
-                height={40} 
-                alt="kasarlabs" 
+                width={125}
+                height={40}
+                alt="kasarlabs"
                 className="dark:invert"
               />
             </div>
             <div className="text-neutral-400 text-sm flex flex-wrap gap-1">
-              <a 
+              <a
                 href="https://pay.kasar.io/pages/terms-and-conditions"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -29,7 +29,7 @@ const Footer = () => {
                 Terms
               </a>
               <span>.</span>
-              <a 
+              <a
                 href="https://pay.kasar.io/pages/general-conditions-of-sale"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -38,7 +38,7 @@ const Footer = () => {
                 Conditions
               </a>
               <span>.</span>
-              <a 
+              <a
                 href="https://pay.kasar.io/pages/legal-information"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -54,8 +54,8 @@ const Footer = () => {
             <h3 className="text-white font-semibold mb-4">Resources</h3>
             <ul className="space-y-2">
               <li>
-                <a 
-                  href="https://www.starknet.io" 
+                <a
+                  href="https://www.starknet.io"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-neutral-400 hover:text-white text-sm transition-colors"
@@ -64,7 +64,7 @@ const Footer = () => {
                 </a>
               </li>
               <li>
-                <a 
+                <a
                   href="https://docs.starknet.io"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -80,26 +80,35 @@ const Footer = () => {
           <div className="sm:mt-0">
             <h3 className="text-white font-semibold mb-4">Contact us</h3>
             <div className="flex space-x-4">
-              <Link 
-                href="https://twitter.com/kasarlabs" 
-                target="_blank" 
+              <Link
+                href="https://twitter.com/kasarlabs"
+                target="_blank"
                 className="text-neutral-400 hover:text-white transition-colors"
               >
-                <BsTwitter size={24} className="sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8" />
+                <BsTwitter
+                  size={24}
+                  className="sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8"
+                />
               </Link>
-              <Link 
-                href="https://t.me/+jZZuOamlUM5lNWNk" 
-                target="_blank" 
+              <Link
+                href="https://t.me/+jZZuOamlUM5lNWNk"
+                target="_blank"
                 className="text-neutral-400 hover:text-white transition-colors"
               >
-                <BsTelegram size={24} className="sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8" />
+                <BsTelegram
+                  size={24}
+                  className="sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8"
+                />
               </Link>
-              <Link 
-                href="https://github.com/kasarlabs" 
-                target="_blank" 
+              <Link
+                href="https://github.com/kasarlabs"
+                target="_blank"
                 className="text-neutral-400 hover:text-white transition-colors"
               >
-                <BsGithub size={24} className="sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8" />
+                <BsGithub
+                  size={24}
+                  className="sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8"
+                />
               </Link>
             </div>
           </div>

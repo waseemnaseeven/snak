@@ -1,8 +1,9 @@
-"use client"
+"use client";
 
-import React, { useState } from 'react';
-import Link from 'next/link';
-import { Menu, X } from 'lucide-react';
+import React, { useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { Menu, X } from "lucide-react";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -18,9 +19,9 @@ const Header = () => {
           {/* Logo */}
           <div className="flex items-center">
             <Link href="https://kasar.io" className="flex items-center">
-              <img 
+              <Image
                 src="https://kasar.io/_next/image?url=%2F_next%2Fstatic%2Fmedia%2FkasarLogo.0513044c.png&w=640&q=75"
-                alt="Logo" 
+                alt="Logo"
                 className="w-11 h-11 rounded-full"
               />
             </Link>
@@ -28,19 +29,19 @@ const Header = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
-            <Link 
-              href="/about" 
+            <Link
+              href="/about"
               className="text-gray-300 hover:text-white font-medium text-lg hover:scale-105 transition-all"
             >
               About
             </Link>
-            <Link 
-              href="/docs" 
+            <Link
+              href="/docs"
               className="text-gray-300 hover:text-white font-medium text-lg hover:scale-105 transition-all"
             >
               Docs
             </Link>
-            <a 
+            <a
               href="https://github.com/kasarlabs/starknet-agent-kit"
               target="_blank"
               rel="noopener noreferrer"
@@ -51,7 +52,7 @@ const Header = () => {
           </div>
 
           {/* Mobile Menu Button */}
-          <button 
+          <button
             className="md:hidden p-2 text-gray-300 hover:text-white"
             onClick={toggleMenu}
             aria-label="Toggle menu"
@@ -63,19 +64,19 @@ const Header = () => {
         {/* Mobile Navigation */}
         {isMenuOpen && (
           <div className="md:hidden absolute top-20 left-0 right-0 bg-neutral-900 border-b border-neutral-800 py-4 px-6 space-y-4">
-            <Link 
-              href="/about" 
+            <Link
+              href="/about"
               className="block text-gray-300 hover:text-white font-medium text-lg hover:bg-neutral-800 py-2 px-4 rounded-lg transition-all"
             >
               About
             </Link>
-            <Link 
-              href="/docs" 
+            <Link
+              href="/docs"
               className="block text-gray-300 hover:text-white font-medium text-lg hover:bg-neutral-800 py-2 px-4 rounded-lg transition-all"
             >
               Docs
             </Link>
-            <a 
+            <a
               href="https://github.com/kasarlabs/starknet-agent-kit"
               target="_blank"
               rel="noopener noreferrer"
