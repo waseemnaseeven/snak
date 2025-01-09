@@ -1,48 +1,90 @@
-import React from 'react';
+"use client"
+
+import React, { useState } from 'react';
 import Link from 'next/link';
+import { Menu, X } from 'lucide-react';
 
 const Header = () => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const toggleMenu = () => {
+    setIsMenuOpen(!isMenuOpen);
+  };
+
   return (
-    <header className="w-full bg-neutral-900 border-b border-neutral-800">
-      <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16">
+    <header className="w-full">
+      <nav className="h-20 px-4 md:px-6">
         <div className="flex items-center justify-between h-full">
-          <div className="flex items-center gap-4">
-            <img 
-              src="https://pbs.twimg.com/profile_images/1656626983617323010/xzIYc6hK_400x400.png" 
-              alt="Starknet Logo" 
-              className="w-8 h-8 rounded-full"
-            />
-            <Link 
-              href="/" 
-              className="text-white font-semibold text-lg hover:text-blue-400 transition-colors"
-            >
-              Starknet Agent
+          {/* Logo */}
+          <div className="flex items-center">
+            <Link href="https://kasar.io" className="flex items-center">
+              <img 
+                src="https://kasar.io/_next/image?url=%2F_next%2Fstatic%2Fmedia%2FkasarLogo.0513044c.png&w=640&q=75"
+                alt="Logo" 
+                className="w-11 h-11 rounded-full"
+              />
             </Link>
           </div>
-          
-          <div className="flex items-center gap-6">
+
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center gap-8">
             <Link 
               href="/about" 
-              className="text-neutral-300 hover:text-white transition-colors"
+              className="text-gray-300 hover:text-white font-medium text-lg hover:scale-105 transition-all"
             >
               About
             </Link>
             <Link 
               href="/docs" 
-              className="text-neutral-300 hover:text-white transition-colors"
+              className="text-gray-300 hover:text-white font-medium text-lg hover:scale-105 transition-all"
             >
               Docs
             </Link>
             <a 
-              href="https://github.com/yourusername/starknet-agent"
+              href="https://github.com/kasarlabs/starknet-agent-kit"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-neutral-300 hover:text-white transition-colors"
+              className="text-gray-300 hover:text-white font-medium text-lg hover:scale-105 transition-all"
             >
               GitHub
             </a>
           </div>
+
+          {/* Mobile Menu Button */}
+          <button 
+            className="md:hidden p-2 text-gray-300 hover:text-white"
+            onClick={toggleMenu}
+            aria-label="Toggle menu"
+          >
+            {isMenuOpen ? <X size={28} /> : <Menu size={28} />}
+          </button>
         </div>
+
+        {/* Mobile Navigation */}
+        {isMenuOpen && (
+          <div className="md:hidden absolute top-20 left-0 right-0 bg-neutral-900 border-b border-neutral-800 py-4 px-6 space-y-4">
+            <Link 
+              href="/about" 
+              className="block text-gray-300 hover:text-white font-medium text-lg hover:bg-neutral-800 py-2 px-4 rounded-lg transition-all"
+            >
+              About
+            </Link>
+            <Link 
+              href="/docs" 
+              className="block text-gray-300 hover:text-white font-medium text-lg hover:bg-neutral-800 py-2 px-4 rounded-lg transition-all"
+            >
+              Docs
+            </Link>
+            <a 
+              href="https://github.com/kasarlabs/starknet-agent-kit"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-gray-300 hover:text-white font-medium text-lg hover:bg-neutral-800 py-2 px-4 rounded-lg transition-all"
+            >
+              GitHub
+            </a>
+          </div>
+        )}
       </nav>
     </header>
   );
