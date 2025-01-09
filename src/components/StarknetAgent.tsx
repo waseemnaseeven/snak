@@ -101,7 +101,7 @@ const StarknetAgent = () => {
         {/* Header */}
         <div className="flex items-center gap-3 md:gap-4">
           <Image
-            src="/api/placeholder/32/32"
+            src="https://pbs.twimg.com/profile_images/1656626983617323010/xzIYc6hK_400x400.png"
             alt="Starknet Logo"
             width={32}
             height={32}
