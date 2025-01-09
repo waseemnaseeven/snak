@@ -52,7 +52,7 @@ const StarknetAgent = () => {
       if (currentIndex >= text.length) {
         clearInterval(typingInterval);
       }
-    }, 30);
+    }, 10);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -97,8 +97,8 @@ const StarknetAgent = () => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-theme(spacing.20))] bg-neutral-950 text-neutral-50 flex flex-col items-center px-4 py-6 md:py-12 lg:py-16">
-      <div className="w-full max-w-lg mx-auto flex flex-col gap-4 md:gap-8">
+    <div className="min-h-screen bg-neutral-950 text-neutral-50 flex items-center justify-center px-4">
+      <div className="w-full max-w-lg -mt-32 flex flex-col gap-4 md:gap-8">
         {/* Header with responsive spacing and sizing */}
         <div className="flex items-center gap-3 md:gap-4 px-2 md:px-0">
           <div className="relative w-8 h-8 md:w-10 md:h-10">

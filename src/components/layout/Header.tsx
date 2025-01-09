@@ -23,6 +23,8 @@ const Header = () => {
                 src="https://kasar.io/_next/image?url=%2F_next%2Fstatic%2Fmedia%2FkasarLogo.0513044c.png&w=640&q=75"
                 alt="Logo"
                 className="w-11 h-11 rounded-full"
+                width={44}
+                height={44}
               />
             </Link>
           </div>
