@@ -29,8 +29,9 @@ interface ApiResponse {
 
 const StarknetAgent = () => {
   const [input, setInput] = useState("");
-  // Now we only store a single response instead of an array
-  const [currentResponse, setCurrentResponse] = useState<AgentResponse | null>(null);
+  const [currentResponse, setCurrentResponse] = useState<AgentResponse | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(false);
 
   const typeResponse = (response: AgentResponse) => {
@@ -96,32 +97,33 @@ const StarknetAgent = () => {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-50 flex flex-col items-center p-4 md:pt-48 pt-8">
-      <div className="w-full max-w-lg flex flex-col gap-4 md:gap-8">
-        {/* Header */}
-        <div className="flex items-center gap-3 md:gap-4">
-          <Image
-            src="https://pbs.twimg.com/profile_images/1656626983617323010/xzIYc6hK_400x400.png"
-            alt="Starknet Logo"
-            width={32}
-            height={32}
-            className="w-8 h-8 md:w-10 md:h-10 rounded-full"
-          />
-          <h1 className="text-xl md:text-2xl font-semibold text-white">
+    <div className="min-h-[calc(100vh-theme(spacing.20))] bg-neutral-950 text-neutral-50 flex flex-col items-center px-4 py-6 md:py-12 lg:py-16">
+      <div className="w-full max-w-lg mx-auto flex flex-col gap-4 md:gap-8">
+        {/* Header with responsive spacing and sizing */}
+        <div className="flex items-center gap-3 md:gap-4 px-2 md:px-0">
+          <div className="relative w-8 h-8 md:w-10 md:h-10">
+            <Image
+              src="https://pbs.twimg.com/profile_images/1656626983617323010/xzIYc6hK_400x400.png"
+              alt="Starknet Logo"
+              fill
+              className="rounded-full object-cover"
+            />
+          </div>
+          <h1 className="text-lg md:text-2xl font-semibold text-white">
             Starknet Agent
           </h1>
         </div>
 
-        {/* Main Interface */}
+        {/* Main Interface with improved mobile spacing */}
         <Card className="w-full bg-neutral-900 border-neutral-800 shadow-xl">
           <CardContent className="p-3 md:p-6 space-y-4 md:space-y-6">
-            {/* Input Form */}
+            {/* Input Form with better mobile handling */}
             <form onSubmit={handleSubmit} className="relative">
               <Input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                className="w-full bg-neutral-800 border-neutral-700 text-neutral-100 pr-12 focus:ring-2 focus:ring-blue-500 text-sm md:text-base"
+                className="w-full bg-neutral-800 border-neutral-700 text-neutral-100 pr-12 focus:ring-2 focus:ring-blue-500 text-sm md:text-base py-2 md:py-3"
                 placeholder="Type your request..."
                 disabled={isLoading}
               />
@@ -139,13 +141,13 @@ const StarknetAgent = () => {
               </Button>
             </form>
 
-            {/* Single Response Display */}
+            {/* Response Display with improved readability on mobile */}
             {currentResponse && (
               <Alert className="bg-neutral-800 border-neutral-700">
-                <AlertDescription className="text-xs md:text-sm text-neutral-200 font-mono break-words">
+                <AlertDescription className="text-xs md:text-sm text-neutral-200 font-mono break-words leading-relaxed">
                   {currentResponse.text}
                   {currentResponse.isTyping && (
-                    <span className="animate-pulse">▋</span>
+                    <span className="animate-pulse ml-1">▋</span>
                   )}
                 </AlertDescription>
               </Alert>
