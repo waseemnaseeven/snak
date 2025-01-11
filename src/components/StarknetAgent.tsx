@@ -14,6 +14,87 @@ interface AgentResponse {
   isTyping: boolean;
 }
 
+const formatHash = (hash: string) => {
+  if (hash.length > 16) {
+    return `${hash.slice(0, 8)}...${hash.slice(-8)}`;
+  }
+  return hash;
+};
+
+const formatStarkscanUrl = (url: string) => {
+  try {
+    const urlObj = new URL(url);
+    if (urlObj.hostname === 'starkscan.com' && urlObj.pathname.startsWith('/tx/')) {
+      const hash = urlObj.pathname.split('/tx/')[1];
+      if (hash && hash.length > 16) {
+        return {
+          displayText: `Starkscan: ${hash.slice(0, 6)}...${hash.slice(-6)}`,
+          fullUrl: url
+        };
+      }
+    }
+  } catch (e) {
+    // Invalid URL, return as-is
+  }
+  return { displayText: url, fullUrl: url };
+};
+
+const TextWithLinks = ({ text }: { text: string }) => {
+  // Regular expression for matching URLs (including line breaks)
+  const urlRegex = /(https?:\/\/\S+)/g;
+  // Regular expression for matching hex hashes
+  const hashRegex = /\b([a-fA-F0-9]{32,})\b/g;
+
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  // Combined regex to match both URLs and hashes
+  const combinedRegex = new RegExp(`${urlRegex.source}|${hashRegex.source}`, 'g');
+
+  while ((match = combinedRegex.exec(text)) !== null) {
+    // Add text before the match
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+
+    const matchedText = match[0];
+    
+    // Check if it's a URL
+    if (matchedText.startsWith('http')) {
+      const { displayText, fullUrl } = formatStarkscanUrl(matchedText);
+      parts.push(
+        <a
+          key={match.index}
+          href={fullUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-400 hover:text-blue-300 underline"
+        >
+          {displayText}
+        </a>
+      );
+    } 
+    // Otherwise it's a hash
+    else {
+      parts.push(
+        <span key={match.index} className="font-mono">
+          {formatHash(matchedText)}
+        </span>
+      );
+    }
+
+    lastIndex = match.index + matchedText.length;
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return <>{parts}</>;
+};
+
 const StarknetAgent = () => {
   const [input, setInput] = useState("");
   const [currentResponse, setCurrentResponse] = useState<AgentResponse | null>(null);
@@ -41,10 +122,15 @@ const StarknetAgent = () => {
       const data = JSON.parse(jsonString);
       if (data.output?.[0]?.text) {
         // Remove JSON syntax and clean up the text
-        const cleanText = data.output[0].text
+        let cleanText = data.output[0].text
           .replace(/\{"input":.*?"output":\[.*?"text":"|"\]\}$/g, '') // Remove JSON wrapper
           .replace(/\\n/g, '\n') // Convert \n to actual newlines
-          .replace(/\\"/g, '"'); // Convert escaped quotes
+          .replace(/\\"/g, '"') // Convert escaped quotes
+          .replace(/"\}\}\]?\}?$/, '') // Remove trailing brackets and braces
+          .replace(/\}\}\]?\}?$/, ''); // Remove unquoted trailing brackets and braces
+        
+        // Clean up any remaining JSON artifacts at the end
+        cleanText = cleanText.replace(/["\]}]+$/, '');
         return cleanText;
       }
       return jsonString;
@@ -170,7 +256,7 @@ const StarknetAgent = () => {
             {currentResponse && (
               <Alert className="bg-neutral-800 border-neutral-700">
                 <AlertDescription className="text-xs md:text-sm text-neutral-200 font-mono whitespace-pre-wrap break-words leading-relaxed">
-                  {showLoadingMessage ? "Processing..." : currentResponse.text}
+                  <TextWithLinks text={showLoadingMessage ? "Processing..." : currentResponse.text} />
                   {(currentResponse.isTyping || isLoading) && (
                     <span className="animate-pulse ml-1">▋</span>
                   )}
