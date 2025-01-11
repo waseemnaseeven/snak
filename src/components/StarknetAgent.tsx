@@ -1,6 +1,6 @@
-"use client";
+"use client"
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { Send, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -14,25 +14,44 @@ interface AgentResponse {
   isTyping: boolean;
 }
 
-interface ApiResponse {
-  message: string;
-  statusCode: number;
-  data: {
-    input: string;
-    output: Array<{
-      index: number;
-      type: string;
-      text: string;
-    }>;
-  };
-}
-
 const StarknetAgent = () => {
   const [input, setInput] = useState("");
-  const [currentResponse, setCurrentResponse] = useState<AgentResponse | null>(
-    null,
-  );
+  const [currentResponse, setCurrentResponse] = useState<AgentResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showLoadingMessage, setShowLoadingMessage] = useState(false);
+
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    if (isLoading) {
+      timeoutId = setTimeout(() => {
+        setShowLoadingMessage(true);
+      }, 5000);
+    } else {
+      setShowLoadingMessage(false);
+    }
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [isLoading]);
+
+  const formatResponse = (jsonString: string) => {
+    try {
+      const data = JSON.parse(jsonString);
+      if (data.output?.[0]?.text) {
+        // Remove JSON syntax and clean up the text
+        const cleanText = data.output[0].text
+          .replace(/\{"input":.*?"output":\[.*?"text":"|"\]\}$/g, '') // Remove JSON wrapper
+          .replace(/\\n/g, '\n') // Convert \n to actual newlines
+          .replace(/\\"/g, '"'); // Convert escaped quotes
+        return cleanText;
+      }
+      return jsonString;
+    } catch {
+      return jsonString;
+    }
+  };
 
   const typeResponse = (response: AgentResponse) => {
     const text = response.text;
@@ -60,6 +79,7 @@ const StarknetAgent = () => {
     if (!input.trim()) return;
 
     setIsLoading(true);
+    setShowLoadingMessage(false);
 
     const newResponse = {
       text: "",
@@ -81,29 +101,37 @@ const StarknetAgent = () => {
         }),
       });
 
-      const data: ApiResponse = await response.json();
-      const responseText = data.data.output[0].text.trim();
-      typeResponse({ ...newResponse, text: responseText });
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const formattedText = formatResponse(JSON.stringify(data));
+      typeResponse({ ...newResponse, text: formattedText });
+
     } catch (error) {
+      console.error("Error details:", error);
+      const errorMessage = process.env.NODE_ENV === 'development' 
+        ? `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        : "Sorry, there was an error processing your request. Please try again.";
+      
       typeResponse({
         ...newResponse,
-        text: "Sorry, there was an error processing your request.",
+        text: errorMessage,
       });
-      console.error("Error:", error);
     } finally {
       setIsLoading(false);
       setInput("");
     }
   };
-
+  
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-50 flex items-center justify-center px-4">
       <div className="w-full max-w-lg -mt-32 flex flex-col gap-4 md:gap-8">
-        {/* Header with responsive spacing and sizing */}
         <div className="flex items-center gap-3 md:gap-4 px-2 md:px-0">
           <div className="relative w-8 h-8 md:w-10 md:h-10">
             <Image
-              src="https://pbs.twimg.com/profile_images/1656626983617323010/xzIYc6hK_400x400.png"
+              src="https://pbs.twimg.com/profile_images/1834202903189618688/N4J8emeY_400x400.png"
               alt="Starknet Logo"
               fill
               className="rounded-full object-cover"
@@ -114,10 +142,8 @@ const StarknetAgent = () => {
           </h1>
         </div>
 
-        {/* Main Interface with improved mobile spacing */}
         <Card className="w-full bg-neutral-900 border-neutral-800 shadow-xl">
           <CardContent className="p-3 md:p-6 space-y-4 md:space-y-6">
-            {/* Input Form with better mobile handling */}
             <form onSubmit={handleSubmit} className="relative">
               <Input
                 type="text"
@@ -141,12 +167,11 @@ const StarknetAgent = () => {
               </Button>
             </form>
 
-            {/* Response Display with improved readability on mobile */}
             {currentResponse && (
               <Alert className="bg-neutral-800 border-neutral-700">
-                <AlertDescription className="text-xs md:text-sm text-neutral-200 font-mono break-words leading-relaxed">
-                  {currentResponse.text}
-                  {currentResponse.isTyping && (
+                <AlertDescription className="text-xs md:text-sm text-neutral-200 font-mono whitespace-pre-wrap break-words leading-relaxed">
+                  {showLoadingMessage ? "Processing..." : currentResponse.text}
+                  {(currentResponse.isTyping || isLoading) && (
                     <span className="animate-pulse ml-1">▋</span>
                   )}
                 </AlertDescription>
