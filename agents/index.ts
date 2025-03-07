@@ -19,14 +19,9 @@ export { JsonConfig, load_json_config } from './src/jsonConfig.js';
 
 // Common exports
 export {
-  BaseUtilityClass,
-  TransactionMonitor,
-  ContractInteractor,
   TwitterInterface,
   TelegramInterface,
   IAgent,
-  ContractDeployResult,
-  TransactionResult,
   AiConfig,
 } from './common/index.js';
 

@@ -10,7 +10,7 @@ import { getRouteFibrous } from '../actions/fetchRoute.js';
 
 export const registerTools = (StarknetToolRegistry: StarknetTool[]) => {
   StarknetToolRegistry.push({
-    name: 'swap',
+    name: 'fibrous_swap',
     plugins: 'fibrous',
     description: 'Swap a token for another token',
     schema: swapSchema,
@@ -18,7 +18,7 @@ export const registerTools = (StarknetToolRegistry: StarknetTool[]) => {
   });
 
   StarknetToolRegistry.push({
-    name: 'batch_swap',
+    name: 'fibrous_batch_swap',
     plugins: 'fibrous',
     description: 'Swap multiple tokens for another token',
     schema: batchSwapSchema,
@@ -26,7 +26,7 @@ export const registerTools = (StarknetToolRegistry: StarknetTool[]) => {
   });
 
   StarknetToolRegistry.push({
-    name: 'route',
+    name: 'fibrous_get_route',
     plugins: 'fibrous',
     description: 'Get a specific route for swapping tokens',
     schema: routeSchema,
