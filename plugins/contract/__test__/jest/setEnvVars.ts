@@ -15,6 +15,7 @@ export const createMockStarknetAgent = (): StarknetAgentInterface => {
     interval: 1000,
     chat_id: 'mock_chat_id',
     internal_plugins: [],
+    memory: false,
   };
 
   return {
@@ -50,6 +51,7 @@ export const createMockInvalidStarknetAgent = (): StarknetAgentInterface => {
     interval: 1000,
     chat_id: 'mock_chat_id',
     internal_plugins: [],
+    memory: false,
   };
 
   return {

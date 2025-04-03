@@ -27,7 +27,7 @@
   "interval": 30000,
   "autonomous": false,
   "chat_id": "sak_guide",
-  "mcp": true,
+  "mcp": false,
   "external_plugins": [],
   "internal_plugins": [
     "argent",
@@ -36,12 +36,12 @@
     "braavos",
     "openzeppelin",
     "rpc",
-    "transaction",
     "avnu",
     "erc20",
     "erc721",
     "scarb",
     "contract",
     "atlantic"
-  ]
+  ],
+  "memory":true
 }

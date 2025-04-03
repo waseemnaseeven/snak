@@ -1,4 +1,4 @@
-import { tool } from '@langchain/core/tools';
+import { DynamicStructuredTool, tool } from '@langchain/core/tools';
 import { RpcProvider } from 'starknet';
 import { JsonConfig } from '../jsonConfig.js';
 import { PostgresAdaptater } from '../databases/postgresql/src/database.js';
@@ -49,7 +49,7 @@ export interface StarknetAgentInterface {
  * @property {string} responseFormat - The response format for the tool
  * @property {(agent: StarknetAgentInterface, params: any, plugins_manager?: any) => Promise<unknown>} execute - Function to execute the tool
  */
-export interface StarknetTool<P = any> {
+export interface StarknetTool<P = unknown> {
   name: string;
   plugins: string;
   description: string;
@@ -151,7 +151,7 @@ export const registerTools = async (
 export const createAllowedTools = async (
   agent: StarknetAgentInterface,
   allowed_tools: string[]
-) => {
+): Promise<DynamicStructuredTool<any>[]> => {
   if (allowed_tools.length === 0) {
     logger.warn('No tools allowed');
   }

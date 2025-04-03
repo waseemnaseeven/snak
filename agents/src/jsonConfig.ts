@@ -41,6 +41,7 @@ export interface JsonConfig {
   external_plugins?: string[];
   mcp?: boolean;
   autonomous?: boolean;
+  memory: boolean;
 }
 
 /**
@@ -232,7 +233,7 @@ const checkParseJson = async (
     );
 
     // Create config object
-    let jsonconfig: JsonConfig = {
+    const jsonconfig: JsonConfig = {
       prompt: systemMessagefromjson,
       name: json.name,
       interval: json.interval,
@@ -244,6 +245,7 @@ const checkParseJson = async (
       external_plugins: Array.isArray(json.external_plugins)
         ? json.external_plugins
         : [],
+      memory: json.memory || false,
       mcp: json.mcp || false,
     };
 
@@ -258,7 +260,7 @@ const checkParseJson = async (
         `⚠️ Ensure your environment variables are set correctly according to your config/agent.json file.`
       )
     );
-    logger.error('Failed to parse config:');
+    logger.error('Failed to parse config : ', error);
     return undefined;
   }
 };
