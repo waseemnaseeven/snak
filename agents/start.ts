@@ -18,8 +18,6 @@ import logger from './src/logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-dotenv.config({ path: path.join(__dirname, '../.env') });
-
 const load_command = async (): Promise<string> => {
   const argv = await yargs(hideBin(process.argv))
     .option('agent', {
@@ -42,11 +40,11 @@ const createLink = (text: string, url: string): string =>
   `\u001B]8;;${url}\u0007${text}\u001B]8;;\u0007`;
 
 const logo = `${chalk.cyan(`
-   _____             __  
+   _____             __
   / ___/____  ____ _/ /__
   \\__ \\/ __ \\/ __ \`/ //_/
- ___/ / / / / /_/ / ,<   
-/____/_/ /_/\\__,_/_/|_|  
+ ___/ / / / / /_/ / ,<
+/____/_/ /_/\\__,_/_/|_|
 
 ${chalk.dim('v0.0.11 by ')}${createLink('Kasar', 'https://kasar.io')}`)}`;
 

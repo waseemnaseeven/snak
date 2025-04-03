@@ -3,6 +3,7 @@ import { createAgent } from './agent.js';
 import { RpcProvider } from 'starknet';
 import { createAutonomousAgent } from './autonomousAgents.js';
 import { JsonConfig } from './jsonConfig.js';
+import { HumanMessage } from '@langchain/core/messages';
 import { PostgresAdaptater } from './databases/postgresql/src/database.js';
 import { PostgresDatabasePoolInterface } from './databases/postgresql/src/interfaces/interfaces.js';
 import logger from './logger.js';
@@ -198,8 +199,20 @@ export class StarknetAgent implements IAgent {
         new_params
       ).connectDatabase();
       if (!new_database_connection) {
-        throw new Error(
-          'Error when trying to connect to your Postgres database'
+        throw new Error('Error when trying to connect to your database');
+      }
+      try {
+        // Assuming there's a public method like query() or execute() in PostgresAdaptater
+        await new_database_connection.query(
+          'CREATE EXTENSION IF NOT EXISTS vector;'
+        );
+      } catch (extError) {
+        console.error(
+          `Failed to create vector extension in database ${database_name}:`,
+          extError
+        );
+        console.warn(
+          'Vector functionality may not work properly. Make sure pgvector is installed.'
         );
       }
       this.database.push(new_database_connection);
@@ -356,9 +369,15 @@ export class StarknetAgent implements IAgent {
       throw new Error(`Need to be in agent mode to execute`);
     }
 
-    const result = await this.agentReactExecutor.invoke({
-      messages: input,
-    });
+    const result = await this.agentReactExecutor.invoke(
+      {
+        messages: [new HumanMessage(input)],
+      },
+      {
+        recursionLimit: 15,
+        configurable: { thread_id: this.agentconfig?.chat_id as string },
+      }
+    );
 
     return result.messages[result.messages.length - 1].content;
   }

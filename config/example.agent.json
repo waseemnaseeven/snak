@@ -21,5 +21,6 @@
   "external_plugins": [
     "Your first external plugin",
     "Your second external plugin"
-  ]
+  ],
+  "memory" : "Enable agent's memory"
 }
