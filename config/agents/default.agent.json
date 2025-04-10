@@ -41,7 +41,8 @@
     "erc721",
     "scarb",
     "contract",
-    "atlantic"
+    "atlantic",
+    "cairocoder"
   ],
-  "memory":true
+  "memory": true
 }
