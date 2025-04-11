@@ -90,19 +90,24 @@ POSTGRES_PORT="YOUR_POSTGRES_PORT"
   "interval": "Your agent interval beetween each transaction of the Agent in ms,",
   "chat_id": "Your Agent Chat-id for isolating memory",
   "autonomous": "Your agent is autonomous or not",
-  "mcp": "Your agent can use mcp or not",
-  "internal_plugins": [
-    "Your first internal plugin",
-    "Your second internal plugin"
-  ],
-  "external_plugins": [
-    "Your first external plugin",
-    "Your second external plugin"
-  ]
+  "plugins": ["Your first plugin", "Your second plugin"],
+  "mcpServers": {
+    "nxp_server_example": {
+      "command": "npx",
+      "args": ["-y", "@npm_package_example/npx_server_example"],
+      "env": {
+        "API_KEY": "YOUR_API_KEY"
+      }
+    },
+    "local_server_example": {
+      "command": "node",
+      "args": ["node /path/to/local_server/dist/index.js"]
+    }
+  }
 }
 ```
 
-You can simply create your own agent configuration using our tool on [starkagent](https://www.starkagent.ai/create-agent)
+You can simply create your own agent configuration using our tool on [snakagent](https://www.snakagent.com/create-agent)
 
 ## Usage
 
