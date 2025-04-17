@@ -73,6 +73,15 @@ export class StarknetToolRegistry {
 
   /**
    * @static
+   * @function clearTools
+   * @description Clears all registered tools
+   */
+  static clearTools(): void {
+    this.tools = [];
+  }
+
+  /**
+   * @static
    * @async
    * @function createAllowedTools
    * @description Creates allowed tools
@@ -84,6 +93,9 @@ export class StarknetToolRegistry {
     agent: StarknetAgentInterface,
     allowed_tools: string[]
   ) {
+    console.log('ALLOOOOO allowed_tools', allowed_tools);
+    // Clear existing tools before registering new ones
+    this.clearTools();
     await registerTools(agent, allowed_tools, this.tools);
     return this.tools.map(({ name, description, schema, execute }) =>
       tool(async (params: any) => execute(agent, params), {
