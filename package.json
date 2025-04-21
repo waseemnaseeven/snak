@@ -35,6 +35,7 @@
     "start:test": "turbo test",
     "test": "./scripts/run_all_test.sh",
     "dev": "lerna run --scope @starknet-agent-kit/agents start --",
+	"dev:multi": "lerna run --scope @starknet-agent-kit/agents multi-agent --",
     "dev:server": "lerna run dev --scope \"@starknet-agent-kit/server\" --scope \"@starknet-agent-kit/client\"",
     "lint": "lerna run lint",
     "lint:client": "lerna run lint --scope \"@starknet-agent-kit/client\"",

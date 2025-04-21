@@ -12,6 +12,7 @@
     "clean:all": "pnpm clean && pnpm clean:dist",
     "pgvector": "../scripts/pgvector.sh",
     "start": "pnpm pgvector && npx tsx -r tsconfig-paths/register ./start.ts ",
+	"multi-agent": "pnpm pgvector && npx tsx -r tsconfig-paths/register ./multiagent-command.ts",
     "lint": "eslint \"src/**/*.ts\""
   },
   "keywords": [],
