@@ -11,8 +11,8 @@
     "clean:dist": "rm -rf dist",
     "clean:all": "pnpm clean && pnpm clean:dist",
     "pgvector": "../scripts/pgvector.sh",
-    "start": "pnpm pgvector && npx tsx -r tsconfig-paths/register ./start.ts ",
 	"multi-agent": "pnpm pgvector && npx tsx -r tsconfig-paths/register ./multiagent-command.ts",
+    "start": "npx tsx -r tsconfig-paths/register ./start.ts ",
     "lint": "eslint \"src/**/*.ts\""
   },
   "keywords": [],
@@ -29,6 +29,7 @@
     "@langchain/langgraph": "^0.2.44",
     "@langchain/ollama": "^0.1.4",
     "@langchain/openai": "^0.3.17",
+    "@snak/database": "workspace:*",
     "discord.js": "^14.17.3",
     "inquirer": "^12.4.1",
     "langchain": "^0.3.10",

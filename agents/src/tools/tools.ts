@@ -1,7 +1,6 @@
 import { DynamicStructuredTool, tool } from '@langchain/core/tools';
 import { RpcProvider } from 'starknet';
 import { JsonConfig } from '../jsonConfig.js';
-import { PostgresAdaptater } from '../databases/postgresql/src/database.js';
 import logger from '../logger.js';
 import * as metrics from '../../metrics.js';
 
@@ -32,12 +31,6 @@ export interface StarknetAgentInterface {
   };
   getProvider: () => RpcProvider;
   getAgentConfig: () => JsonConfig | undefined;
-  getDatabase: () => PostgresAdaptater[];
-  connectDatabase: (database_name: string) => Promise<void>;
-  createDatabase: (
-    database_name: string
-  ) => Promise<PostgresAdaptater | undefined>;
-  getDatabaseByName: (name: string) => PostgresAdaptater | undefined;
 }
 
 /**
@@ -80,6 +73,15 @@ export class StarknetToolRegistry {
 
   /**
    * @static
+   * @function clearTools
+   * @description Clears all registered tools
+   */
+  static clearTools(): void {
+    this.tools = [];
+  }
+
+  /**
+   * @static
    * @async
    * @function createAllowedTools
    * @description Creates allowed tools
@@ -91,6 +93,8 @@ export class StarknetToolRegistry {
     agent: StarknetAgentInterface,
     allowed_tools: string[]
   ) {
+    // Clear existing tools before registering new ones
+    this.clearTools();
     await registerTools(agent, allowed_tools, this.tools);
     return this.tools.map(({ name, description, schema, execute }) =>
       tool(async (params: any) => execute(agent, params), {

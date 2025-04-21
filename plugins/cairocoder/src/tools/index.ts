@@ -1,7 +1,6 @@
 import {
   StarknetTool,
   StarknetAgentInterface,
-  PostgresAdaptater,
 } from '@starknet-agent-kit/agents';
 import {
   generateCairoCodeSchema,
@@ -16,7 +15,6 @@ import {
 } from '../schema/schema.js';
 import { generateCairoCode } from '../actions/generateCairoCode.js';
 import { fixCairoCode } from '../actions/fixCairoCode.js';
-import { initializeDatabase } from '../utils/db_init.js';
 import { registerProject } from '../actions/registerProject.js';
 import {
   deleteProgramAction,
@@ -25,13 +23,13 @@ import {
 } from '../actions/deleteItemProject.js';
 import { addDependencyAction, addProgramAction } from '../actions/addItem.js';
 import { listProjects } from '../actions/listProjects.js';
+import { scarb } from '@snak/database/queries';
 
 export const initializeTools = async (
-  agent: StarknetAgentInterface
-): Promise<PostgresAdaptater | undefined> => {
+  _agent: StarknetAgentInterface
+): Promise<void> => {
   try {
-    const res = await initializeDatabase(agent);
-    return res;
+    await scarb.init();
   } catch (error) {
     console.error('Error initializing database:', error);
   }
@@ -39,14 +37,8 @@ export const initializeTools = async (
 
 export const registerTools = async (
   StarknetToolRegistry: StarknetTool[],
-  agent: StarknetAgentInterface
+  _agent: StarknetAgentInterface
 ) => {
-  const database_instance = await initializeTools(agent);
-  if (!database_instance) {
-    console.error('Error while initializing database');
-    return;
-  }
-
   StarknetToolRegistry.push({
     name: 'cairocoder_generate_code',
     plugins: 'cairocoder',
@@ -58,7 +50,7 @@ export const registerTools = async (
       FAILURE: After 2 failed attempts, report the error and stop retrying.
       DO NOT automatically compile, execute, or otherwise process the generated code unless explicitly requested.
     `,
-    schema: generateCairoCodeSchema,
+    schema: generateCairoCodeSchema as any,
     execute: generateCairoCode,
   });
 
@@ -67,7 +59,7 @@ export const registerTools = async (
     plugins: 'cairocoder',
     description:
       'Fix Cairo code using AI and update it in the database within a project. Requires the name of an existing program and an error description. No need to check if the project exists.',
-    schema: fixCairoCodeSchema,
+    schema: fixCairoCodeSchema as any,
     execute: fixCairoCode,
   });
 
@@ -76,7 +68,7 @@ export const registerTools = async (
     description:
       'Register new Cairo project in the database, only when explicitly asked in the command. Requires a project name.',
     plugins: 'cairocoder',
-    schema: registerProjectSchema,
+    schema: registerProjectSchema as any,
     execute: registerProject,
   });
 
@@ -85,7 +77,7 @@ export const registerTools = async (
     description:
       'Delete programs from a Cairo project in the database. Requires a project name and a list of program names.',
     plugins: 'cairocoder',
-    schema: deleteProgramSchema,
+    schema: deleteProgramSchema as any,
     execute: deleteProgramAction,
   });
 
@@ -94,7 +86,7 @@ export const registerTools = async (
     description:
       'Delete dependencies from a Cairo project in the database. Requires a project name and a list of dependency names.',
     plugins: 'cairocoder',
-    schema: deleteDependencySchema,
+    schema: deleteDependencySchema as any,
     execute: deleteDependencyAction,
   });
 
@@ -103,7 +95,7 @@ export const registerTools = async (
     description:
       'Delete several Cairo projects and all their data from the database. Requires a list of project names.',
     plugins: 'cairocoder',
-    schema: deleteProjectSchema,
+    schema: deleteProjectSchema as any,
     execute: deleteProjectAction,
   });
 
@@ -112,7 +104,7 @@ export const registerTools = async (
     description:
       'Add dependencies to an existing Cairo project in the database. Requires a project name and a list of dependency names.',
     plugins: 'cairocoder',
-    schema: addDependencySchema,
+    schema: addDependencySchema as any,
     execute: addDependencyAction,
   });
 
@@ -121,7 +113,7 @@ export const registerTools = async (
     description:
       'Add programs to an existing Cairo project in the database. Requires a project name and a list of program paths.',
     plugins: 'cairocoder',
-    schema: addProgramSchema,
+    schema: addProgramSchema as any,
     execute: addProgramAction,
   });
 
@@ -130,7 +122,7 @@ export const registerTools = async (
     description:
       'List all Cairo projects stored in the database with their names.',
     plugins: 'cairocoder',
-    schema: listProjectsSchema,
+    schema: listProjectsSchema as any,
     execute: listProjects,
   });
 };

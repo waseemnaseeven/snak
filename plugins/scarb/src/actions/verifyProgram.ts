@@ -1,11 +1,10 @@
 import { logger, StarknetAgentInterface } from '@starknet-agent-kit/agents';
 import { verifyProject, cleanProject } from '../utils/workspace.js';
 import { verifyProgramSchema } from '../schema/schema.js';
-import { saveVerification } from '../utils/db_save.js';
-import { retrieveProjectData, retrieveProof } from '../utils/db_retrieve.js';
 import { setupScarbProject } from '../utils/common.js';
 import { writeJsonToFile } from '../utils/utils.js';
 import { z } from 'zod';
+import { scarb } from '@snak/database/queries';
 
 /**
  * Verify a program
@@ -14,7 +13,7 @@ import { z } from 'zod';
  * @returns The verification results
  */
 export const verifyProgram = async (
-  agent: StarknetAgentInterface,
+  _agent: StarknetAgentInterface,
   params: z.infer<typeof verifyProgramSchema>
 ) => {
   let projectDir = '';
@@ -22,14 +21,16 @@ export const verifyProgram = async (
     logger.debug('\n Verifying program');
     logger.debug(JSON.stringify(params, null, 2));
 
-    const projectData = await retrieveProjectData(agent, params.projectName);
+    const projectData = await scarb.retrieveProjectData(params.projectName);
+    if (!projectData) {
+      throw new Error(`project ${params.projectName} does not exist`);
+    }
 
     projectDir = await setupScarbProject({
       projectName: params.projectName,
     });
 
-    const proof = await retrieveProof(agent, projectData.name);
-    writeJsonToFile(proof, projectDir, 'proof.json');
+    writeJsonToFile(projectData.proof, projectDir, 'proof.json');
 
     const result = await verifyProject({
       projectDir: projectDir,
@@ -37,8 +38,7 @@ export const verifyProgram = async (
     });
     const parsedResult = JSON.parse(result);
 
-    await saveVerification(
-      agent,
+    await scarb.saveVerify(
       projectData.id,
       parsedResult.status === 'success' ? true : false
     );
