@@ -26,6 +26,8 @@ const { Pool } = pg;
 
 import { DatabaseError } from './error.js';
 
+const DEFAULT_PORT = '5454';
+
 /**
  * We rely on the default postgress environment variables to establish a
  * connection.
@@ -37,7 +39,7 @@ let pool = new Pool({
   host: process.env.POSTGRES_HOST,
   database: process.env.POSTGRES_DB,
   password: process.env.POSTGRES_PASSWORD,
-  port: parseInt(process.env.POSTGRES_PORT || '5454'),
+  port: parseInt(process.env.POSTGRES_PORT || DEFAULT_PORT),
 });
 
 pool.on('error', (err) => {
@@ -79,7 +81,7 @@ export async function connect(): Promise<void> {
     host: process.env.POSTGRES_HOST,
     database: process.env.POSTGRES_DB,
     password: process.env.POSTGRES_PASSWORD,
-    port: parseInt(process.env.POSTGRES_PORT || '5454'),
+    port: parseInt(process.env.POSTGRES_PORT || DEFAULT_PORT),
   });
 
   pool.on('error', (err) => {
