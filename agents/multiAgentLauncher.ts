@@ -1,17 +1,12 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import chalk from 'chalk';
 import { createBox } from './src/formatting.js';
 import { load_json_config } from './src/jsonConfig.js';
 import logger from './src/logger.js';
-
-// For signal handling and cleanup
 import { EventEmitter } from 'events';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { StarknetAgent } from './src/starknetAgent.js';
+import { RpcProvider } from 'starknet';
 
 interface MultiAgentConfig {
   description?: string;
@@ -22,30 +17,32 @@ interface AgentConfig {
   type: string;
   count: number;
 }
-
-// Global event bus for inter-agent communication
 export const agentEventBus = new EventEmitter();
-
-// Increase max listeners to handle many agents
-agentEventBus.setMaxListeners(100);
+agentEventBus.setMaxListeners(100); // MAX NB OF AGENTS
 
 /**
- * Locates the agent config file
+ * Locates the agent configuration file based on agent name
+ * @param agentName - The name of the agent to find configuration for
+ * @returns The full path to the agent config file, or null if not found
  */
 function findAgentConfig(agentName: string): string | null {
   const configFileName = `${agentName}.agent.json`;
   const configPath = path.resolve(process.cwd(), '..', 'config', 'agents', configFileName);
-  console.log(configPath);
-
   if (fs.existsSync(configPath)) {
     return configPath;
   }
-
+  logger.warn(`Agent configuration not found: ${configFileName}`);
   return null;
 }
 
 /**
- * Launches a single agent instance as an async process
+ * Launches an single agent instance as an asynchronous process
+ * @param agentPath - Path to the agent configuration file
+ * @param agentId - Unique identifier for this agent instance
+ * @param agentType - Type of agent being launched
+ * @param abortController - AbortController to signal termination
+ * @returns An object containing the stop function for this agent
+ * @throws Error if agent initialization fails
  */
 async function launchAgentAsync(
   agentPath: string,
@@ -54,23 +51,13 @@ async function launchAgentAsync(
   abortController: AbortController
 ): Promise<{ stop: () => Promise<void> }> {
   try {
-    // Load agent configuration
     const agentConfig = await load_json_config(agentPath);
     if (!agentConfig) {
       throw new Error(`Failed to load agent configuration from ${agentPath}`);
     }
+    const agentConfigCopy = JSON.parse(JSON.stringify(agentConfig));
+    agentConfigCopy.chat_id = `${agentConfigCopy.chat_id || agentType}_${agentId}`;
 
-    // Make a deep copy to avoid modifying the original
-    const uniqueAgentConfig = JSON.parse(JSON.stringify(agentConfig));
-
-    // Set a unique chat_id for this instance
-    uniqueAgentConfig.chat_id = `${uniqueAgentConfig.chat_id || agentType}_${agentId}`;
-
-    // Import the agent dynamically to avoid circular dependencies
-    const { StarknetAgent } = await import('./src/starknetAgent.js');
-    const { RpcProvider } = await import('starknet');
-
-    // Create agent instance with proper configuration
     const agent = new StarknetAgent({
       provider: new RpcProvider({ nodeUrl: process.env.STARKNET_RPC_URL }),
       accountPrivateKey: process.env.STARKNET_PRIVATE_KEY as string,
@@ -79,13 +66,11 @@ async function launchAgentAsync(
       aiProvider: process.env.AI_PROVIDER as string,
       aiProviderApiKey: process.env.AI_PROVIDER_API_KEY as string,
       signature: 'key',
-      agentMode: 'auto', // Always use autonomous mode for async agents
-      agentconfig: uniqueAgentConfig,
+      agentMode: 'auto',
+      agentconfig: agentConfigCopy,
     });
 
     await agent.createAgentReactExecutor();
-
-    // Configure logging options
     agent.setLoggingOptions({
       langchainVerbose: false,
       tokenLogging: false,
@@ -95,15 +80,10 @@ async function launchAgentAsync(
     const agentLog = (message: string) => {
       console.log(chalk.blue(`[${agentType}-${agentId}] `) + message);
     };
-
     agentLog(`Agent initialized. Starting autonomous execution...`);
-
-    // Signal handler for abort controller
     const signalListener = () => {
       agentLog(`Stopping agent execution...`);
-      // Any cleanup needed
     };
-
     abortController.signal.addEventListener('abort', signalListener);
 
     // Start agent in non-blocking async mode
@@ -114,17 +94,14 @@ async function launchAgentAsync(
     // Return a stop function that can be called to terminate this agent
     return {
       stop: async () => {
-        agentLog(`Stopping agent...`);
         abortController.abort();
-        // Any additional cleanup needed
-
-        // Wait for any pending operations to complete
         try {
           // Wait for execution with a timeout
           await Promise.race([
             executePromise,
             new Promise(resolve => setTimeout(resolve, 5000)) // 5s timeout
           ]);
+          agentLog(`Successfully stopped.`)
         } catch (e) {
           agentLog(`Error during shutdown: ${e.message}`);
         }
@@ -136,12 +113,35 @@ async function launchAgentAsync(
   }
 }
 
+
+/**
+ * Loads and validates the multi-agent configuration from a JSON file
+ * @param configPath - Path to the multi-agent configuration file
+ * @returns The parsed and validated configuration, or null if invalid
+ */
 async function loadMultiAgentConfig(configPath: string): Promise<MultiAgentConfig | null> {
   try {
     await fs.promises.access(configPath);
     const jsonData = await fs.promises.readFile(configPath, 'utf8');
     const config = JSON.parse(jsonData);
-    // Validation logic...
+
+    if (!config || typeof config !== 'object') {
+      throw new Error('Configuration is not a valid object');
+    }
+    if (!Array.isArray(config.agents)) {
+      throw new Error('Configuration must contain an "agents" array');
+    }
+
+    for (const agent of config.agents) {
+      if (!agent.type || typeof agent.type !== 'string') {
+        throw new Error('Each agent must have a valid "type" property');
+      }
+
+      if (!Number.isInteger(agent.count) || agent.count <= 0) {
+        throw new Error(`Agent "${agent.type}" must have a valid positive "count" property`);
+      }
+    }
+
     return config as MultiAgentConfig;
   } catch (error) {
     logger.error(`Failed to load multi-agent configuration: ${error.message}`);
@@ -150,16 +150,16 @@ async function loadMultiAgentConfig(configPath: string): Promise<MultiAgentConfi
 }
 
 /**
- * Main function to launch multiple agents based on configuration
- * @returns A function that can be called to stop all agents
+ * Launches multiple agent instances based on the provided configuration
+ * @param configPath - Path to the multi-agent configuration file
+ * @returns A function that can be called to stop all launched agents
+ * @throws Error if the configuration is invalid or agents cannot be launched
  */
 export async function launchMultiAgent(configPath: string): Promise<() => Promise<void>> {
   try {
-    // Load the multi-agent configuration
     const multiAgentConfig = await loadMultiAgentConfig(configPath);
-
-    if (!multiAgentConfig || !multiAgentConfig.agents || !Array.isArray(multiAgentConfig.agents)) {
-      throw new Error('Invalid multi-agent configuration');
+    if (!multiAgentConfig) {
+      throw new Error('Invalid or missing multi-agent configuration');
     }
 
     const agentStopFunctions: Array<() => Promise<void>> = [];

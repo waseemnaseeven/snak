@@ -129,9 +129,18 @@ const loadCommand = async (): Promise<string> => {
 };
 
 /**
- * Main function to run the application
+ * Runs the Multi-Agent Launcher application
+ *
+ * This function:
+ * 1. Initializes the UI with a welcome message
+ * 2. Validates environment variables
+ * 3. Loads the multi-agent configuration
+ * 4. Launches all agents based on the configuration
+ * 5. Sets up graceful shutdown handling
+ *
+ * @returns A Promise that resolves when initialization is complete
  */
-const run = async (): Promise<void> => {
+const runMultiAgentLauncher = async (): Promise<void> => {
   clearScreen();
   console.log(logo);
   console.log(
@@ -141,33 +150,24 @@ const run = async (): Promise<void> => {
     )
   );
 
-  const spinner = createSpinner('Initializing Multi-Agent Launcher').start();
+  const loadingSpinner = createSpinner('Initializing Multi-Agent Launcher').start();
 
   try {
-    spinner.stop();
+    loadingSpinner.stop();
     await validateEnvVars();
-
-    const configPath = await loadCommand();
-
-    if (!fs.existsSync(configPath)) {
-      throw new Error(`Multi-agent configuration file not found: ${configPath}`);
-    }
-
-    spinner.success({
+	const configPath = await loadCommand();
+    loadingSpinner.success({
       text: chalk.black(
         `Multi-agent configuration loaded from: ${chalk.cyan(configPath)}`
       ),
     });
-
     console.log(chalk.dim('\nLaunching multi-agent environment...\n'));
 
-    // Launch the agents and get the termination function
     const terminateAgents = await launchMultiAgent(configPath);
 
     console.log(chalk.green('\nAll agents have been launched successfully.'));
     console.log(chalk.dim('Press Ctrl+C to terminate all agents and exit.'));
 
-    // Handle graceful shutdown
     process.on('SIGINT', async () => {
       console.log('\nGracefully shutting down from SIGINT (Ctrl+C)');
       await terminateAgents();
@@ -175,7 +175,7 @@ const run = async (): Promise<void> => {
     });
 
   } catch (error) {
-    spinner.error({ text: 'Failed to initialize multi-agent launcher' });
+    loadingSpinner.error({ text: 'Failed to initialize multi-agent launcher' });
     console.error(
       createBox("Fatal Error", error.message)
     );
@@ -183,10 +183,4 @@ const run = async (): Promise<void> => {
   }
 };
 
-// Run the application
-run().catch((error) => {
-  console.error(
-    createBox(error.message, { title: 'Fatal Error', isError: true })
-  );
-  process.exit(1);
-});
+runMultiAgentLauncher()
