@@ -1,4 +1,4 @@
-import { query, transaction, Query } from '../../database.js';
+import { Postgres } from '../../database.js';
 import { Id } from '../common.js';
 import { DatabaseError } from '../../error.js';
 
@@ -11,7 +11,7 @@ export namespace scarb {
    */
   export async function init(): Promise<void> {
     const t = [
-      new Query(
+      new Postgres.Query(
         `CREATE TABLE IF NOT EXISTS project(
           id SERIAL PRIMARY KEY,
           name VARCHAR(100),
@@ -22,7 +22,7 @@ export namespace scarb {
           UNIQUE (name)
         );`
       ),
-      new Query(
+      new Postgres.Query(
         `CREATE TABLE IF NOT EXISTS program(
           id SERIAL PRIMARY KEY,
           project_id INTEGER REFERENCES project(id) ON DELETE CASCADE,
@@ -33,7 +33,7 @@ export namespace scarb {
           UNIQUE (project_id, name)
         )`
       ),
-      new Query(
+      new Postgres.Query(
         `CREATE TABLE IF NOT EXISTS dependency(
           id SERIAL PRIMARY KEY,
           project_id INTEGER REFERENCES project(id) ON DELETE CASCADE,
@@ -42,7 +42,7 @@ export namespace scarb {
           UNIQUE (project_id, name)
         )`
       ),
-      new Query(
+      new Postgres.Query(
         `CREATE OR REPLACE FUNCTION insert_project(
           name varchar(100),
           type varchar(50)
@@ -54,7 +54,7 @@ export namespace scarb {
             RETURNING id;
         $$ LANGUAGE sql`
       ),
-      new Query(
+      new Postgres.Query(
         `CREATE OR REPLACE FUNCTION insert_program(
           project_id integer,
           name varchar(255),
@@ -75,7 +75,7 @@ export namespace scarb {
             SET source_code = $3;
         $$ LANGUAGE sql;`
       ),
-      new Query(
+      new Postgres.Query(
         `CREATE OR REPLACE FUNCTION insert_dependency(
           project_id integer,
           name varchar(255),
@@ -96,7 +96,7 @@ export namespace scarb {
             SET version = COALESCE($3, '');
         $$ LANGUAGE sql;`
       ),
-      new Query(
+      new Postgres.Query(
         `CREATE OR REPLACE FUNCTION init_project(
           project jsonb,
           programs jsonb,
@@ -131,7 +131,7 @@ export namespace scarb {
         $$ LANGUAGE plpgsql;
         `
       ),
-      new Query(
+      new Postgres.Query(
         `CREATE OR REPLACE FUNCTION retrieve_project(
           name varchar(100)
         ) RETURNS TABLE (
@@ -190,7 +190,7 @@ export namespace scarb {
         $$ LANGUAGE sql`
       ),
     ];
-    await transaction(t);
+    await Postgres.transaction(t);
   }
 
   interface ProjectBase {
@@ -229,11 +229,11 @@ export namespace scarb {
    * @throws { DatabaseError } If a database operation fails.
    */
   export async function insertProject(project: Project): Promise<void> {
-    const q = new Query(`SELECT insert_project($1, $2);`, [
+    const q = new Postgres.Query(`SELECT insert_project($1, $2);`, [
       project.name,
       project.type,
     ]);
-    await query(q);
+    await Postgres.query(q);
   }
 
   /**
@@ -248,7 +248,7 @@ export namespace scarb {
   export async function selectProject(
     name: string
   ): Promise<Project<Id.Id> | undefined> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `SELECT
         id,
         name,
@@ -262,7 +262,7 @@ export namespace scarb {
         name = $1;`,
       [name]
     );
-    const q_res = await query<Project<Id.Id>>(q);
+    const q_res = await Postgres.query<Project<Id.Id>>(q);
     return q_res ? q_res[0] : undefined;
   }
 
@@ -278,8 +278,8 @@ export namespace scarb {
    * @throws { DatabaseError } If a database operation fails.
    */
   export async function selectProjects(): Promise<Project<Id.Id>[]> {
-    const q = new Query(`SELECT id, name, type FROM project`);
-    return await query(q);
+    const q = new Postgres.Query(`SELECT id, name, type FROM project`);
+    return await Postgres.query(q);
   }
 
   /**
@@ -290,8 +290,8 @@ export namespace scarb {
    * @throws { DatabaseError } If a database operation fails.
    */
   export async function deleteProject(name: string): Promise<void> {
-    const q = new Query(`DELETE FROM project WHERE name = $1`, [name]);
-    await query(q);
+    const q = new Postgres.Query(`DELETE FROM project WHERE name = $1`, [name]);
+    await Postgres.query(q);
   }
 
   /**
@@ -345,14 +345,14 @@ export namespace scarb {
     dependencies: Dependency[]
   ): Promise<ProjectData | undefined> {
     const t = [
-      new Query(`SELECT init_project($1, $2, $3)`, [
+      new Postgres.Query(`SELECT init_project($1, $2, $3)`, [
         JSON.stringify(project),
         JSON.stringify(programs),
         JSON.stringify(dependencies),
       ]),
-      new Query(`SELECT * FROM retrieve_project($1)`, [project.name]),
+      new Postgres.Query(`SELECT * FROM retrieve_project($1)`, [project.name]),
     ];
-    const t_res = await transaction<ProjectQueryRes>(t);
+    const t_res = await Postgres.transaction<ProjectQueryRes>(t);
 
     if (t_res.length) {
       const init: ProjectData = {
@@ -380,9 +380,9 @@ export namespace scarb {
   export async function retrieveProjectData(
     name: string
   ): Promise<ProjectData | undefined> {
-    const q = new Query(`SELECT * FROM retrieve_project($1);`, [name]);
+    const q = new Postgres.Query(`SELECT * FROM retrieve_project($1);`, [name]);
 
-    const q_res = await query<ProjectQueryRes>(q);
+    const q_res = await Postgres.query<ProjectQueryRes>(q);
 
     if (q_res.length) {
       const init: ProjectData = {
@@ -464,17 +464,17 @@ export namespace scarb {
    * @throws { DatabaseError } If a database operation fails.
    */
   export async function insertProgram(program: Program<Id.Id>): Promise<void> {
-    const q = new Query(`SELECT insert_program($1, $2, $3);`, [
+    const q = new Postgres.Query(`SELECT insert_program($1, $2, $3);`, [
       program.project_id,
       program.name,
       program.source_code,
     ]);
-    await query(q);
+    await Postgres.query(q);
   }
 
   /**
    * Inserts multiple { @see Program }s into the database as a single atomic
-   * transaction.
+   * Postgres.transaction.
    *
    * @param { Program<Id.Id>[] } programs - Programs to insert.
    *
@@ -485,13 +485,13 @@ export namespace scarb {
   ): Promise<void> {
     const t = programs.map(
       (program) =>
-        new Query(`SELECT insert_program($1, $2, $3);`, [
+        new Postgres.Query(`SELECT insert_program($1, $2, $3);`, [
           program.project_id,
           program.name,
           program.source_code,
         ])
     );
-    await transaction(t);
+    await Postgres.transaction(t);
   }
 
   /**
@@ -509,13 +509,13 @@ export namespace scarb {
     projectId: number,
     programName: string
   ): Promise<Program<Id.Id> | undefined> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `SELECT project_id, name, source_code, sierra, casm FROM program
       WHERE project_id = $1 AND name = $2
       ORDER BY id ASC;`,
       [projectId, programName]
     );
-    const q_res = await query<Program<Id.Id>>(q);
+    const q_res = await Postgres.query<Program<Id.Id>>(q);
     return q_res ? q_res[0] : undefined;
   }
 
@@ -536,13 +536,13 @@ export namespace scarb {
   export async function selectPrograms(
     project_id: number
   ): Promise<Program<Id.Id>[]> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `SELECT project_id, name, source_code, sierra, casm FROM program
       WHERE project_id = $1
       ORDER BY id ASC;`,
       [project_id]
     );
-    return await query(q);
+    return await Postgres.query(q);
   }
 
   /**
@@ -558,16 +558,16 @@ export namespace scarb {
     projectId: number,
     name: string
   ): Promise<void> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `DELETE FROM program WHERE project_id = $1 AND name = $2;`,
       [projectId, name]
     );
-    await query(q);
+    await Postgres.query(q);
   }
 
   /**
    * Atomically deletes multiple { @see Program }s across a single or multiple
-   * { @see Project }s as part of a single transaction.
+   * { @see Project }s as part of a single Postgres.transaction.
    *
    * @param { { projectId: number, name: string } } programs - Identifiers
    * used to delete each program.
@@ -579,12 +579,12 @@ export namespace scarb {
   ): Promise<void> {
     const t = programs.map(
       (program) =>
-        new Query(`DELETE FROM program WHERE project_id = $1 AND name = $2;`, [
-          program.projectId,
-          program.name,
-        ])
+        new Postgres.Query(
+          `DELETE FROM program WHERE project_id = $1 AND name = $2;`,
+          [program.projectId, program.name]
+        )
     );
-    await transaction(t);
+    await Postgres.transaction(t);
   }
 
   interface DepBase {
@@ -618,17 +618,17 @@ export namespace scarb {
   export async function insertDependency(
     dep: Dependency<Id.Id>
   ): Promise<void> {
-    const q = new Query(`SELECT insert_dependency($1, $2, $3)`, [
+    const q = new Postgres.Query(`SELECT insert_dependency($1, $2, $3)`, [
       dep.project_id,
       dep.name,
       dep.version,
     ]);
-    await query(q);
+    await Postgres.query(q);
   }
 
   /**
    * Inserts multiple { @see Dependency } into the database as a single atomic
-   * transaction.
+   * Postgres.transaction.
    *
    * @param { Dependency<Id.Id>[] } deps - Dependencies to insert.
    *
@@ -639,13 +639,13 @@ export namespace scarb {
   ): Promise<void> {
     const t = deps.map(
       (dep) =>
-        new Query(`SELECT insert_dependency($1, $2, $3)`, [
+        new Postgres.Query(`SELECT insert_dependency($1, $2, $3)`, [
           dep.project_id,
           dep.name,
           dep.version,
         ])
     );
-    await transaction(t);
+    await Postgres.transaction(t);
   }
 
   /**
@@ -665,13 +665,13 @@ export namespace scarb {
   export async function selectDependencies(
     projectId: number
   ): Promise<Dependency<Id.Id>[]> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `SELECT project_id, name, version FROM dependency
       WHERE project_id = $1
       ORDER BY id ASC;`,
       [projectId]
     );
-    return await query(q);
+    return await Postgres.query(q);
   }
 
   /**
@@ -687,16 +687,16 @@ export namespace scarb {
     projectId: number,
     name: string
   ): Promise<void> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `DELETE FROM dependency WHERE project_id = $1 AND name = $2;`,
       [projectId, name]
     );
-    await query(q);
+    await Postgres.query(q);
   }
 
   /**
    * Atomically deletes multiple { @see Dependency } across a single or
-   * multiple { @see Project }s as part of a single transaction.
+   * multiple { @see Project }s as part of a single Postgres.transaction.
    *
    * @param { { projectId: number, name: string } } deps - Identifiers
    * used to delete each dependency.
@@ -708,17 +708,17 @@ export namespace scarb {
   ): Promise<void> {
     const t = deps.map(
       (dep) =>
-        new Query(
+        new Postgres.Query(
           `DELETE FROM dependency WHERE project_id = $1 AND name = $2;`,
           [dep.projectId, dep.name]
         )
     );
-    await transaction(t);
+    await Postgres.transaction(t);
   }
 
   /**
    * Atomically updates compilation info for multiple { @see Program }s as
-   * part of a single transaction.
+   * part of a single Postgres.transaction.
    *
    * @param { string[] } programNames - Names used to identify each program.
    * @param { string[] } sierraFiles - Sierra code for each program.
@@ -732,7 +732,7 @@ export namespace scarb {
     casmFiles: string[]
   ): Promise<void> {
     const t = programNames.map((name, index) => {
-      return new Query(
+      return new Postgres.Query(
         `UPDATE program SET sierra = $1, casm = $2 WHERE name = $3;`,
         [
           JSON.stringify(sierraFiles[index]),
@@ -742,7 +742,7 @@ export namespace scarb {
       );
     });
 
-    await transaction(t);
+    await Postgres.transaction(t);
   }
 
   /**
@@ -757,11 +757,11 @@ export namespace scarb {
     projectId: number,
     trace: Buffer
   ): Promise<void> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `UPDATE PROJECT SET execution_trace = $1 WHERE id = $2;`,
       [trace, projectId]
     );
-    await query(q);
+    await Postgres.query(q);
   }
 
   /**
@@ -776,11 +776,11 @@ export namespace scarb {
     projectId: number,
     proof: string
   ): Promise<void> {
-    const q = new Query(`UPDATE PROJECT SET proof = $1 WHERE id = $2;`, [
-      JSON.stringify(proof),
-      projectId,
-    ]);
-    await query(q);
+    const q = new Postgres.Query(
+      `UPDATE PROJECT SET proof = $1 WHERE id = $2;`,
+      [JSON.stringify(proof), projectId]
+    );
+    await Postgres.query(q);
   }
 
   /**
@@ -795,10 +795,10 @@ export namespace scarb {
     projectId: number,
     verified: boolean
   ): Promise<void> {
-    const q = new Query(`UPDATE PROJECT SET verified = $1 WHERE id = $2`, [
-      verified,
-      projectId,
-    ]);
-    await query(q);
+    const q = new Postgres.Query(
+      `UPDATE PROJECT SET verified = $1 WHERE id = $2`,
+      [verified, projectId]
+    );
+    await Postgres.query(q);
   }
 }

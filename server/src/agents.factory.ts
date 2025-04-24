@@ -1,10 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigurationService } from '../config/configuration.js';
-import {
-  StarknetAgent,
-  JsonConfig,
-  load_json_config,
-} from '@starknet-agent-kit/agents';
+import { StarknetAgent, JsonConfig, load_json_config } from '@snakagent/agents';
 
 @Injectable()
 export class AgentFactory {
@@ -96,6 +92,14 @@ export class AgentFactory {
         return agentSignature;
       }
 
+      const database = {
+        database: process.env.POSTGRES_DB as string,
+        host: process.env.POSTGRES_HOST as string,
+        user: process.env.POSTGRES_USER as string,
+        password: process.env.POSTGRES_PASSWORD as string,
+        port: parseInt(process.env.POSTGRES_PORT as string),
+      };
+
       const agent = new StarknetAgent({
         provider: this.config.starknet.provider,
         accountPrivateKey: this.config.starknet.privateKey,
@@ -104,6 +108,7 @@ export class AgentFactory {
         aiProvider: this.config.ai.provider,
         aiProviderApiKey: this.config.ai.apiKey,
         agentconfig: this.json_config,
+        db_credentials: database,
         signature: signature,
         agentMode: agentMode,
       });

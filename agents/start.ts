@@ -1,19 +1,20 @@
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { createSpinner } from 'nanospinner';
-import { StarknetAgent } from './src/starknetAgent.js';
+import { StarknetAgent } from './src/agents/core/starknetAgent.js';
 import { RpcProvider } from 'starknet';
 import { config } from 'dotenv';
-import { load_json_config, updateModeConfig } from './src/jsonConfig.js';
-import { createBox } from './src/formatting.js';
-import { addTokenInfoToBox } from './src/tokenTracking.js';
+import { load_json_config, updateModeConfig } from './src/config/jsonConfig.js';
+import { createBox } from './src/prompt/formatting.js';
+import { addTokenInfoToBox } from './src/token/tokenTracking.js';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import * as fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import logger from './src/logger.js';
+import { logger } from '@snakagent/core';
+import { DatabaseCredentials } from './src/tools/types/database.js';
 
 // Global deactivation of LangChain logs
 process.env.LANGCHAIN_TRACING = 'false';
@@ -323,6 +324,14 @@ const localRun = async (): Promise<void> => {
       ),
     });
 
+    const database: DatabaseCredentials = {
+      database: process.env.POSTGRES_DB as string,
+      host: process.env.POSTGRES_HOST as string,
+      user: process.env.POSTGRES_USER as string,
+      password: process.env.POSTGRES_PASSWORD as string,
+      port: parseInt(process.env.POSTGRES_PORT as string),
+    };
+
     // Create agent instance with proper configuration
     const agent = new StarknetAgent({
       provider: new RpcProvider({ nodeUrl: process.env.STARKNET_RPC_URL }),
@@ -332,6 +341,7 @@ const localRun = async (): Promise<void> => {
       aiProvider: process.env.AI_PROVIDER as string,
       aiProviderApiKey: process.env.AI_PROVIDER_API_KEY as string,
       signature: 'key',
+      db_credentials: database,
       agentMode: agentMode,
       agentconfig: agentConfig,
     });

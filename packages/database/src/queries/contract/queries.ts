@@ -1,16 +1,16 @@
-import { query, transaction, Query } from '../../database.js';
+import { Postgres } from '../../database.js';
 import { Id } from '../common.js';
 import { DatabaseError } from '../../error.js';
 
 export namespace contract {
   /**
-   * Initializes the { @see Contract} and { @see Deployment } tables.
+   * Initializes the { @see Contract } and { @see Deployment } tables.
    *
    * @throws { DatabaseError } If a database operation fails.
    */
   export async function init(): Promise<void> {
     const t = [
-      new Query(
+      new Postgres.Query(
         `CREATE TABLE IF NOT EXISTS contract(
             id SERIAL PRIMARY KEY,
             class_hash VARCHAR(100) NOT NULL,
@@ -18,7 +18,7 @@ export namespace contract {
             UNIQUE(class_hash)
         );`
       ),
-      new Query(
+      new Postgres.Query(
         `CREATE TABLE IF NOT EXISTS deployment(
           id SERIAL PRIMARY KEY,
           contract_id INTEGER REFERENCES contract(id) ON DELETE CASCADE,
@@ -28,7 +28,7 @@ export namespace contract {
         );`
       ),
     ];
-    await transaction(t);
+    await Postgres.transaction(t);
   }
 
   interface ContractBase {
@@ -59,7 +59,7 @@ export namespace contract {
    * @throws { DatabaseError } If a database operation fails.
    */
   export async function insertContract(contract: Contract): Promise<void> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `INSERT INTO contract(
         class_hash,
         declare_tx_hash
@@ -69,7 +69,7 @@ export namespace contract {
       )`,
       [contract.class_hash, contract.declare_tx_hash]
     );
-    await query(q);
+    await Postgres.query(q);
   }
 
   /**
@@ -84,7 +84,7 @@ export namespace contract {
   export async function selectContract(
     classHash: string
   ): Promise<Contract<Id.Id> | undefined> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `SELECT 
         id, 
         class_hash, 
@@ -95,7 +95,7 @@ export namespace contract {
         class_hash = $1;`,
       [classHash]
     );
-    const q_res = await query<Contract<Id.Id>>(q);
+    const q_res = await Postgres.query<Contract<Id.Id>>(q);
     return q_res ? q_res[0] : undefined;
   }
 
@@ -111,7 +111,7 @@ export namespace contract {
    * @throws { DatabaseError } If a database operation fails.
    */
   export async function selectContracts(): Promise<Contract<Id.Id>[]> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `SELECT
         id,
         class_hash,
@@ -119,7 +119,7 @@ export namespace contract {
       FROM
         contract;`
     );
-    return await query(q);
+    return await Postgres.query(q);
   }
 
   /**
@@ -130,10 +130,11 @@ export namespace contract {
    * @throws { DatabaseError } If a database operation fails.
    */
   export async function deleteContract(classHash: string): Promise<void> {
-    const q = new Query(`DELETE FROM contract WHERE class_hash = $1;`, [
-      classHash,
-    ]);
-    await query(q);
+    const q = new Postgres.Query(
+      `DELETE FROM contract WHERE class_hash = $1;`,
+      [classHash]
+    );
+    await Postgres.query(q);
   }
 
   interface DeploymentBase {
@@ -151,7 +152,7 @@ export namespace contract {
    * @field { number } [id] - Deployment id in db (optional).
    * @field { number } [contract_id] - Related contract id in db (optional).
    * @field { string } [contract_address] - On-chain address of the deployed contract.
-   * @field { string } [deploy_tx_hash] - Hash of the deploy transaction.
+   * @field { string } [deploy_tx_hash] - Hash of the deploy Postgres.transaction.
    *
    * @throws { DatabaseError } If a database operation fails.
    */
@@ -171,7 +172,7 @@ export namespace contract {
     deployment: Deployment,
     classHash: string
   ): Promise<void> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `INSERT INTO deployment(
         contract_id,
         contract_address,
@@ -183,7 +184,7 @@ export namespace contract {
       );`,
       [classHash, deployment.contract_address, deployment.deploy_tx_hash]
     );
-    await query(q);
+    await Postgres.query(q);
   }
 
   /**
@@ -198,8 +199,8 @@ export namespace contract {
   export async function selectDeployment(
     contractAddress: string
   ): Promise<Deployment<Id.Id> | undefined> {
-    const q = new Query(
-      `SELECT 
+    const q = new Postgres.Query(
+      `SELECT \
         id,
         contract_id,
         contract_address,
@@ -210,7 +211,7 @@ export namespace contract {
         contract_address = $1`,
       [contractAddress]
     );
-    const q_res = await query<Deployment<Id.Id>>(q);
+    const q_res = await Postgres.query<Deployment<Id.Id>>(q);
     return q_res ? q_res[0] : undefined;
   }
 
@@ -230,7 +231,7 @@ export namespace contract {
   export async function selectDeployments(
     classHash: string
   ): Promise<Deployment<Id.Id>[]> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `SELECT
         id,
         contract_id,
@@ -243,6 +244,6 @@ export namespace contract {
       `,
       [classHash]
     );
-    return await query(q);
+    return await Postgres.query(q);
   }
 }

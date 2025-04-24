@@ -1,8 +1,9 @@
 import { DynamicStructuredTool, tool } from '@langchain/core/tools';
 import { RpcProvider } from 'starknet';
-import { JsonConfig } from '../jsonConfig.js';
-import logger from '../logger.js';
-import * as metrics from '../../metrics.js';
+import { JsonConfig } from '../config/jsonConfig.js';
+import { logger } from '@snakagent/core';
+import { metrics } from '@snakagent/core';
+import { DatabaseCredentials } from './types/database.js';
 
 /**
  * @interface StarknetAgentInterface
@@ -17,6 +18,7 @@ import * as metrics from '../../metrics.js';
  * @property {(database_name: string) => Promise<PostgresAdaptater | undefined>} createDatabase - Function to create a database
  * @property {(name: string) => PostgresAdaptater | undefined} getDatabaseByName - Function to get a database by name
  */
+
 export interface StarknetAgentInterface {
   getAccountCredentials: () => {
     accountPublicKey: string;
@@ -26,6 +28,7 @@ export interface StarknetAgentInterface {
     aiModel: string;
     aiProviderApiKey: string;
   };
+  getDatabaseCredentials: () => DatabaseCredentials;
   getSignature: () => {
     signature: string;
   };
@@ -127,7 +130,7 @@ export const registerTools = async (
         index = index + 1;
 
         const imported_tool = await import(
-          `@starknet-agent-kit/plugin-${tool}/dist/index.js`
+          `@snakagent/plugin-${tool}/dist/index.js`
         );
         if (typeof imported_tool.registerTools !== 'function') {
           return false;

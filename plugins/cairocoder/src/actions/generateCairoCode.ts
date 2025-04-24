@@ -1,4 +1,4 @@
-import { logger, StarknetAgentInterface } from '@starknet-agent-kit/agents';
+import { logger, StarknetAgentInterface } from '@snakagent/core';
 import { z } from 'zod';
 import { generateCairoCodeSchema } from '../schema/schema.js';
 import {
@@ -6,7 +6,7 @@ import {
   callCairoGenerationAPI,
   extractCairoCode,
 } from '../utils/utils.js';
-import { scarb } from '@snak/database/queries';
+import { scarb } from '@snakagent/database/queries';
 
 /**
  * Generate Cairo code using AI via API and store it in the database

@@ -1,4 +1,4 @@
-import { query, transaction, Query } from '../../database.js';
+import { Postgres } from '../../database.js';
 import { Id } from '../common.js';
 import { DatabaseError } from 'pg';
 import pg from 'pg';
@@ -11,8 +11,8 @@ export namespace memory {
    */
   export async function init() {
     const t = [
-      new Query(`CREATE EXTENSION IF NOT EXISTS vector;`),
-      new Query(
+      new Postgres.Query(`CREATE EXTENSION IF NOT EXISTS vector;`),
+      new Postgres.Query(
         `CREATE TABLE IF NOT EXISTS agent_memories(
           id SERIAL PRIMARY KEY,
           user_id VARCHAR(100) NOT NULL,
@@ -24,7 +24,7 @@ export namespace memory {
           history JSONB NOT NULL
         );`
       ),
-      new Query(`
+      new Postgres.Query(`
         CREATE OR REPLACE FUNCTION insert_memory(
           id integer,
           user_id varchar(100),
@@ -60,7 +60,7 @@ export namespace memory {
             history = $8;
         $$ LANGUAGE sql
       `),
-      new Query(`
+      new Postgres.Query(`
         CREATE OR REPLACE FUNCTION select_memory(
           id integer
         ) RETURNS TABLE (
@@ -88,7 +88,7 @@ export namespace memory {
             id = $1
         $$ LANGUAGE sql;
       `),
-      new Query(`
+      new Postgres.Query(`
         CREATE OR REPLACE FUNCTION update_memory(
           id integer,
           content text,
@@ -122,10 +122,10 @@ export namespace memory {
         $$ LANGUAGE plpgsql
       `),
     ];
-    await transaction(t);
+    await Postgres.transaction(t);
 
-    const q = new Query(`SELECT 'vector'::regtype::oid;`);
-    const oid = (await query<{ oid: number }>(q))[0].oid;
+    const q = new Postgres.Query(`SELECT 'vector'::regtype::oid;`);
+    const oid = (await Postgres.query<{ oid: number }>(q))[0].oid;
     pg.types.setTypeParser(oid, (v: any) => {
       return JSON.parse(v) as number[];
     });
@@ -199,7 +199,7 @@ export namespace memory {
    * @throws { DatabaseError } If a database operation fails.
    */
   export async function insert_memory(memory: Memory): Promise<void> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `SELECT insert_memory(null, $1, $2, $3, $4, $5, $6, $7);`,
       [
         memory.user_id,
@@ -211,7 +211,7 @@ export namespace memory {
         JSON.stringify(memory.history),
       ]
     );
-    await query(q);
+    await Postgres.query(q);
   }
 
   /**
@@ -226,8 +226,8 @@ export namespace memory {
   export async function select_memory(
     id: number
   ): Promise<Memory<Id.Id> | undefined> {
-    const q = new Query(`SELECT * FROM select_memory($1)`, [id]);
-    const q_res = await query<Memory<Id.Id>>(q);
+    const q = new Postgres.Query(`SELECT * FROM select_memory($1)`, [id]);
+    const q_res = await Postgres.query<Memory<Id.Id>>(q);
     return q_res ? q_res[0] : undefined;
   }
 
@@ -249,12 +249,12 @@ export namespace memory {
     content: string,
     embedding: number[]
   ): Promise<void> {
-    const q = new Query(`SELECT update_memory($1, $2, $3);`, [
+    const q = new Postgres.Query(`SELECT update_memory($1, $2, $3);`, [
       id,
       content,
       JSON.stringify(embedding),
     ]);
-    await query(q);
+    await Postgres.query(q);
   }
 
   /**
@@ -282,7 +282,7 @@ export namespace memory {
     userId: string,
     embedding: number[]
   ): Promise<Similarity[]> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `SELECT id, content, history, 1 - (embedding <=> $1::vector) AS similarity
           FROM agent_memories
           WHERE user_id = $2
@@ -291,6 +291,6 @@ export namespace memory {
       `,
       [JSON.stringify(embedding), userId]
     );
-    return await query(q);
+    return await Postgres.query(q);
   }
 }
