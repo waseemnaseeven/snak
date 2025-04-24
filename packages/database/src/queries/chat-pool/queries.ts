@@ -1,4 +1,4 @@
-import { query, Query } from '../../database.js';
+import { Postgres } from '../../database.js';
 import { Id } from '../common.js';
 import { DatabaseError } from '../../error.js';
 
@@ -9,13 +9,13 @@ export namespace chat {
    * @throws { DatabaseError }
    */
   export async function init(): Promise<void> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `CREATE TABLE IF NOT EXISTS sak_table_chat(
         id SERIAL PRIMARY KEY,
         instruction VARCHAR(255) NOT NULL
       )`
     );
-    await query(q);
+    await Postgres.query(q);
   }
 
   interface InstructionBase {
@@ -43,11 +43,11 @@ export namespace chat {
    * @throws { DatabaseError } If a database operation fails.
    */
   export async function insert_instruction(instruction: string): Promise<void> {
-    const q = new Query(
+    const q = new Postgres.Query(
       `INSERT INTO sak_table_chat(instruction) VALUES($1); `,
       [instruction]
     );
-    await query(q);
+    await Postgres.query(q);
   }
 
   /**
@@ -62,7 +62,9 @@ export namespace chat {
    * @throws { DatabaseError } If a database operation fails.
    */
   export async function select_instructions(): Promise<Instruction<Id.Id>[]> {
-    const q = new Query(`SELECT id, instruction FROM sak_table_chat; `);
-    return await query(q);
+    const q = new Postgres.Query(
+      `SELECT id, instruction FROM sak_table_chat; `
+    );
+    return await Postgres.query(q);
   }
 }

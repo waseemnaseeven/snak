@@ -1,12 +1,20 @@
-import { connect, shutdown } from '../../../database.js';
+import { Postgres } from '../../../database.js';
 import { memory } from '../queries.js';
 
+const db_credentials = {
+  host: process.env.POSTGRES_HOST as string,
+  port: parseInt(process.env.POSTGRES_PORT!) as number,
+  user: process.env.POSTGRES_USER as string,
+  password: process.env.POSTGRES_PASSWORD as string,
+  database: process.env.POSTGRES_DB as string,
+};
+
 beforeAll(async () => {
-  await connect();
+  await Postgres.connect(db_credentials);
 });
 
 afterAll(async () => {
-  await shutdown();
+  await Postgres.shutdown();
 });
 
 describe('Memory database initialization', () => {

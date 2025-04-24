@@ -1,7 +1,7 @@
-import { logger, StarknetAgentInterface } from '@starknet-agent-kit/agents';
+import { logger, StarknetAgentInterface } from '@snakagent/core';
 import { listContractsSchema } from '../schemas/schema.js';
 import { z } from 'zod';
-import { contract } from '@snak/database/queries';
+import { contract } from '@snakagent/database/queries';
 
 /**
  * List the declared contracts
