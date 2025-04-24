@@ -15,7 +15,7 @@ process.env.LANGCHAIN_TRACING = 'false';
 process.env.LANGCHAIN_VERBOSE = 'false';
 
 const createLink = (text: string, url: string): string =>
-	`\u001B]8;;${url}\u0007${text}\u001B]8;;\u0007`;
+  `\u001B]8;;${url}\u0007${text}\u001B]8;;\u0007`;
 
 const logo = `${chalk.cyan(`
    _____             __
@@ -42,15 +42,14 @@ const clearScreen = (): void => {
  */
 
 const appendToEnvFile = async (key: string, value: string): Promise<void> => {
-	return new Promise<void>((resolve, reject) => {
-	  const entry = `${key}=${value}\n`;
-	  fs.appendFile('.env', entry, (err) => {
-		if (err)
-			reject(new Error('Error when trying to write on .env file'));
-		resolve();
-	  });
-	});
-  };
+  return new Promise<void>((resolve, reject) => {
+    const entry = `${key}=${value}\n`;
+    fs.appendFile('.env', entry, (err) => {
+      if (err) reject(new Error('Error when trying to write on .env file'));
+      resolve();
+    });
+  });
+};
 
 /**
  * Validates required environment variables and prompts for missing ones
@@ -61,42 +60,42 @@ const appendToEnvFile = async (key: string, value: string): Promise<void> => {
  * @returns A Promise that resolves when all required variables have been validated
  */
 const validateEnvVars = async (): Promise<void> => {
-	const required = [
-	  'STARKNET_RPC_URL',
-	  'STARKNET_PRIVATE_KEY',
-	  'STARKNET_PUBLIC_ADDRESS',
-	  'AI_MODEL',
-	  'AI_PROVIDER',
-	  'AI_PROVIDER_API_KEY',
-	];
+  const required = [
+    'STARKNET_RPC_URL',
+    'STARKNET_PRIVATE_KEY',
+    'STARKNET_PUBLIC_ADDRESS',
+    'AI_MODEL',
+    'AI_PROVIDER',
+    'AI_PROVIDER_API_KEY',
+  ];
 
-	let missings = required.filter((key) => !process.env[key]);
+  let missings = required.filter((key) => !process.env[key]);
 
-	if (missings.length > 0) {
-	  console.error(
-		createBox(missings.join('\n'), {
-		  title: 'Missing Environment Variables',
-		  isError: true,
-		})
-	  );
-	  for (const missing of missings) {
-		const { prompt } = await inquirer.prompt([
-		  {
-			type: 'input',
-			name: 'prompt',
-			message: chalk.redBright(`Enter the value of ${missing}:`),
-			validate: (value: string) => {
-			  const trimmed = value.trim();
-			  if (!trimmed) return 'Please enter a valid message';
-			  return true;
-			},
-		  },
-		]);
-		process.env[missing] = prompt;
-		await appendToEnvFile(missing, prompt);
-	  }
-	}
-  };
+  if (missings.length > 0) {
+    console.error(
+      createBox(missings.join('\n'), {
+        title: 'Missing Environment Variables',
+        isError: true,
+      })
+    );
+    for (const missing of missings) {
+      const { prompt } = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'prompt',
+          message: chalk.redBright(`Enter the value of ${missing}:`),
+          validate: (value: string) => {
+            const trimmed = value.trim();
+            if (!trimmed) return 'Please enter a valid message';
+            return true;
+          },
+        },
+      ]);
+      process.env[missing] = prompt;
+      await appendToEnvFile(missing, prompt);
+    }
+  }
+};
 
 /**
  * Loads command line arguments and resolves the multi-agent configuration path
@@ -150,12 +149,14 @@ const runMultiAgentLauncher = async (): Promise<void> => {
     )
   );
 
-  const loadingSpinner = createSpinner('Initializing Multi-Agent Launcher').start();
+  const loadingSpinner = createSpinner(
+    'Initializing Multi-Agent Launcher'
+  ).start();
 
   try {
     loadingSpinner.stop();
     await validateEnvVars();
-	const configPath = await loadCommand();
+    const configPath = await loadCommand();
     loadingSpinner.success({
       text: chalk.black(
         `Multi-agent configuration loaded from: ${chalk.cyan(configPath)}`
@@ -173,14 +174,11 @@ const runMultiAgentLauncher = async (): Promise<void> => {
       await terminateAgents();
       process.exit(0);
     });
-
   } catch (error) {
     loadingSpinner.error({ text: 'Failed to initialize multi-agent launcher' });
-    console.error(
-      createBox("Fatal Error", error.message)
-    );
+    console.error(createBox('Fatal Error', error.message));
     process.exit(1);
   }
 };
 
-runMultiAgentLauncher()
+runMultiAgentLauncher();

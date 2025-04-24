@@ -193,115 +193,69 @@ const checkParseJson = async (
   agent_config_name: string
 ): Promise<JsonConfig | undefined> => {
   try {
-    // Try multiple possible locations for the config file
-    const possiblePaths = [
-      path.resolve(process.cwd(), 'config', 'agents', agent_config_name),
-      path.resolve(process.cwd(), '..', 'config', 'agents', agent_config_name),
-      path.resolve(
-        __dirname,
-        '..',
-        '..',
-        '..',
-        'config',
-        'agents',
-        agent_config_name
-      ),
-      path.resolve(
-        __dirname,
-        '..',
-        '..',
-        '..',
-        '..',
-        'config',
-        'agents',
-        agent_config_name
-      ),
-    ];
-
-    let configPath: string | null = null;
-    let jsonData: string | null = null;
-
-    // Find first accessible config file
-    for (const tryPath of possiblePaths) {
-      try {
-        await fs.access(tryPath);
-        configPath = tryPath;
-        jsonData = await fs.readFile(tryPath, 'utf8');
-        break;
-      } catch (error) {
-        logger.debug(
-          `Failed to access config file at ${tryPath}: ${error.message}`
-        );
-      }
-    }
-
-    if (!configPath || !jsonData) {
-      throw new Error(
-        `Could not find config file '${agent_config_name}' in any of the expected locations`
-      );
-    }
-
-    const json = JSON.parse(jsonData);
-
-    if (!json) {
-      throw new Error(`Failed to parse JSON from ${configPath}`);
-    }
-
-    // Create system message
-    const systemMessagefromjson = new SystemMessage(
-      createContextFromJson(json)
+    const configPath = path.resolve(
+      process.cwd(),
+      '..',
+      'config',
+      'agents',
+      agent_config_name
     );
 
-    // Handle mode configuration
-    let modeConfig: ModeConfig;
+    try {
+      await fs.access(configPath);
+      const jsonData = await fs.readFile(configPath, 'utf8');
 
-    if (json.mode) {
-      // Use existing mode configuration
-      modeConfig = {
-        interactive: json.mode.interactive !== false, // default to true if not specified
-        autonomous: json.mode.autonomous === true, // default to false if not specified
-        recursionLimit:
-          typeof json.mode.recursionLimit === 'number'
-            ? json.mode.recursionLimit
-            : 15, // default to 15 if not specified
-      };
-    } else {
-      // Default mode configuration
-      modeConfig = {
-        interactive: true,
-        autonomous: false,
-        recursionLimit: 15,
-      };
-    }
+      if (!jsonData) {
+        throw new Error(`Config file is empty: ${configPath}`);
+      }
 
-    // Ensure only one mode is enabled
-    if (modeConfig.interactive && modeConfig.autonomous) {
-      logger.warn(
-        'Both interactive and autonomous modes are enabled - setting interactive to true and autonomous to false'
+      const json = JSON.parse(jsonData);
+      if (!json) {
+        throw new Error(`Failed to parse JSON from ${configPath}`);
+      }
+
+      const systemMessagefromjson = new SystemMessage(
+        createContextFromJson(json)
       );
-      modeConfig.interactive = true;
-      modeConfig.autonomous = false;
-    }
 
-    // Create config object
-    const jsonconfig: JsonConfig = {
-      prompt: systemMessagefromjson,
-      name: json.name,
-      interval: json.interval,
-      chat_id: json.chat_id,
-      mode: modeConfig,
-      plugins: Array.isArray(json.plugins)
-        ? json.plugins.map((tool: string) => tool.toLowerCase())
-        : [],
-      memory: json.memory || false,
-      mcpServers: json.mcpServers || {},
-    };
+      const modeConfig: ModeConfig = {
+        interactive: json.mode?.interactive !== false,
+        autonomous: json.mode?.autonomous === true,
+        recursionLimit:
+          typeof json.mode?.recursionLimit === 'number'
+            ? json.mode.recursionLimit
+            : 15,
+      };
+      if (modeConfig.interactive && modeConfig.autonomous) {
+        logger.warn(
+          'Both interactive and autonomous modes are enabled - setting autonomous to false'
+        );
+        modeConfig.autonomous = false;
+      }
+      const jsonconfig: JsonConfig = {
+        prompt: systemMessagefromjson,
+        name: json.name,
+        interval: json.interval,
+        chat_id: json.chat_id,
+        mode: modeConfig,
+        plugins: Array.isArray(json.plugins)
+          ? json.plugins.map((tool: string) => tool.toLowerCase())
+          : [],
+        memory: json.memory || false,
+        mcpServers: json.mcpServers || {},
+      };
 
-    if (jsonconfig.plugins.length === 0) {
-      logger.warn("No plugins specified in agent's config");
-    }
-    validateConfig(jsonconfig);
-    return jsonconfig;
+
+      if (jsonconfig.plugins.length === 0) {
+        logger.warn("No plugins specified in agent's config");
+      }
+      validateConfig(jsonconfig);
+      return jsonconfig;
+    } catch (error) {
+		throw new Error(
+			`Failed to access or parse config file at ${configPath}: ${error.message}`
+		  );
+	}
   } catch (error) {
     logger.error(
       chalk.red(

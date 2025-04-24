@@ -27,7 +27,13 @@ agentEventBus.setMaxListeners(100); // MAX NB OF AGENTS
  */
 function findAgentConfig(agentName: string): string | null {
   const configFileName = `${agentName}.agent.json`;
-  const configPath = path.resolve(process.cwd(), '..', 'config', 'agents', configFileName);
+  const configPath = path.resolve(
+    process.cwd(),
+    '..',
+    'config',
+    'agents',
+    configFileName
+  );
   if (fs.existsSync(configPath)) {
     return configPath;
   }
@@ -52,6 +58,11 @@ async function launchAgentAsync(
 ): Promise<{ stop: () => Promise<void> }> {
   try {
     const agentConfig = await load_json_config(agentPath);
+	if (!agentConfig) {
+		throw new Error(`Invalid configuration for agent type: ${agentType}`);
+	}
+	console.log("SYSTEM MESSAGE IN JSON : ", agentConfig.prompt)
+
     if (!agentConfig) {
       throw new Error(`Failed to load agent configuration from ${agentPath}`);
     }
@@ -87,7 +98,7 @@ async function launchAgentAsync(
     abortController.signal.addEventListener('abort', signalListener);
 
     // Start agent in non-blocking async mode
-    const executePromise = agent.execute_autonomous().catch(error => {
+    const executePromise = agent.execute_autonomous().catch((error) => {
       logger.error(`Error in agent ${agentType}-${agentId}: ${error.message}`);
     });
 
@@ -99,27 +110,30 @@ async function launchAgentAsync(
           // Wait for execution with a timeout
           await Promise.race([
             executePromise,
-            new Promise(resolve => setTimeout(resolve, 5000)) // 5s timeout
+            new Promise((resolve) => setTimeout(resolve, 5000)), // 5s timeout
           ]);
-          agentLog(`Successfully stopped.`)
+          agentLog(`Successfully stopped.`);
         } catch (e) {
           agentLog(`Error during shutdown: ${e.message}`);
         }
-      }
+      },
     };
   } catch (error) {
-    logger.error(`Failed to launch agent ${agentType}-${agentId}: ${error.message}`);
+    logger.error(
+      `Failed to launch agent ${agentType}-${agentId}: ${error.message}`
+    );
     throw error;
   }
 }
-
 
 /**
  * Loads and validates the multi-agent configuration from a JSON file
  * @param configPath - Path to the multi-agent configuration file
  * @returns The parsed and validated configuration, or null if invalid
  */
-async function loadMultiAgentConfig(configPath: string): Promise<MultiAgentConfig | null> {
+async function loadMultiAgentConfig(
+  configPath: string
+): Promise<MultiAgentConfig | null> {
   try {
     await fs.promises.access(configPath);
     const jsonData = await fs.promises.readFile(configPath, 'utf8');
@@ -138,7 +152,9 @@ async function loadMultiAgentConfig(configPath: string): Promise<MultiAgentConfi
       }
 
       if (!Number.isInteger(agent.count) || agent.count <= 0) {
-        throw new Error(`Agent "${agent.type}" must have a valid positive "count" property`);
+        throw new Error(
+          `Agent "${agent.type}" must have a valid positive "count" property`
+        );
       }
     }
 
@@ -155,7 +171,9 @@ async function loadMultiAgentConfig(configPath: string): Promise<MultiAgentConfi
  * @returns A function that can be called to stop all launched agents
  * @throws Error if the configuration is invalid or agents cannot be launched
  */
-export async function launchMultiAgent(configPath: string): Promise<() => Promise<void>> {
+export async function launchMultiAgent(
+  configPath: string
+): Promise<() => Promise<void>> {
   try {
     const multiAgentConfig = await loadMultiAgentConfig(configPath);
     if (!multiAgentConfig) {
@@ -170,7 +188,13 @@ export async function launchMultiAgent(configPath: string): Promise<() => Promis
     for (const agentConfig of multiAgentConfig.agents) {
       const { type, count } = agentConfig;
 
-      if (!type || typeof type !== 'string' || !count || typeof count !== 'number' || count <= 0) {
+      if (
+        !type ||
+        typeof type !== 'string' ||
+        !count ||
+        typeof count !== 'number' ||
+        count <= 0
+      ) {
         logger.warn(`Invalid agent configuration for type: ${type}`);
         continue;
       }
@@ -185,10 +209,10 @@ export async function launchMultiAgent(configPath: string): Promise<() => Promis
 
       // Load the agent configuration to verify it exists and is valid
       try {
-        const agentConfigContent = await load_json_config(agentConfigPath);
-        if (!agentConfigContent) {
-          throw new Error(`Invalid configuration for agent type: ${type}`);
-        }
+        //const agentConfigContent = await load_json_config(agentConfigPath);
+        // if (!agentConfigContent) {
+        //   throw new Error(`Invalid configuration for agent type: ${type}`);
+        // }
 
         logger.info(`Launching ${count} instances of agent type: ${type}`);
 
@@ -215,7 +239,7 @@ export async function launchMultiAgent(configPath: string): Promise<() => Promis
           agentPromises.push(agentPromise);
 
           // Brief delay between agent launches to stagger resource usage
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await new Promise((resolve) => setTimeout(resolve, 200));
         }
 
         // Wait for all agents of this type to be initialized
@@ -223,7 +247,9 @@ export async function launchMultiAgent(configPath: string): Promise<() => Promis
 
         totalAgentsLaunched += count;
       } catch (configError) {
-        logger.error(`Error with agent configuration for ${type}: ${configError.message}`);
+        logger.error(
+          `Error with agent configuration for ${type}: ${configError.message}`
+        );
         continue;
       }
     }
@@ -236,19 +262,23 @@ export async function launchMultiAgent(configPath: string): Promise<() => Promis
       console.log('\nShutting down all agents...');
 
       // Call all stop functions in parallel
-      await Promise.all(agentStopFunctions.map(stopFn => {
-        try {
-          return stopFn();
-        } catch (e) {
-          logger.error(`Error stopping agent: ${e.message}`);
-          return Promise.resolve();
-        }
-      }));
+      await Promise.all(
+        agentStopFunctions.map((stopFn) => {
+          try {
+            return stopFn();
+          } catch (e) {
+            logger.error(`Error stopping agent: ${e.message}`);
+            return Promise.resolve();
+          }
+        })
+      );
 
       console.log('All agents terminated.');
     };
   } catch (error) {
-    logger.error(`Failed to launch multi-agent configuration: ${error.message}`);
+    logger.error(
+      `Failed to launch multi-agent configuration: ${error.message}`
+    );
     throw error;
   }
 }
