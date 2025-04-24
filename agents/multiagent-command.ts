@@ -175,10 +175,18 @@ const run = async (): Promise<void> => {
 
     console.log(chalk.dim('\nLaunching multi-agent environment...\n'));
 
-    await launchMultiAgent(configPath);
+    // Launch the agents and get the termination function
+    const terminateAgents = await launchMultiAgent(configPath);
 
     console.log(chalk.green('\nAll agents have been launched successfully.'));
     console.log(chalk.dim('Press Ctrl+C to terminate all agents and exit.'));
+
+    // Handle graceful shutdown
+    process.on('SIGINT', async () => {
+      console.log('\nGracefully shutting down from SIGINT (Ctrl+C)');
+      await terminateAgents(); // Call the termination function
+      process.exit(0);
+    });
 
   } catch (error) {
     spinner.error({ text: 'Failed to initialize multi-agent launcher' });
@@ -188,12 +196,6 @@ const run = async (): Promise<void> => {
     process.exit(1);
   }
 };
-
-// Handle graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('\nGracefully shutting down from SIGINT (Ctrl+C)');
-  process.exit(0);
-});
 
 // Run the application
 run().catch((error) => {

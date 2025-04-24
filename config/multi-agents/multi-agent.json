@@ -1,0 +1,8 @@
+{
+	"agents": [
+	  {
+		"type": "cairo",
+		"count": 2
+	  }
+	]
+}
