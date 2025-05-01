@@ -35,6 +35,7 @@ export class AgentFactory {
 
       const jsonData = await fs.readFile(configPath, 'utf8');
 
+      console.log('jsonData', jsonData);
       const json = JSON.parse(jsonData);
 
       if (!json) {
@@ -59,6 +60,8 @@ export class AgentFactory {
           : [],
         memory: json.memory || false,
       };
+
+      console.log('json_config', this.json_config);
 
       this.initialized = true;
     } catch (error) {
@@ -107,7 +110,7 @@ export class AgentFactory {
         aiProviderApiKey: this.config.ai.apiKey,
         agentconfig: this.json_config,
         db_credentials: database,
-        signature: 'singleton', // Une seule signature, puisque c'est un singleton
+        signature: 'key',
         agentMode: agentMode,
       });
 
