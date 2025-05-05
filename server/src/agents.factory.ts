@@ -35,7 +35,7 @@ export class AgentFactory {
 
       const jsonData = await fs.readFile(configPath, 'utf8');
 
-      console.log('jsonData', jsonData);
+      // console.log('jsonData', jsonData);
       const json = JSON.parse(jsonData);
 
       if (!json) {
@@ -61,7 +61,7 @@ export class AgentFactory {
         memory: json.memory || false,
       };
 
-      console.log('json_config', this.json_config);
+      // console.log('json_config', this.json_config);
 
       this.initialized = true;
     } catch (error) {

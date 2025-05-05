@@ -51,7 +51,14 @@ export const compileContract = async (
       }
     })();
 
-    await setupToml(projectDir, tomlSections, projectData.dependencies);
+    const requiredDependencies = [
+      {
+        name: 'starknet',
+        version: '2.10.0',
+      },
+    ];
+
+    await setupToml(projectDir, tomlSections, projectData.dependencies, requiredDependencies);
     await setupSrc(projectDir, projectData.programs);
 
     const buildResult = await buildProject({ path: projectDir });

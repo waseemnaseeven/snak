@@ -10,10 +10,10 @@
     }
   },
   "include": [
-    "common/**/*",
-    "config/**/*",
+    "./common/**/*",
+    "./config/**/*",
     "./index.ts",
-    "src/**/*",
+    "./src/**/*",
     "./main.ts"
   ],
   "exclude": ["node_modules", "dist"]
