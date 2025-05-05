@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigurationService } from '../config/configuration.js';
 import { StarknetAgent, JsonConfig, load_json_config } from '@snakagent/agents';
+import { AgentInitializationDTO } from './dto/agents.js';
+import { SystemMessage } from '@langchain/core/messages';
 
 @Injectable()
 export class AgentFactory {
@@ -41,8 +43,6 @@ export class AgentFactory {
         throw new Error('Empty JSON configuration');
       }
 
-      const { SystemMessage } = await import('@langchain/core/messages');
-
       const systemMessage = new SystemMessage(json.name);
       this.json_config = {
         prompt: systemMessage,
@@ -68,29 +68,35 @@ export class AgentFactory {
   }
 
   async createAgent(
-    signature: string,
-    agentMode: string = 'agent'
+    agentConfig : AgentInitializationDTO
   ): Promise<StarknetAgent> {
+
     if (!this.initialized) {
       await this.initPromise;
     }
+
+    const systemMessage = new SystemMessage(agentConfig.prompt);
+    this.json_config = {
+      prompt: systemMessage,
+      name: agentConfig.name,
+      interval: agentConfig.interval || 30000,
+      chat_id: 'default',
+      mode: {
+        interactive: true,
+        autonomous: false,
+        recursionLimit: 15,
+      },
+      plugins: Array.isArray(agentConfig.plugins) 
+        ? agentConfig.plugins.map((tool: string) => tool.toLowerCase())
+        : [],
+      memory: agentConfig.memory.enabled,
+    };
 
     if (!this.json_config) {
       throw new Error(
         'Agent configuration is still undefined after initialization'
       );
     }
-
-    try {
-      if (this.agentInstances.has(signature)) {
-        const agentSignature = this.agentInstances.get(signature);
-        if (!agentSignature) {
-          throw new Error(
-            `Agent with signature ${signature} exists in map but returned undefined`
-          );
-        }
-        return agentSignature;
-      }
 
       const database = {
         database: process.env.POSTGRES_DB as string,
@@ -109,17 +115,16 @@ export class AgentFactory {
         aiProviderApiKey: this.config.ai.apiKey,
         agentconfig: this.json_config,
         db_credentials: database,
-        signature: signature,
-        agentMode: agentMode,
+        signature: "key",
+        agentMode: "agent",
       });
 
       // Store for later reuse
-      this.agentInstances.set(signature, agent);
+      this.agentInstances.set("key", agent);
 
       return agent;
-    } catch (error) {
+    } catch (error : any) {
       console.error('Error creating agent:', error);
       throw error;
     }
   }
-}

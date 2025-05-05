@@ -22,7 +22,6 @@ import { DatabaseController } from './database.controller.js';
   ],
   providers: [
     AgentService,
-    WalletService,
     AgentFactory,
     {
       provide: APP_GUARD,
@@ -31,10 +30,9 @@ import { DatabaseController } from './database.controller.js';
   ],
   controllers: [
     AgentsController,
-    WalletController,
     DatabaseController,
     MetricsController,
   ],
-  exports: [AgentService, WalletService, AgentFactory],
+  exports: [AgentService, AgentFactory],
 })
 export class AgentsModule {}

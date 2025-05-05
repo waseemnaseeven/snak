@@ -7,11 +7,12 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build": "pnpm clean:dist && nest build",
+    "build": "nest build",
     "clean": "rm -rf node_modules",
     "clean:dist": "rm -rf dist",
     "clean:all": "pnpm clean && pnpm clean:dist",
-    "format": "prettier --write \"src/**/*.ts\"",    "dev": "nest start --watch",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "dev": "nest start --watch",
     "start": "node dist/main"
   },
   "keywords": [],
