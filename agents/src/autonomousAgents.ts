@@ -120,7 +120,7 @@ export const createAutonomousAgent = async (
       llm: model,
       tools,
       checkpointSaver: memory,
-      //messageModifier: json_config.prompt,
+      messageModifier: json_config.prompt,
     });
 
     // Patch the agent to handle token limits in autonomous mode
