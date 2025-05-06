@@ -41,6 +41,46 @@ export interface ModeConfig {
 }
 
 /**
+ * Creates a deep copy of a JsonConfig object while preserving class instances
+ * @param config The JsonConfig object to copy
+ * @returns A deep copy of the JsonConfig object
+ */
+export const deepCopyJsonConfig = (config: JsonConfig): JsonConfig => {
+	if (!config) {
+	  throw new Error('Cannot copy null or undefined config');
+	}
+
+	// Create a new SystemMessage with the same content
+	const promptCopy = new SystemMessage(config.prompt.content as string);
+
+	// Copy the mode config
+	const modeCopy: ModeConfig = {
+	  interactive: config.mode.interactive,
+	  autonomous: config.mode.autonomous,
+	  recursionLimit: config.mode.recursionLimit,
+	};
+
+	// Copy mcpServers if present
+	const mcpServersCopy = config.mcpServers
+	  ? JSON.parse(JSON.stringify(config.mcpServers))
+	  : undefined;
+
+	// Create a new JsonConfig object with all properties copied
+	const configCopy: JsonConfig = {
+	  name: config.name,
+	  prompt: promptCopy,
+	  interval: config.interval,
+	  chat_id: config.chat_id,
+	  plugins: [...config.plugins],
+	  memory: config.memory,
+	  mcpServers: mcpServersCopy,
+	  mode: modeCopy,
+	};
+
+	return configCopy;
+  };
+
+/**
  * Updates the mode configuration in the JSON file
  */
 export const updateModeConfig = async (
@@ -245,17 +285,16 @@ const checkParseJson = async (
         mcpServers: json.mcpServers || {},
       };
 
-
       if (jsonconfig.plugins.length === 0) {
         logger.warn("No plugins specified in agent's config");
       }
       validateConfig(jsonconfig);
       return jsonconfig;
     } catch (error) {
-		throw new Error(
-			`Failed to access or parse config file at ${configPath}: ${error.message}`
-		  );
-	}
+      throw new Error(
+        `Failed to access or parse config file at ${configPath}: ${error.message}`
+      );
+    }
   } catch (error) {
     logger.error(
       chalk.red(
