@@ -7,6 +7,7 @@ import logger from './src/logger.js';
 import { EventEmitter } from 'events';
 import { StarknetAgent } from './src/starknetAgent.js';
 import { RpcProvider } from 'starknet';
+import { deepCopyJsonConfig } from './src/jsonConfig.js';
 
 interface MultiAgentConfig {
   description?: string;
@@ -58,15 +59,15 @@ async function launchAgentAsync(
 ): Promise<{ stop: () => Promise<void> }> {
   try {
     const agentConfig = await load_json_config(agentPath);
-	if (!agentConfig) {
-		throw new Error(`Invalid configuration for agent type: ${agentType}`);
-	}
-	console.log("SYSTEM MESSAGE IN JSON : ", agentConfig.prompt)
+    if (!agentConfig) {
+      throw new Error(`Invalid configuration for agent type: ${agentType}`);
+    }
 
     if (!agentConfig) {
       throw new Error(`Failed to load agent configuration from ${agentPath}`);
     }
-    const agentConfigCopy = JSON.parse(JSON.stringify(agentConfig));
+	const agentConfigCopy = deepCopyJsonConfig(agentConfig)
+    //const agentConfigCopy = JSON.parse(JSON.stringify(agentConfig)); // ISSUE HERE
     agentConfigCopy.chat_id = `${agentConfigCopy.chat_id || agentType}_${agentId}`;
 
     const agent = new StarknetAgent({
@@ -80,7 +81,6 @@ async function launchAgentAsync(
       agentMode: 'auto',
       agentconfig: agentConfigCopy,
     });
-
     await agent.createAgentReactExecutor();
     agent.setLoggingOptions({
       langchainVerbose: false,
@@ -184,7 +184,6 @@ export async function launchMultiAgent(
     let totalAgentsLaunched = 0;
     const masterAbortController = new AbortController();
 
-    // Process each agent type in the configuration
     for (const agentConfig of multiAgentConfig.agents) {
       const { type, count } = agentConfig;
 
@@ -198,52 +197,46 @@ export async function launchMultiAgent(
         logger.warn(`Invalid agent configuration for type: ${type}`);
         continue;
       }
-
-      // Find the agent configuration file
       const agentConfigPath = findAgentConfig(type);
-
       if (!agentConfigPath) {
         logger.error(`Agent configuration not found for type: ${type}`);
         continue;
       }
 
-      // Load the agent configuration to verify it exists and is valid
       try {
-        //const agentConfigContent = await load_json_config(agentConfigPath);
-        // if (!agentConfigContent) {
-        //   throw new Error(`Invalid configuration for agent type: ${type}`);
-        // }
-
         logger.info(`Launching ${count} instances of agent type: ${type}`);
-
-        // Launch the specified number of agents for this agent type
         const agentPromises = [];
 
         for (let i = 0; i < count; i++) {
           const agentId = totalAgentsLaunched + i;
-          // Create individual abort controller for each agent
           const agentAbortController = new AbortController();
 
-          // Launch agent asynchronously
+          masterAbortController.signal.addEventListener('abort', () => {
+            agentAbortController.abort();
+          });
+
           const agentPromise = launchAgentAsync(
             agentConfigPath,
             agentId,
             type,
             agentAbortController
-          ).then(({ stop }) => {
-            // Store the stop function
-            agentStopFunctions.push(stop);
-            return agentId;
-          });
-
+          )
+            .then(({ stop }) => {
+              agentStopFunctions.push(stop);
+              return agentId;
+            })
+            .catch((error) => {
+              logger.error(
+                `Failed to launch agent ${agentId} of type ${type}: ${error.message}`
+              );
+              return agentId;
+            });
           agentPromises.push(agentPromise);
-
-          // Brief delay between agent launches to stagger resource usage
-          await new Promise((resolve) => setTimeout(resolve, 200));
+          if (i < count - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          }
         }
-
-        // Wait for all agents of this type to be initialized
-        const agentIds = await Promise.all(agentPromises);
+        await Promise.all(agentPromises);
 
         totalAgentsLaunched += count;
       } catch (configError) {
@@ -257,12 +250,10 @@ export async function launchMultiAgent(
     const successMessage = `Successfully launched ${totalAgentsLaunched} agent instances across ${multiAgentConfig.agents.length} agent types`;
     console.log(createBox('Multi-Agent Launcher', successMessage));
 
-    // Return a function that will stop all agents when called
     return async () => {
       console.log('\nShutting down all agents...');
-
-      // Call all stop functions in parallel
-      await Promise.all(
+      masterAbortController.abort();
+      const results = await Promise.allSettled(
         agentStopFunctions.map((stopFn) => {
           try {
             return stopFn();
@@ -272,6 +263,12 @@ export async function launchMultiAgent(
           }
         })
       );
+      const failedShutdowns = results.filter(
+        (r) => r.status === 'rejected'
+      ).length;
+      if (failedShutdowns > 0) {
+        logger.warn(`${failedShutdowns} agents failed to shut down cleanly`);
+      }
 
       console.log('All agents terminated.');
     };

@@ -104,23 +104,24 @@ const validateEnvVars = async (): Promise<void> => {
  */
 const loadCommand = async (): Promise<string> => {
   const argv = await yargs(hideBin(process.argv))
-    .option('config', {
+    .option('agent', {
       alias: 'c',
       describe: 'Multi-agent configuration file path',
       type: 'string',
-      default: '../config/multi-agents/default.multi-agent.json',
+      default: 'default.multi-agent.json',
     })
     .strict()
     .parse();
 
-  const configPath = argv['config'] as string;
-  logger.info(`Looking for multi-agent config at: ${configPath}`);
+  const configName = argv['agent'] as string;
+  console.log(configName);
 
-  if (path.isAbsolute(configPath) && fs.existsSync(configPath)) {
-    return path.normalize(configPath);
-  }
-
-  const relativePath = path.resolve(process.cwd(), configPath);
+  const relativePath = path.resolve(
+    process.cwd(),
+    '../config/multi-agents',
+    configName
+  );
+  logger.info(`Looking for multi-agent config at: ${relativePath}`);
   if (fs.existsSync(relativePath)) {
     return path.normalize(relativePath);
   }
