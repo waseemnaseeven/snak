@@ -6,7 +6,6 @@ import {
   NotFoundException,
   OnModuleInit,
   Post,
-  Req,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -15,7 +14,6 @@ import { StarknetAgent } from '@snakagent/agents';
 import { AgentService } from './services/agent.service.js';
 import { AgentResponseInterceptor } from './interceptors/response.js';
 import { FileTypeGuard } from './guard/file-validator.guard.js';
-import { FastifyRequest } from 'fastify';
 import { promises as fs } from 'fs';
 import { getFilename } from './utils/index.js';
 import { AgentFactory } from './agents.factory.js';
@@ -34,8 +32,8 @@ export class AgentsController implements OnModuleInit {
 
   async onModuleInit() {
     try {
-      this.agent = await this.agentFactory.createAgent('key', 'agent');
-      await this.agent.createAgentReactExecutor();
+      this.agent = await this.agentFactory.createAgent('key');
+      await this.agent.init();
     } catch (error) {
       console.error('Failed to initialize AgentsController:', error);
       throw error;
@@ -65,7 +63,7 @@ export class AgentsController implements OnModuleInit {
       'image/png',
     ])
   )
-  async uploadFile(@Req() req: FastifyRequest) {
+  async uploadFile() {
     const logger = new Logger('Upload service');
     logger.debug({ message: 'The file has been uploaded' });
     return { status: 'success', data: 'The file has been uploaded.' };

@@ -1,4 +1,4 @@
-# Contract Plugin - Comprehensive Guide
+# Snak - Contract Plugin
 
 ## Overview
 

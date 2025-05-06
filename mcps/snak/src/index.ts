@@ -41,15 +41,12 @@ export const RegisterToolInServer = async (allowed_tools: string[]) => {
     provider: new RpcProvider({ nodeUrl: process.env.STARKNET_RPC_URL }),
     accountPrivateKey: process.env.STARKNET_PRIVATE_KEY as string,
     accountPublicKey: process.env.STARKNET_PUBLIC_ADDRESS as string,
-    aiModel: process.env.AI_MODEL as string,
-    aiProvider: process.env.AI_PROVIDER as string,
-    aiProviderApiKey: process.env.AI_PROVIDER_API_KEY as string,
     signature: 'key',
     db_credentials: database,
-
-    agentMode: 'agent',
-    agentconfig: undefined,
+    agentConfig: undefined,
   });
+  await agent.init();
+
   const tools: StarknetTool[] = [];
   await registerTools(agent, allowed_tools, tools);
   for (const tool of tools) {
@@ -70,6 +67,7 @@ export const RegisterToolInServer = async (allowed_tools: string[]) => {
         tool.name,
         tool.description,
         tool.schema.shape,
+        // @ts-ignore - Ignoring unused 'extra' parameter for now
         async (params: any, extra: any) => {
           const result = await tool.execute(agent, params);
           return {

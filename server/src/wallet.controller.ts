@@ -31,8 +31,8 @@ export class WalletController implements OnModuleInit {
 
   async onModuleInit() {
     try {
-      this.agent = await this.agentFactory.createAgent('wallet', 'agent');
-      await this.agent.createAgentReactExecutor();
+      this.agent = await this.agentFactory.createAgent('wallet');
+      await this.agent.init();
     } catch (error) {
       console.error('Failed to initialize WalletController:', error);
       throw error;
@@ -42,7 +42,7 @@ export class WalletController implements OnModuleInit {
   @Post('request')
   async handleUserCalldataRequest(@Body() userRequest: AgentRequestDTO) {
     const agent = this.agent.getAgentConfig()?.name ?? 'agent';
-    const mode = this.agent.agentMode; // TODO: This should be exposed by method
+    const mode = this.agent.getAgentMode(); // TODO: This should be exposed by method
     const route = this.reflector.get('path', this.handleUserCalldataRequest);
     const action = this.walletService.handleUserCalldataRequest(
       this.agent,
@@ -53,7 +53,7 @@ export class WalletController implements OnModuleInit {
 
   @Post('upload_large_file')
   @UseGuards(new FileTypeGuard(['image/jpeg', 'image/png']))
-  async uploadFile(@Req() req: FastifyRequest) {
+  async uploadFile(@Req() _req: FastifyRequest) {
     const logger = new Logger('Upload service');
     logger.debug({ message: 'The file has been uploaded' });
     return {

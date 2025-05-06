@@ -11,7 +11,8 @@
     "clean": "rm -rf node_modules",
     "clean:dist": "rm -rf dist",
     "clean:all": "pnpm clean && pnpm clean:dist",
-    "format": "prettier --write \"src/**/*.ts\"",    "format": "prettier --write \"./**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format": "prettier --write \"./**/*.ts\"",
     "prepublishOnly": "npm run format && npm run build",
     "prepack": "npm run build",
     "lint": "eslint \"src/**/*.ts\" --fix"
@@ -19,7 +20,10 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.7.0",
     "starknet": "^6.23.1",
-    "zod": "^3.24.2"
+    "zod": "^3.24.2",
+    "@fastify/type-provider-json-schema-to-ts": "^3.0.0",
+    "fastify": "^4.28.1",
+    "@fastify/cors": "^9.0.1"
   },
   "devDependencies": {
     "@snakagent/agents": "workspace:*",

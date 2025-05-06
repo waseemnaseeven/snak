@@ -1,20 +1,15 @@
 // Main exports
-export type {
-  StarknetAgentConfig,
-  LoggingOptions,
-} from './agents/core/starknetAgent.js';
+export type { StarknetAgentConfig } from './agents/core/starknetAgent.js';
 export { StarknetAgent } from './agents/core/starknetAgent.js';
 
 // Agent-related exports
 // Interactive agent exports
-export {
-  selectModel,
-  createAgent,
-  initializeToolsList,
-} from './agents/interactive/agent.js';
+export { createAgent } from './agents/modes/interactive.js';
+
+export { initializeToolsList } from './agents/core/utils.js';
 
 // Autonomous agent exports
-export { createAutonomousAgent } from './agents/autonomous/autonomousAgents.js';
+export { createAutonomousAgent } from './agents/modes/autonomous.js';
 
 // Tool-related exports
 export type {

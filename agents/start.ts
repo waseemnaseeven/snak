@@ -1,10 +1,18 @@
+// Simple log configuration - set DEBUG=true to enable debug logs
+const DEBUG = process.env.DEBUG === 'true';
+console.log(`Environment variables: DEBUG=${DEBUG}`);
+
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { createSpinner } from 'nanospinner';
-import { StarknetAgent } from './src/agents/core/starknetAgent.js';
 import { RpcProvider } from 'starknet';
 import { config } from 'dotenv';
-import { load_json_config, updateModeConfig } from './src/config/jsonConfig.js';
+import { Postgres } from '@snakagent/database';
+import {
+  load_json_config,
+  updateModeConfig,
+  JsonConfig,
+} from './src/config/jsonConfig.js';
 import { createBox } from './src/prompt/formatting.js';
 import { addTokenInfoToBox } from './src/token/tokenTracking.js';
 import yargs from 'yargs';
@@ -16,28 +24,33 @@ import { dirname } from 'path';
 import { logger } from '@snakagent/core';
 import { DatabaseCredentials } from './src/tools/types/database.js';
 
-// Global deactivation of LangChain logs
-process.env.LANGCHAIN_TRACING = 'false';
-process.env.LANGCHAIN_VERBOSE = 'false';
+import { AgentSystem, AgentSystemConfig } from './src/agents/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 interface CommandOptions {
   agentPath: string;
+  modelsConfigPath: string;
   silentLlm: boolean;
 }
 
 /**
- * Loads command line arguments and resolves the agent configuration path
+ * Loads command line arguments and resolves configuration paths
  */
 const loadCommand = async (): Promise<CommandOptions> => {
   const argv = await yargs(hideBin(process.argv))
     .option('agent', {
       alias: 'a',
-      describe: 'Your config agent file name',
+      describe: 'Your agent config file name (e.g., default.agent.json)',
       type: 'string',
       default: 'default.agent.json',
+    })
+    .option('models', {
+      alias: 'm',
+      describe: 'Your models config file name (e.g., default.models.json)',
+      type: 'string',
+      default: 'default.models.json',
     })
     .option('silent-llm', {
       alias: 's',
@@ -48,40 +61,57 @@ const loadCommand = async (): Promise<CommandOptions> => {
     .strict()
     .parse();
 
-  const agentPath = argv['agent'] as string;
+  const agentFileName = argv['agent'] as string;
+  const modelsFileName = argv['models'] as string;
   const silentLlm = argv['silent-llm'] as boolean;
 
-  // Try multiple possible locations for the config file
-  const possiblePaths = [
-    path.resolve(process.cwd(), 'config', 'agents', agentPath),
-    path.resolve(process.cwd(), '..', 'config', 'agents', agentPath),
-    path.resolve(__dirname, '..', '..', '..', 'config', 'agents', agentPath),
-    path.resolve(
-      __dirname,
-      '..',
-      '..',
-      '..',
-      '..',
-      'config',
-      'agents',
-      agentPath
-    ),
-  ];
+  // Now update all environment variables now that we have processed the command line args
+  console.log(`Environment variables after parsing: DEBUG=${DEBUG}`);
+  process.env.LOG_LEVEL = DEBUG ? 'debug' : 'info';
+  process.env.DEBUG_LOGGING = DEBUG ? 'true' : 'false';
+  process.env.LANGCHAIN_VERBOSE = DEBUG ? 'true' : 'false';
+  console.log(
+    `Final environment variables: LOG_LEVEL=${process.env.LOG_LEVEL}`
+  );
+  // Always disable langchain tracing regardless of debug mode
+  process.env.LANGCHAIN_TRACING = 'false';
 
-  // Try each path until we find one that works
-  for (const tryPath of possiblePaths) {
-    if (fs.existsSync(tryPath)) {
-      return { agentPath: tryPath, silentLlm };
+  const findConfigPath = (
+    fileName: string,
+    configType: 'agents' | 'models'
+  ): string => {
+    const possibleBasePaths = [
+      process.cwd(),
+      path.resolve(process.cwd(), '..'),
+      path.resolve(__dirname, '..', '..', '..'),
+      path.resolve(__dirname, '..', '..', '..', '..'),
+    ];
+
+    for (const basePath of possibleBasePaths) {
+      const tryPath = path.resolve(basePath, 'config', configType, fileName);
+      if (fs.existsSync(tryPath)) {
+        logger.debug(`Found ${configType} config at: ${tryPath}`);
+        return tryPath;
+      }
     }
-  }
 
-  // If not found in any of the expected locations, try the absolute path
-  return {
-    agentPath: path.isAbsolute(agentPath)
-      ? agentPath
-      : path.resolve(process.cwd(), agentPath),
-    silentLlm,
+    logger.warn(
+      `Could not find ${fileName} in standard config locations. Trying absolute/relative path.`
+    );
+    const directPath = path.resolve(process.cwd(), fileName);
+    if (fs.existsSync(directPath)) {
+      logger.debug(`Found ${configType} config at direct path: ${directPath}`);
+      return directPath;
+    }
+
+    logger.error(`Configuration file ${fileName} not found.`);
+    throw new Error(`Configuration file ${fileName} not found.`);
   };
+
+  const agentPath = findConfigPath(agentFileName, 'agents');
+  const modelsConfigPath = findConfigPath(modelsFileName, 'models');
+
+  return { agentPath, modelsConfigPath, silentLlm };
 };
 
 /**
@@ -108,102 +138,36 @@ const logo = `${chalk.cyan(`
 ${chalk.dim('v0.0.11 by ')}${createLink('Kasar', 'https://kasar.io')}`)}`;
 
 /**
- * Gets the available terminal width
+ * Charge les variables d'environnement depuis le fichier .env
+ * Les variables définies en ligne de commande ont priorité
  */
-const getTerminalWidth = (): number => {
-  return Math.min(process.stdout.columns || 80, 100);
-};
+function loadEnvVars(): Record<string, string> | undefined {
+  // Correctly determine the project root relative to the script
+  const projectRoot = path.resolve(__dirname, '..');
+  const envPath = path.resolve(projectRoot, '.env');
 
-/**
- * Wraps text to fit within a maximum width
- */
-const wrapText = (text: string, maxWidth: number): string[] => {
-  const words = text.split(' ');
-  const lines: string[] = [];
-  let currentLine = '';
-
-  words.forEach((word) => {
-    if ((currentLine + ' ' + word).length <= maxWidth) {
-      currentLine += (currentLine ? ' ' : '') + word;
-    } else {
-      if (currentLine) lines.push(currentLine);
-      currentLine = word;
-    }
-  });
-
-  if (currentLine) lines.push(currentLine);
-  return lines;
-};
-
-/**
- * Reloads environment variables from .env file
- */
-function reloadEnvVars(): Record<string, string> | undefined {
-  Object.keys(process.env).forEach((key) => {
-    delete process.env[key];
-  });
+  if (process.env.DEBUG === 'true')
+    console.log(`Loading .env file from: ${envPath}`);
 
   const result = config({
-    path: path.resolve(process.cwd(), '.env'),
-    override: true,
+    path: envPath,
+    override: false, // Ne pas écraser les variables définies en ligne de commande
   });
 
-  if (result.error) {
-    throw new Error('Failed to reload .env file');
+  if (result.error && !fs.existsSync(envPath)) {
+    console.warn(
+      `No .env file found at ${envPath}, using environment variables only`
+    );
+    return undefined;
+  } else if (result.error) {
+    console.error(`Failed to load .env file from ${envPath}`, result.error);
+    throw new Error('Failed to load .env file');
   }
 
+  if (process.env.DEBUG === 'true')
+    console.log('.env file loaded successfully');
   return result.parsed;
 }
-
-/**
- * Validates required environment variables and prompts for missing ones
- */
-const validateEnvVars = async (): Promise<void> => {
-  const required = [
-    'STARKNET_RPC_URL',
-    'STARKNET_PRIVATE_KEY',
-    'STARKNET_PUBLIC_ADDRESS',
-    'AI_MODEL',
-    'AI_PROVIDER',
-    'AI_PROVIDER_API_KEY',
-  ];
-
-  const missings = required.filter((key) => !process.env[key]);
-
-  if (missings.length > 0) {
-    console.error(
-      createBox(missings.join('\n'), {
-        title: 'Missing Environment Variables',
-        isError: true,
-      })
-    );
-
-    for (const missing of missings) {
-      const { prompt } = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'prompt',
-          message: chalk.redBright(`Enter the value of ${missing}:`),
-          validate: (value: string) => {
-            const trimmed = value.trim();
-            if (!trimmed) return 'Please enter a valid message';
-            return true;
-          },
-        },
-      ]);
-
-      await new Promise<void>((resolve, reject) => {
-        fs.appendFile('.env', `\n${missing}=${prompt}\n`, (err) => {
-          if (err) reject(new Error('Error when trying to write on .env file'));
-          resolve();
-        });
-      });
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-    reloadEnvVars();
-    await validateEnvVars();
-  }
-};
 
 /**
  * Formats agent response for display
@@ -235,43 +199,62 @@ const localRun = async (): Promise<void> => {
     )
   );
 
-  const { agentPath, silentLlm } = await loadCommand();
-  const { mode } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'mode',
-      message: 'Select operation mode:',
-      choices: [
-        {
-          name: `Interactive Mode`,
-          value: 'agent',
-          short: 'Interactive',
-        },
-        {
-          name: `Autonomous Mode`,
-          value: 'auto',
-          short: 'Autonomous',
-        },
-      ],
-    },
-  ]);
-
-  clearScreen();
-  console.log(logo);
-  const spinner = createSpinner('Initializing Starknet Agent').start();
+  let agentSystem: AgentSystem | null = null;
 
   try {
-    spinner.stop();
-    await validateEnvVars();
-    const agentConfig = await load_json_config(agentPath);
+    // Load command line args
+    const { agentPath, modelsConfigPath } = await loadCommand();
 
-    if (agentConfig === undefined) {
-      throw new Error('Failed to load agent configuration');
+    // Load initial agent config
+    let json_config: JsonConfig | undefined = await load_json_config(agentPath);
+    if (!json_config) {
+      throw new Error(`Failed to load agent configuration from ${agentPath}`);
     }
 
-    // Update the configuration file with the selected mode
-    if (mode === 'agent' || mode === 'auto') {
-      const modeToUpdate = mode === 'agent' ? 'interactive' : 'autonomous';
+    // Load environment variables
+    loadEnvVars();
+
+    // Verify required environment variables
+    const required = [
+      'STARKNET_RPC_URL',
+      'STARKNET_PRIVATE_KEY',
+      'STARKNET_PUBLIC_ADDRESS',
+    ];
+
+    const missing = required.filter((key) => !process.env[key]);
+    if (missing.length > 0) {
+      throw new Error(
+        `Missing required environment variables: ${missing.join(', ')}`
+      );
+    }
+
+    // Ask for mode
+    const { mode } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'mode',
+        message: 'Select operation mode:',
+        choices: [
+          {
+            name: `Interactive Mode`,
+            value: 'interactive',
+            short: 'Interactive',
+          },
+          { name: `Autonomous Mode`, value: 'autonomous', short: 'Autonomous' },
+        ],
+      },
+    ]);
+    const agentMode = mode;
+
+    clearScreen();
+    console.log(logo);
+    const spinner = createSpinner('Initializing Agent System').start();
+
+    // Update config file on disk if needed
+    try {
+      spinner.stop();
+
+      const modeToUpdate = agentMode;
       const updateSpinner = createSpinner(
         `Updating configuration to ${modeToUpdate} mode`
       ).start();
@@ -282,48 +265,24 @@ const localRun = async (): Promise<void> => {
           text: `Configuration updated to ${modeToUpdate} mode`,
         });
 
-        // Reload the configuration after updating it
-        const updatedConfig = await load_json_config(agentPath);
-        if (updatedConfig) {
-          Object.assign(agentConfig, updatedConfig);
+        // Reload config from disk
+        json_config = await load_json_config(agentPath);
+        if (!json_config) {
+          throw new Error(
+            `Failed to reload agent configuration after update from ${agentPath}`
+          );
         }
       } else {
-        updateSpinner.error({
+        updateSpinner.warn({
           text: `Failed to update configuration, continuing with current settings`,
         });
       }
+    } catch (updateError) {
+      spinner.error({ text: `Failed to update configuration: ${updateError}` });
+      logger.warn('Continuing with potentially outdated mode configuration.');
     }
 
-    // Make sure the mode settings match the user's selection
-    if (mode === 'agent') {
-      agentConfig.mode.interactive = true;
-      agentConfig.mode.autonomous = false;
-    } else if (mode === 'auto') {
-      agentConfig.mode.interactive = false;
-      agentConfig.mode.autonomous = true;
-    }
-
-    // Determine agent mode based on the user's selection
-    const agentMode = mode;
-
-    // Log the configuration and mode for debugging
-    logger.debug(`Selected mode: ${mode}, Agent mode: ${agentMode}`);
-    logger.debug(
-      `Config mode settings: interactive=${agentConfig.mode?.interactive}, autonomous=${agentConfig.mode?.autonomous}`
-    );
-
-    // Display more information about the agent
-    const agentName = agentConfig.name || 'Unknown';
-    const configPath = path.basename(agentPath);
-    const aiModel = process.env.AI_MODEL;
-    const aiProvider = process.env.AI_PROVIDER;
-
-    spinner.success({
-      text: chalk.black(
-        `Agent "${chalk.cyan(agentName)}" initialized successfully`
-      ),
-    });
-
+    // Setup database credentials from environment variables
     const database: DatabaseCredentials = {
       database: process.env.POSTGRES_DB as string,
       host: process.env.POSTGRES_HOST as string,
@@ -332,38 +291,59 @@ const localRun = async (): Promise<void> => {
       port: parseInt(process.env.POSTGRES_PORT as string),
     };
 
-    // Create agent instance with proper configuration
-    const agent = new StarknetAgent({
-      provider: new RpcProvider({ nodeUrl: process.env.STARKNET_RPC_URL }),
-      accountPrivateKey: process.env.STARKNET_PRIVATE_KEY as string,
-      accountPublicKey: process.env.STARKNET_PUBLIC_ADDRESS as string,
-      aiModel: process.env.AI_MODEL as string,
-      aiProvider: process.env.AI_PROVIDER as string,
-      aiProviderApiKey: process.env.AI_PROVIDER_API_KEY as string,
-      signature: 'key',
-      db_credentials: database,
-      agentMode: agentMode,
-      agentconfig: agentConfig,
+    // Initialize Database Connection Pool FIRST
+    try {
+      await Postgres.connect(database);
+      spinner.update({ text: 'Database connection pool initialized' });
+      logger.info('Database connection pool initialized successfully.');
+    } catch (dbError) {
+      spinner.error({ text: 'Failed to initialize database connection pool' });
+      logger.error('Database initialization failed:', dbError);
+      throw new Error(`Failed to initialize database: ${dbError.message}`);
+    }
+
+    const nodeUrl = process.env.STARKNET_RPC_URL;
+    if (!nodeUrl) {
+      throw new Error(
+        "STARKNET_RPC_URL n'est pas défini dans les variables d'environnement"
+      );
+    }
+
+    // Prepare RPC Provider
+    const provider = new RpcProvider({ nodeUrl: `${nodeUrl}` });
+
+    // Prepare Agent System configuration ACCORDING TO THE DEFINITION IN agents/src/agents/index.ts
+    const agentSystemConfig: AgentSystemConfig = {
+      starknetProvider: provider,
+      accountPrivateKey: process.env.STARKNET_PRIVATE_KEY!,
+      accountPublicKey: process.env.STARKNET_PUBLIC_ADDRESS!,
+      modelsConfigPath, // Already loaded
+      agentMode:
+        json_config?.mode?.autonomous === true ? 'autonomous' : 'interactive', // Use autonomous flag or default to interactive
+      signature: '', // TODO: Implement signature handling
+      databaseCredentials: database,
+      agentConfigPath: agentPath, // Pass the PATH to the agent config file
+      debug: DEBUG,
+    };
+
+    // Create and initialize the agent system
+    agentSystem = new AgentSystem(agentSystemConfig);
+    await agentSystem.init();
+
+    spinner.success({
+      text: chalk.black(
+        `Agent System "${chalk.cyan(json_config?.name || 'Unknown')}" initialized successfully`
+      ),
     });
 
-    logger.info(`Created StarknetAgent with agentMode: ${agentMode}`);
-
-    await agent.createAgentReactExecutor();
-
-    // Configure logging options with a small delay to ensure initialization
-    setTimeout(() => {
-      agent.setLoggingOptions({
-        langchainVerbose: !silentLlm,
-        tokenLogging: !silentLlm,
-      });
-    }, 100);
-
-    if (agentMode === 'agent') {
+    // --- Execution Logic based on mode ---
+    if (agentMode === 'interactive') {
       console.log(chalk.dim('\nStarting interactive session...\n'));
       console.log(
-        chalk.dim(`- Config: ${chalk.bold(configPath)}\n`) +
-          chalk.dim(`- Model: ${chalk.bold(aiModel)}\n`) +
-          chalk.dim(`- Provider: ${chalk.bold(aiProvider)}\n`)
+        chalk.dim(`- Config: ${chalk.bold(path.basename(agentPath))}`)
+      );
+      console.log(
+        chalk.dim(`- Models: ${chalk.bold(path.basename(modelsConfigPath))}\n`)
       );
 
       while (true) {
@@ -375,52 +355,108 @@ const localRun = async (): Promise<void> => {
             validate: (value: string) => {
               const trimmed = value.trim();
               if (!trimmed) return 'Please enter a valid message';
+              if (trimmed.toLowerCase() === 'exit') return true;
               return true;
             },
           },
         ]);
 
+        if (user.toLowerCase() === 'exit') {
+          console.log(chalk.blue('Exiting interactive mode...'));
+          break;
+        }
+
         // Start with a message instead of a spinner to allow log display
         console.log(chalk.yellow('Processing request...'));
 
         try {
-          const aiResponse = await agent.execute(user);
+          // Execute through the supervisor agent which will route appropriately
+          const result = await agentSystem.execute(user);
+
+          // Extract the response from the result
+          let aiResponse;
+          if (result && result.messages && result.messages.length > 0) {
+            aiResponse = result.messages[result.messages.length - 1].content;
+          } else {
+            aiResponse = String(result);
+          }
 
           if (typeof aiResponse === 'string') {
-            const boxContent = createBox(
+            let mainResponse = aiResponse;
+            let nextStepsContent: string | null = null;
+            // Use a more robust regex to split, accounting for whitespace and case
+            const nextStepsMarkerRegex = /\\s*NEXT\\s+STEPS:\\s*/i;
+            const parts = aiResponse.split(nextStepsMarkerRegex);
+
+            if (parts.length > 1) {
+              // If split produces more than one part, the marker was found
+              mainResponse = parts[0].trim(); // Everything before the marker
+              nextStepsContent = parts[1].trim(); // Everything after the marker
+            } else {
+              // Marker not found, the whole response is the main response
+              mainResponse = aiResponse.trim();
+            }
+
+            // Format and print the main response box
+            const mainBoxContent = createBox(
               'Agent Response',
-              formatAgentResponse(aiResponse)
+              formatAgentResponse(mainResponse) // Format only the main part
             );
-            // Add token information to the box
-            const boxWithTokens = addTokenInfoToBox(boxContent);
-            process.stdout.write(boxWithTokens);
+            // Add token information to the main box
+            const mainBoxWithTokens = addTokenInfoToBox(mainBoxContent);
+            process.stdout.write(mainBoxWithTokens);
+
+            // Format and print the "Next Steps" box if it exists and is not empty
+            if (nextStepsContent && nextStepsContent.length > 0) {
+              const nextStepsBoxContent = createBox(
+                'Agent Next Steps',
+                formatAgentResponse(nextStepsContent) // Format only the next steps part
+              );
+              // Do not add token info here, it's part of the main generation stats
+              process.stdout.write(nextStepsBoxContent);
+            }
           } else {
-            logger.error('Invalid response type');
+            logger.error('Invalid response type received:', aiResponse);
+            console.log(
+              createBox('Received invalid response type from agent system.', {
+                title: 'Error',
+                isError: true,
+              })
+            );
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error(chalk.red('Error processing request'));
+          logger.error('Error during agent execution:', error);
           console.log(
-            createBox(error.message, { title: 'Error', isError: true })
+            createBox(
+              error.message || 'An unknown error occurred during processing.',
+              { title: 'Error', isError: true }
+            )
           );
         }
       }
-    } else if (agentMode === 'auto') {
+    } else if (agentMode === 'autonomous') {
       console.log(chalk.dim('\nStarting autonomous session...\n'));
       console.log(
-        chalk.dim(`- Config: ${chalk.bold(configPath)}\n`) +
-          chalk.dim(`- Model: ${chalk.bold(aiModel)}\n`) +
-          chalk.dim(`- Provider: ${chalk.bold(aiProvider)}\n`)
+        chalk.dim(`- Config: ${chalk.bold(path.basename(agentPath))}`)
       );
       console.log(chalk.yellow('Running autonomous mode...'));
 
       try {
         // Verify autonomous mode is enabled in the configuration
-        if (!agentConfig.mode.autonomous) {
+        if (!json_config?.mode?.autonomous) {
           throw new Error('Autonomous mode is disabled in agent configuration');
         }
 
-        // Autonomous execution without spinner to allow log display
-        await agent.execute_autonomous();
+        // Get the Starknet Agent and execute in autonomous mode
+        const starknetAgent = agentSystem.getStarknetAgent();
+        if (!starknetAgent) {
+          throw new Error('Failed to get StarknetAgent from the agent system');
+        }
+
+        // For backwards compatibility, still accessing execute_autonomous directly
+        // In future versions, this should be handled by the SupervisorAgent
+        await starknetAgent.execute_autonomous();
         console.log(chalk.green('Autonomous execution completed'));
       } catch (error) {
         console.error(chalk.red('Error in autonomous mode'));
@@ -429,11 +465,31 @@ const localRun = async (): Promise<void> => {
         );
       }
     }
-  } catch (error) {
-    spinner.error({ text: 'Failed to initialize agent' });
+  } catch (error: any) {
     console.error(
-      createBox(error.message, { title: 'Fatal Error', isError: true })
+      createBox(error.message || 'An unknown error occurred', {
+        title: 'Fatal Error',
+        isError: true,
+      })
     );
+    process.exit(1);
+  } finally {
+    // Clean up resources
+    if (agentSystem) {
+      try {
+        await agentSystem.dispose();
+        logger.info('Agent system disposed.');
+      } catch (error) {
+        logger.error('Error during agent system disposal:', error);
+      }
+    }
+    // Shutdown database pool
+    try {
+      await Postgres.shutdown();
+      logger.info('Database connection pool shut down.');
+    } catch (dbShutdownError) {
+      logger.error('Error shutting down database pool:', dbShutdownError);
+    }
   }
 };
 

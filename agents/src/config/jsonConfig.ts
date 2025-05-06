@@ -1,10 +1,10 @@
 import { SystemMessage } from '@langchain/core/messages';
-import { createBox, getTerminalWidth } from '../prompt/formatting.js';
 import chalk from 'chalk';
-import * as path from 'path';
+import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
 import { logger } from '@snakagent/core';
+import { MemoryConfig } from '../agents/operators/memoryAgent.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,7 +26,7 @@ export interface JsonConfig {
   interval: number;
   chat_id: string;
   plugins: string[];
-  memory: boolean;
+  memory: MemoryConfig;
   mcpServers?: Record<string, any>;
   mode: ModeConfig;
 }
@@ -37,7 +37,8 @@ export interface JsonConfig {
 export interface ModeConfig {
   interactive: boolean;
   autonomous: boolean;
-  recursionLimit: number;
+  maxIteration: number;
+  metaSelection?: boolean;
 }
 
 /**
@@ -52,11 +53,11 @@ export const updateModeConfig = async (
     const jsonData = await fs.readFile(configPath, 'utf8');
     const json = JSON.parse(jsonData);
 
-    // Ensure the mode object exists
+    // Throw error if mode object doesn't exist
     if (!json.mode) {
-      json.mode = {
-        recursionLimit: 15,
-      };
+      throw new Error(
+        'Mode configuration is mandatory but missing in config file'
+      );
     }
 
     // Update the mode properties
@@ -152,10 +153,12 @@ export const validateConfig = (config: JsonConfig) => {
 
   // Ensure recursion limit is valid
   if (
-    typeof config.mode.recursionLimit !== 'number' ||
-    config.mode.recursionLimit < 0
+    typeof config.mode.maxIteration !== 'number' ||
+    config.mode.maxIteration < 0
   ) {
-    config.mode.recursionLimit = 15;
+    throw new Error(
+      'maxIteration must be a positive number in mode configuration'
+    );
   }
 
   // Validate mcpServers if present
@@ -253,25 +256,26 @@ const checkParseJson = async (
     );
 
     // Handle mode configuration
-    let modeConfig: ModeConfig;
+    if (!json.mode) {
+      throw new Error(
+        'Mode configuration is mandatory but missing in config file'
+      );
+    }
 
-    if (json.mode) {
-      // Use existing mode configuration
-      modeConfig = {
-        interactive: json.mode.interactive !== false, // default to true if not specified
-        autonomous: json.mode.autonomous === true, // default to false if not specified
-        recursionLimit:
-          typeof json.mode.recursionLimit === 'number'
-            ? json.mode.recursionLimit
-            : 15, // default to 15 if not specified
-      };
-    } else {
-      // Default mode configuration
-      modeConfig = {
-        interactive: true,
-        autonomous: false,
-        recursionLimit: 15,
-      };
+    const modeConfig: ModeConfig = {
+      interactive: json.mode.interactive !== false,
+      autonomous: json.mode.autonomous === true,
+      maxIteration: json.mode.maxIteration,
+    };
+
+    // Add validation for maxIteration
+    if (
+      typeof modeConfig.maxIteration !== 'number' ||
+      modeConfig.maxIteration < 0
+    ) {
+      throw new Error(
+        'maxIteration must be a positive number in mode configuration'
+      );
     }
 
     // Ensure only one mode is enabled
