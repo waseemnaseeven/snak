@@ -33,7 +33,7 @@ export interface SignatureTool<P = any> {
 export interface ModeConfig {
   interactive: boolean;
   autonomous: boolean;
-  recursionLimit: number;
+  maxIteration: number;
 }
 
 /**
@@ -41,6 +41,9 @@ export interface ModeConfig {
  */
 export interface JsonConfig {
   name: string;
+  bio?: string;
+  objectives?: string[];
+  knowledge?: string[];
   prompt: SystemMessage;
   interval: number;
   chat_id: string;
@@ -62,7 +65,6 @@ export interface DatabaseCredentials {
  * @interface StarknetAgentInterface
  * @description Interface for the Starknet agent
  * @property {() => { accountPublicKey: string; accountPrivateKey: string; }} getAccountCredentials - Function to get the account credentials
- * @property {() => { aiModel: string; aiProviderApiKey: string; }} getModelCredentials - Function to get the model credentials
  * @property {() => DatabaseCredentials} getDatabaseCredentials - Function to get the database credentials
  * @property {() => { signature: string; }} getSignature - Function to get the signature
  * @property {() => RpcProvider} getProvider - Function to get the provider
@@ -76,10 +78,6 @@ export interface StarknetAgentInterface {
   getAccountCredentials: () => {
     accountPublicKey: string;
     accountPrivateKey: string;
-  };
-  getModelCredentials: () => {
-    aiModel: string;
-    aiProviderApiKey: string;
   };
   getDatabaseCredentials: () => DatabaseCredentials;
   getSignature: () => {

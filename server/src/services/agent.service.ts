@@ -85,12 +85,20 @@ export class AgentService implements IAgentService {
   }> {
     try {
       const credentials = agent.getAccountCredentials();
-      const model = agent.getModelCredentials();
+
+      // Check if the AI provider API keys are configured
+      let apiKeyValid = false;
+      try {
+        const aiConfig = this.config.ai;
+        apiKeyValid = Boolean(aiConfig && aiConfig.apiKey);
+      } catch (error) {
+        this.logger.debug('AI API key verification failed', error);
+      }
 
       return {
-        isReady: Boolean(credentials && model.aiProviderApiKey),
+        isReady: Boolean(credentials && apiKeyValid),
         walletConnected: Boolean(credentials.accountPrivateKey),
-        apiKeyValid: Boolean(model.aiProviderApiKey),
+        apiKeyValid,
       };
     } catch (error) {
       this.logger.error('Error checking agent status', error);

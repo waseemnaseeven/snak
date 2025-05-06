@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigurationService } from '../config/configuration.js';
-import { StarknetAgent, JsonConfig, load_json_config } from '@snakagent/agents';
+import { StarknetAgent, JsonConfig } from '@snakagent/agents';
 
 @Injectable()
 export class AgentFactory {
@@ -52,7 +52,7 @@ export class AgentFactory {
         mode: {
           interactive: true,
           autonomous: json.autonomous || false,
-          recursionLimit: 15,
+          maxIteration: 15,
         },
         plugins: Array.isArray(json.plugins)
           ? json.plugins.map((tool: string) => tool.toLowerCase())
@@ -67,10 +67,7 @@ export class AgentFactory {
     }
   }
 
-  async createAgent(
-    signature: string,
-    agentMode: string = 'agent'
-  ): Promise<StarknetAgent> {
+  async createAgent(signature: string): Promise<StarknetAgent> {
     if (!this.initialized) {
       await this.initPromise;
     }
@@ -104,13 +101,9 @@ export class AgentFactory {
         provider: this.config.starknet.provider,
         accountPrivateKey: this.config.starknet.privateKey,
         accountPublicKey: this.config.starknet.publicKey,
-        aiModel: this.config.ai.model,
-        aiProvider: this.config.ai.provider,
-        aiProviderApiKey: this.config.ai.apiKey,
-        agentconfig: this.json_config,
+        agentConfig: this.json_config,
         db_credentials: database,
         signature: signature,
-        agentMode: agentMode,
       });
 
       // Store for later reuse

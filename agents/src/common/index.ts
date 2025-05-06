@@ -2,24 +2,18 @@ import { RpcProvider } from 'starknet';
 import { JsonConfig } from '../config/jsonConfig.js';
 
 /**
- * AI service configuration
- * @property {string} apiKey - API key for the AI service
- * @property {string} aiModel - Model identifier to use
- * @property {string} aiProvider - Name of the AI service provider
- * @property {boolean} langchainVerbose - Whether to enable verbose logging for LangChain
- * @property {number} maxInputTokens - Maximum number of input tokens allowed
- * @property {number} maxCompletionTokens - Maximum number of completion tokens allowed
- * @property {number} maxTotalTokens - Maximum number of total tokens allowed
+ * Configuration for AI models used by agents
  */
-export type AiConfig = {
-  aiProviderApiKey: string;
-  aiModel: string;
-  aiProvider: string;
+export interface AiConfig {
+  aiModel?: string;
+  aiProvider?: string;
+  aiProviderApiKey?: string;
   langchainVerbose?: boolean;
   maxInputTokens?: number;
   maxCompletionTokens?: number;
   maxTotalTokens?: number;
-};
+  modelSelector?: any; // Model selector instance - using any to avoid circular dependencies
+}
 
 export interface IAgent {
   /**
@@ -61,15 +55,6 @@ export interface IAgent {
   getAccountCredentials(): {
     accountPrivateKey: string;
     accountPublicKey: string;
-  };
-
-  /**
-   * Returns the agent's AI provider credentials
-   * @returns AI provider credentials
-   */
-  getModelCredentials(): {
-    aiModel: string;
-    aiProviderApiKey: string;
   };
 
   getProvider(): RpcProvider;
