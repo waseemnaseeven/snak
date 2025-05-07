@@ -27,7 +27,7 @@ export type {
 
 // Config exports
 export type { JsonConfig } from './config/jsonConfig.js';
-export { load_json_config } from './config/jsonConfig.js';
+export { load_json_config, createContextFromJson } from './config/jsonConfig.js';
 
 // Common exports
 export type { IAgent, AiConfig } from './common/index.js';

@@ -17,7 +17,6 @@ export interface StarknetAgentConfig {
   provider: RpcProvider;
   accountPublicKey: string;
   accountPrivateKey: string;
-  signature: string;
   db_credentials: DatabaseCredentials;
   agentConfig?: JsonConfig;
   memory?: MemoryConfig;
@@ -47,7 +46,6 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
     this.provider = config.provider;
     this.accountPrivateKey = config.accountPrivateKey;
     this.accountPublicKey = config.accountPublicKey;
-    this.signature = config.signature;
     this.agentMode = config.agentConfig?.mode?.autonomous
       ? 'autonomous'
       : 'interactive';

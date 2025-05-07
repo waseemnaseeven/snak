@@ -70,7 +70,6 @@ export class AgentSystem {
           provider: this.config.starknetProvider,
           accountPrivateKey: this.config.accountPrivateKey,
           accountPublicKey: this.config.accountPublicKey,
-          signature: this.config.signature,
           agentConfig: this.agentConfig || undefined,
           db_credentials: this.config.databaseCredentials,
         },
