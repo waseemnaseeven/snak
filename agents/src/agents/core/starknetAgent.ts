@@ -5,10 +5,16 @@ import { logger, metrics } from '@snakagent/core';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { BaseMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
 import { DatabaseCredentials } from '../../tools/types/database.js';
-import { JsonConfig } from '../../config/jsonConfig.js';
+import {
+  AgentConfig,
+  AgentMode,
+  AGENT_MODES,
+} from '../../config/agentConfig.js';
 import { MemoryConfig } from '../operators/memoryAgent.js';
-import { createAgent } from '../modes/interactive.js';
+import { createInteractiveAgent } from '../modes/interactive.js';
 import { createAutonomousAgent } from '../modes/autonomous.js';
+import { createHybridAgent } from '../modes/hybrid.js';
+import { Command } from '@langchain/langgraph';
 
 /**
  * Configuration for StarknetAgent
@@ -18,7 +24,7 @@ export interface StarknetAgentConfig {
   accountPublicKey: string;
   accountPrivateKey: string;
   db_credentials: DatabaseCredentials;
-  agentConfig?: JsonConfig;
+  agentConfig: AgentConfig;
   memory?: MemoryConfig;
   modelSelector?: ModelSelectionAgent;
 }
@@ -32,7 +38,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   private readonly accountPublicKey: string;
   private readonly signature: string;
   private readonly agentMode: string;
-  private readonly agentconfig?: JsonConfig;
+  private readonly agentConfig: AgentConfig;
   private readonly db_credentials: DatabaseCredentials;
   private memory: MemoryConfig;
   private currentMode: string;
@@ -46,13 +52,13 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
     this.provider = config.provider;
     this.accountPrivateKey = config.accountPrivateKey;
     this.accountPublicKey = config.accountPublicKey;
-    this.agentMode = config.agentConfig?.mode?.autonomous
-      ? 'autonomous'
-      : 'interactive';
+    this.signature = config.signature;
+    this.agentMode =
+      AGENT_MODES[config.agentConfig?.mode || AgentMode.INTERACTIVE];
     this.db_credentials = config.db_credentials;
     this.currentMode =
-      config.agentConfig?.mode?.autonomous === true ? 'auto' : 'interactive';
-    this.agentconfig = config.agentConfig;
+      AGENT_MODES[config.agentConfig?.mode || AgentMode.INTERACTIVE];
+    this.agentConfig = config.agentConfig;
     this.memory = config.memory || {};
     this.modelSelector = config.modelSelector || null;
 
@@ -63,7 +69,9 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
 
     metrics.metricsAgentConnect(
       config.agentConfig?.name ?? 'agent',
-      config.agentConfig?.mode?.autonomous ? 'autonomous' : 'interactive'
+      config.agentConfig?.mode === AgentMode.AUTONOMOUS
+        ? AGENT_MODES[AgentMode.AUTONOMOUS]
+        : AGENT_MODES[AgentMode.INTERACTIVE]
     );
   }
 
@@ -76,19 +84,31 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
 
       if (!this.modelSelector) {
         logger.warn(
-          'StarknetAgent: No ModelSelectionAgent provided, functionality will be limited'
+          'StarknetAgent: No ModelSelectionAgent provided, functionality will be limited.'
         );
       }
 
-      try {
-        logger.debug(
-          'StarknetAgent: Testing agent executor creation during init...'
-        );
-        await this.createAgentReactExecutor();
+      // Ensure agentConfig and its plugins property are initialized
+      if (this.agentConfig) {
+        this.agentConfig.plugins = this.agentConfig.plugins || [];
+      } else {
+        logger.warn('StarknetAgent: No agent configuration available.');
+      }
 
+      // Set default mode to hybrid if configuration allows
+      if (
+        this.agentConfig?.mode === AgentMode.HYBRID ||
+        (this.agentMode === AGENT_MODES[AgentMode.AUTONOMOUS] &&
+          this.agentConfig?.mode === AgentMode.AUTONOMOUS)
+      ) {
+        this.currentMode = AGENT_MODES[AgentMode.HYBRID];
+      }
+
+      try {
+        await this.createAgentReactExecutor();
         if (!this.agentReactExecutor) {
           logger.warn(
-            'StarknetAgent: Agent executor creation succeeded but returned null/undefined'
+            'StarknetAgent: Agent executor creation succeeded but result is null or undefined.'
           );
         }
       } catch (executorError) {
@@ -96,7 +116,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
           `StarknetAgent: Failed to create agent executor during init: ${executorError}`
         );
         logger.warn(
-          'StarknetAgent: Will attempt to recover during execute() calls'
+          'StarknetAgent: Will attempt to recover during execute() calls.'
         );
       }
 
@@ -113,28 +133,31 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   private async createAgentReactExecutor(): Promise<void> {
     try {
       logger.debug(
-        'StarknetAgent: Starting createAgentReactExecutor with mode=' +
-          this.currentMode
+        `StarknetAgent: Creating agent executor for mode: ${this.currentMode}`
       );
 
-      logger.debug(`StarknetAgent: Using current mode: ${this.currentMode}`);
-
-      if (this.currentMode === 'auto') {
-        logger.debug('StarknetAgent: Creating autonomous agent executor...');
+      if (this.currentMode === AGENT_MODES[AgentMode.AUTONOMOUS]) {
         this.agentReactExecutor = await createAutonomousAgent(
           this,
           this.modelSelector
         );
-      } else if (this.currentMode === 'interactive') {
-        logger.debug('StarknetAgent: Creating interactive agent executor...');
-        this.agentReactExecutor = await createAgent(this, this.modelSelector);
+      } else if (this.currentMode === AGENT_MODES[AgentMode.INTERACTIVE]) {
+        this.agentReactExecutor = await createInteractiveAgent(
+          this,
+          this.modelSelector
+        );
+      } else if (this.currentMode === AGENT_MODES[AgentMode.HYBRID]) {
+        this.agentReactExecutor = await createHybridAgent(
+          this,
+          this.modelSelector
+        );
       } else {
         throw new Error(`Invalid mode: ${this.currentMode}`);
       }
 
       if (!this.agentReactExecutor) {
         throw new Error(
-          `Failed to create agent executor for mode ${this.currentMode}: result is null/undefined`
+          `Failed to create agent executor for mode ${this.currentMode}: result is null or undefined`
         );
       }
     } catch (error) {
@@ -177,7 +200,8 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Get Starknet account credentials
+   * Get Starknet account credentials.
+   * @returns An object containing the account's private and public keys.
    */
   public getAccountCredentials() {
     return {
@@ -187,14 +211,16 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Get database credentials
+   * Get database credentials.
+   * @returns The database credentials object.
    */
   public getDatabaseCredentials() {
     return this.db_credentials;
   }
 
   /**
-   * Get agent signature
+   * Get agent signature.
+   * @returns An object containing the agent's signature.
    */
   public getSignature() {
     return {
@@ -203,7 +229,8 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Get current agent mode
+   * Get current agent mode.
+   * @returns An object containing the current agent mode string.
    */
   public getAgent() {
     return {
@@ -212,24 +239,42 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Get agent configuration
+   * Get agent configuration.
+   * @returns The agent configuration object, or undefined if not set.
    */
-  public getAgentConfig(): JsonConfig | undefined {
-    return this.agentconfig;
+  public getAgentConfig(): AgentConfig {
+    return this.agentConfig;
   }
 
   /**
-   * Get original agent mode from initialization
+   * Get original agent mode from initialization.
+   * @returns The agent mode string set during construction.
    */
   public getAgentMode(): string {
     return this.agentMode;
   }
 
   /**
-   * Get Starknet RPC provider
+   * Get Starknet RPC provider.
+   * @returns The RpcProvider instance.
    */
   public getProvider(): RpcProvider {
     return this.provider;
+  }
+
+  /**
+   * Validates the user request before execution.
+   * Currently checks if the request is not empty.
+   * @param request The user's request string.
+   * @returns A promise that resolves to true if the request is valid, false otherwise.
+   */
+  public async validateRequest(request: string): Promise<boolean> {
+    // Basic validation - check if request is not empty
+    if (!request || request.trim() === '') {
+      return false;
+    }
+
+    return true;
   }
 
   /**
@@ -251,16 +296,13 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
     try {
       logger.debug(`StarknetAgent executing with mode: ${this.currentMode}`);
 
-      // Retrieve the original user query if it exists in config metadata
-      let originalUserQuery = null;
-      if (config && config.originalUserQuery) {
-        originalUserQuery = config.originalUserQuery;
+      let originalUserQuery = config?.originalUserQuery || null;
+      if (originalUserQuery) {
         logger.debug(
-          `StarknetAgent: Retrieved original user query from config: "${originalUserQuery}"`
+          `StarknetAgent: Using original user query from config: "${originalUserQuery}"`
         );
       }
 
-      // Also extract from the input if it's a message from ModelSelectionAgent
       if (
         input instanceof BaseMessage &&
         input.additional_kwargs?.from === 'model-selector' &&
@@ -268,29 +310,26 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
       ) {
         originalUserQuery = input.additional_kwargs.originalUserQuery;
         logger.debug(
-          `StarknetAgent: Retrieved original user query from model-selector: "${originalUserQuery}"`
+          `StarknetAgent: Using original user query from model-selector: "${originalUserQuery}"`
         );
       }
 
-      // Check if we need to temporarily adjust mode for this execution
       const requestedMode = config?.agentMode;
 
-      // Temporarily change mode if requested, valid, and different from current
       if (
         requestedMode &&
-        (requestedMode === 'interactive' || requestedMode === 'auto') &&
+        Object.values(AGENT_MODES).includes(requestedMode) &&
         requestedMode !== this.currentMode
       ) {
         logger.debug(
-          `Temporarily switching mode from ${this.currentMode} to ${requestedMode} for this execution`
+          `Temporarily switching mode from ${this.currentMode} to ${requestedMode} for this execution.`
         );
         this.currentMode = requestedMode;
       }
 
-      // Ensure executor is created for current mode
       if (!this.agentReactExecutor) {
         logger.debug(
-          'StarknetAgent: No executor exists, attempting to create one...'
+          'StarknetAgent: No executor exists, attempting to create one.'
         );
         try {
           await this.createAgentReactExecutor();
@@ -299,9 +338,8 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
             `StarknetAgent: Initial attempt to initialize executor failed: ${initError}`
           );
           errorCount++;
-          // Return formatted error message on initial failure
           const errorMessage = new AIMessage({
-            content: `I cannot process your request at this time because the agent failed to initialize properly. Error: ${initError}`,
+            content: `The agent failed to initialize properly and cannot process your request at this time. Error: ${initError}`,
             additional_kwargs: {
               from: 'snak',
               final: true,
@@ -309,25 +347,22 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
             },
           });
 
-          // Check if we should retry or fallback
           if (errorCount >= maxErrors) {
             logger.warn(
-              'StarknetAgent: Maximum initialization attempts reached, using fallback mode'
+              'StarknetAgent: Maximum initialization attempts reached, using fallback mode.'
             );
             fallbackAttempted = true;
             return this.executeSimpleFallback(input);
           } else {
-            // If not max errors, return the init error message but allow retry on next call
             return errorMessage;
           }
         }
       }
 
-      // Retry logic within execute if executor is still null after initial attempt or becomes null later
       while (!this.agentReactExecutor && errorCount < maxErrors) {
         errorCount++;
         logger.warn(
-          `StarknetAgent: Attempt ${errorCount} to initialize executor failed, trying again...`
+          `StarknetAgent: Attempt ${errorCount} to initialize executor, trying again...`
         );
         try {
           await this.createAgentReactExecutor();
@@ -338,33 +373,31 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         }
         if (this.agentReactExecutor) {
           logger.debug(
-            `StarknetAgent: Executor successfully created on attempt ${errorCount}`
+            `StarknetAgent: Executor successfully created on attempt ${errorCount}.`
           );
-          break; // Exit loop if successful
+          break;
         }
       }
 
-      // If still no executor after retries, use fallback
       if (
         !this.agentReactExecutor &&
         errorCount >= maxErrors &&
         !fallbackAttempted
       ) {
         logger.warn(
-          'StarknetAgent: Maximum initialization attempts reached after retries, using fallback mode'
+          'StarknetAgent: Maximum initialization attempts reached after retries, using fallback mode.'
         );
         fallbackAttempted = true;
         return this.executeSimpleFallback(input);
       }
 
-      // Ensure we have a valid executor now before proceeding
       if (!this.agentReactExecutor) {
         logger.error(
-          'StarknetAgent: Failed to create a valid executor after attempts'
+          'StarknetAgent: Failed to create a valid executor after multiple attempts.'
         );
         return new AIMessage({
           content:
-            'Failed to initialize execution agent after multiple attempts. Please try again or contact an administrator.',
+            'Failed to initialize the execution agent after multiple attempts. Please try again or contact an administrator.',
           additional_kwargs: {
             from: 'snak',
             final: true,
@@ -373,8 +406,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         });
       }
 
-      // Check if we need to recreate the executor for a different mode
-      else if (originalMode !== this.currentMode) {
+      if (originalMode !== this.currentMode) {
         logger.debug(`Re-creating executor for mode: ${this.currentMode}`);
         try {
           await this.createAgentReactExecutor();
@@ -384,16 +416,13 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
             );
           }
           logger.debug(
-            `Executor successfully re-created for mode: ${this.currentMode}`
+            `Executor successfully re-created for mode: ${this.currentMode}.`
           );
         } catch (modeChangeError) {
           logger.error(
             `StarknetAgent: Failed to recreate executor for mode ${this.currentMode}: ${modeChangeError}`
           );
-
-          // Restore original mode on failure
-          this.currentMode = originalMode;
-
+          this.currentMode = originalMode; // Restore original mode on failure
           return new AIMessage({
             content: `Unable to change agent mode to "${requestedMode}". Error: ${modeChangeError}`,
             additional_kwargs: {
@@ -405,8 +434,6 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         }
       }
 
-      // ----- Main execution logic starts here -----
-      // Ensure input is a BaseMessage for LangChain compatibility
       let currentMessages: BaseMessage[];
       if (input instanceof BaseMessage) {
         currentMessages = [input];
@@ -428,14 +455,13 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         `StarknetAgent: Invoking agent executor with input: ${JSON.stringify(currentMessages)}`
       );
 
-      // If we have an original query, use it as the main input
       if (
         originalUserQuery &&
         currentMessages.length > 0 &&
         currentMessages[0].additional_kwargs?.from === 'model-selector'
       ) {
         logger.debug(
-          `StarknetAgent: Using original user query instead of model-selector message`
+          `StarknetAgent: Using original user query "${originalUserQuery}" instead of model-selector message.`
         );
         currentMessages = [new HumanMessage(originalUserQuery)];
       }
@@ -447,8 +473,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
           { configurable: { thread_id: 'default' } }
         );
 
-        if (result && result.messages && result.messages.length > 0) {
-          // Get the last non-empty AIMessage from the result
+        if (result?.messages?.length > 0) {
           for (let i = result.messages.length - 1; i >= 0; i--) {
             const msg = result.messages[i];
             if (msg instanceof AIMessage && msg.content) {
@@ -465,16 +490,13 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
             }
           }
 
-          // If we still don't have content, use the last message or a default
           if (!responseContent) {
             const lastMsg = result.messages[result.messages.length - 1];
             responseContent =
-              lastMsg && lastMsg.content
-                ? lastMsg.content
-                : "I couldn't generate a specific response for this request.";
+              lastMsg?.content ||
+              "I couldn't generate a specific response for this request.";
           }
         } else {
-          // Default response if no valid messages found
           responseContent =
             'No response could be generated. Please try again with a different request.';
         }
@@ -482,21 +504,18 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         logger.error(
           `StarknetAgent: Agent execution failed: ${agentExecError}`
         );
-        // Check for specific error types if needed
         if (this.isTokenRelatedError(agentExecError)) {
           logger.warn('Token related error detected during execution.');
           responseContent = 'Error: Token validation or processing failed.';
         } else {
           responseContent = `Error during agent execution: ${agentExecError.message}`;
         }
-        // Decide if we should fallback even on execution error
         logger.error(
           `StarknetAgent: Catastrophic error in execute, using fallback: ${agentExecError}`
         );
         return this.executeSimpleFallback(input); // Using fallback for execution errors too
       }
 
-      // Always return a properly formatted AIMessage with required metadata
       return new AIMessage({
         content: responseContent,
         additional_kwargs: {
@@ -507,15 +526,12 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
       });
     } catch (error: any) {
       logger.error(`StarknetAgent main execution failed: ${error}`);
-      // In case of catastrophic error outside agent invocation, use fallback
       if (!fallbackAttempted) {
         logger.error(
           `StarknetAgent: Catastrophic error in execute, using fallback: ${error}`
         );
-        // Ensure fallback returns directly
         return this.executeSimpleFallback(input);
       }
-      // If fallback was attempted or error happened after fallback check, create error AIMessage
       return new AIMessage({
         content: `Error: ${error.message}`,
         additional_kwargs: {
@@ -525,7 +541,6 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         },
       });
     } finally {
-      // Restore original mode if temporarily changed
       if (config?.agentMode && this.currentMode !== originalMode) {
         logger.debug(`Restoring original agent mode: ${originalMode}`);
         this.currentMode = originalMode;
@@ -534,16 +549,15 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Simple fallback execution mode when main executor fails
-   * @param input The original input received by execute method
-   * @returns A simple AIMessage indicating fallback mode
+   * Simple fallback execution mode when main executor fails.
+   * @param input The original input received by the execute method.
+   * @returns A simple AIMessage indicating fallback mode.
    */
   private async executeSimpleFallback(
     input: string | BaseMessage
   ): Promise<AIMessage> {
-    logger.warn('StarknetAgent: Executing in simple fallback mode');
+    logger.warn('StarknetAgent: Executing in simple fallback mode.');
 
-    // Safely extract query content
     let queryContent = 'Unavailable';
     try {
       if (typeof input === 'string') {
@@ -560,10 +574,9 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
       logger.error(`Error extracting content in fallback mode: ${e}`);
     }
 
-    // Simplified response
     const truncatedQuery =
       queryContent.substring(0, 100) + (queryContent.length > 100 ? '...' : '');
-    const responseMessage = `I cannot process your request completely because I'm in fallback mode. Your query was: "${truncatedQuery}"`;
+    const responseMessage = `I cannot process your request completely as I am in fallback mode. Your query was: "${truncatedQuery}"`;
 
     return new AIMessage({
       content: responseMessage,
@@ -590,79 +603,72 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Execute call data request (signature mode) in agent mode
+   * Executes a call data request in agent mode, typically for signature requests.
+   * Requires the agent to be in interactive mode.
+   * @param input The input string for the call data execution.
+   * @returns A promise that resolves to the parsed JSON response or an error object.
    */
   public async execute_call_data(input: string): Promise<unknown> {
     try {
-      // Check if in interactive mode now
-      if (this.currentMode !== 'interactive') {
+      if (this.currentMode !== AGENT_MODES[AgentMode.INTERACTIVE]) {
         throw new Error(
-          `Need to be in interactive mode to execute_call_data (current mode: ${this.currentMode})`
+          `Must be in interactive mode to execute call_data (current mode: ${this.currentMode}).`
         );
       }
 
       if (!this.agentReactExecutor) {
-        throw new Error('Agent executor is not initialized');
+        throw new Error('Agent executor is not initialized.');
       }
 
-      // Prepare invocation options with message pruning
       const invokeOptions: any = {};
 
-      // Add message pruning if memory is enabled
       if (this.memory.enabled !== false) {
-        // Use mode.maxIteration if available, otherwise fall back to memory config
         const maxIteration =
-          this.agentconfig?.mode?.maxIteration !== undefined
-            ? this.agentconfig.mode.maxIteration
-            : this.memory.maxIteration !== undefined
-              ? this.memory.maxIteration
-              : this.memory.shortTermMemorySize || 15;
+          this.agentConfig?.maxIteration ??
+          this.memory.maxIteration ??
+          this.memory.shortTermMemorySize ??
+          15;
 
-        // Only apply recursion limit if it's not null (0 means no limit)
         if (maxIteration !== 0) {
           invokeOptions.maxIteration = maxIteration;
-          invokeOptions.messageHandler = (messages: any[]) => {
+          invokeOptions.messageHandler = (messages: BaseMessage[]) => {
             if (messages.length > maxIteration) {
               logger.debug(
-                `Call data - message pruning: ${messages.length} messages exceeds limit ${maxIteration}`
+                `Call data - message pruning: ${messages.length} messages exceeds limit ${maxIteration}.`
               );
               const prunedMessages = [
                 messages[0],
                 ...messages.slice(-(maxIteration - 1)),
               ];
               logger.debug(
-                `Call data - pruned from ${messages.length} to ${prunedMessages.length} messages`
+                `Call data - pruned from ${messages.length} to ${prunedMessages.length} messages.`
               );
               return prunedMessages;
             }
             return messages;
           };
           logger.debug(
-            `Execute call data: configured with maxIteration=${maxIteration}`
+            `execute_call_data: Configured with maxIteration=${maxIteration}.`
           );
         } else {
-          logger.debug(`Execute call data: running without recursion limit`);
+          logger.debug(`execute_call_data: Running without recursion limit.`);
         }
       }
 
-      // Invoke with 'messages' key as expected by Langchain standard interfaces
-      logger.debug('Execute call data: invoking agent with input message');
+      logger.debug('execute_call_data: Invoking agent with input message.');
       const result = await this.agentReactExecutor.invoke(
         {
-          // Ensure the input is wrapped correctly if it's just a string
           messages: [new HumanMessage({ content: input })],
         },
         invokeOptions
       );
-      logger.debug('Execute call data: agent invocation complete');
+      logger.debug('execute_call_data: Agent invocation complete.');
 
       try {
-        // Process the result - Assuming result structure includes 'messages'
-        if (!result || !result.messages || result.messages.length === 0) {
-          throw new Error('No messages returned from call data execution');
+        if (!result?.messages?.length) {
+          throw new Error('No messages returned from call data execution.');
         }
 
-        // Find the last AIMessage content which should contain the observation
         const lastAiMessage = result.messages
           .slice()
           .reverse()
@@ -674,12 +680,8 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
           );
         }
 
-        const messageContent = lastAiMessage.content;
-
-        // Attempt to parse the JSON content
-        return JSON.parse(messageContent);
+        return JSON.parse(lastAiMessage.content);
       } catch (parseError) {
-        // More specific error handling for parsing issues
         const lastMessageContent =
           result?.messages?.[result.messages.length - 1]?.content;
         logger.error(
@@ -691,7 +693,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         };
       }
     } catch (error) {
-      logger.error(`Execute call data error: ${error}`);
+      logger.error(`execute_call_data error: ${error}`);
       return {
         status: 'failure',
         error: `Execution error: ${error instanceof Error ? error.message : String(error)}`,
@@ -700,54 +702,51 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Execute in autonomous mode with a structure similar to execute()
-   * @returns Result of the autonomous execution
+   * Executes the agent in autonomous mode.
+   * This mode allows the agent to operate continuously based on an initial goal or prompt.
+   * @returns A promise that resolves to the result of the autonomous execution, typically an AIMessage.
    */
   public async execute_autonomous(): Promise<unknown> {
     let responseContent: string | any;
     let errorCount = 0;
-    let maxErrors = 3;
+    const maxErrors = 3;
     let fallbackAttempted = false;
     let originalMode = this.currentMode;
     let iterationCount = 0;
-    let conversationHistory: BaseMessage[] = [];
 
     try {
       logger.debug(
-        `StarknetAgent executing autonomous mode: ${this.currentMode}`
+        `StarknetAgent starting autonomous execution. Current mode: ${this.currentMode}`
       );
 
-      // Verify we are in autonomous mode
-      if (this.currentMode !== 'auto') {
-        if (this.agentconfig?.mode?.autonomous) {
+      if (this.currentMode !== AGENT_MODES[AgentMode.AUTONOMOUS]) {
+        if (this.agentConfig?.mode === AgentMode.AUTONOMOUS) {
           logger.info(
-            `Overriding mode to 'auto' based on config settings (autonomous=${this.agentconfig?.mode?.autonomous})`
+            `Overriding current mode to '${AGENT_MODES[AgentMode.AUTONOMOUS]}' based on agent configuration for autonomous execution.`
           );
-          this.currentMode = 'auto';
+          this.currentMode = AGENT_MODES[AgentMode.AUTONOMOUS];
         } else {
           throw new Error(
-            `Need to be in autonomous mode to execute_autonomous (current mode: ${this.currentMode})`
+            `Agent must be in autonomous mode or configured for autonomous execution. Current mode: ${this.currentMode}`
           );
         }
       }
 
-      // Ensure executor is created
       if (!this.agentReactExecutor) {
         logger.debug(
-          'StarknetAgent: No executor exists, attempting to create one...'
+          'StarknetAgent (autonomous): No executor exists, attempting to create one.'
         );
         try {
           await this.createAgentReactExecutor();
         } catch (initError) {
           logger.error(
-            `StarknetAgent: Initial attempt to initialize executor failed: ${initError}`
+            `StarknetAgent (autonomous): Initial attempt to initialize executor failed: ${initError}`
           );
           errorCount++;
 
-          // Check if we should retry or use fallback
           if (errorCount >= maxErrors) {
             logger.warn(
-              'StarknetAgent: Maximum initialization attempts reached, using fallback mode'
+              'StarknetAgent (autonomous): Maximum initialization attempts reached, using fallback mode.'
             );
             fallbackAttempted = true;
             return this.executeSimpleFallback(
@@ -755,46 +754,44 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
             );
           } else {
             return new AIMessage({
-              content: `I cannot process autonomous execution at this time because the agent failed to initialize properly. Error: ${initError}`,
+              content: `Cannot start autonomous execution: agent initialization failed. Error: ${initError}`,
               additional_kwargs: {
                 from: 'snak',
                 final: true,
-                error: 'initialization_failed',
+                error: 'initialization_failed_autonomous',
               },
             });
           }
         }
       }
 
-      // Retry logic identical to execute()
       while (!this.agentReactExecutor && errorCount < maxErrors) {
         errorCount++;
         logger.warn(
-          `StarknetAgent: Attempt ${errorCount} to initialize executor failed, trying again...`
+          `StarknetAgent (autonomous): Attempt ${errorCount} to initialize executor, trying again...`
         );
         try {
           await this.createAgentReactExecutor();
         } catch (retryError) {
           logger.error(
-            `StarknetAgent: Retry attempt ${errorCount} failed: ${retryError}`
+            `StarknetAgent (autonomous): Retry attempt ${errorCount} failed: ${retryError}`
           );
         }
         if (this.agentReactExecutor) {
           logger.debug(
-            `StarknetAgent: Executor successfully created on attempt ${errorCount}`
+            `StarknetAgent (autonomous): Executor successfully created on attempt ${errorCount}.`
           );
           break;
         }
       }
 
-      // If still no executor after retries, use fallback
       if (
         !this.agentReactExecutor &&
         errorCount >= maxErrors &&
         !fallbackAttempted
       ) {
         logger.warn(
-          'StarknetAgent: Maximum initialization attempts reached after retries, using fallback mode'
+          'StarknetAgent (autonomous): Maximum initialization attempts after retries, using fallback mode.'
         );
         fallbackAttempted = true;
         return this.executeSimpleFallback(
@@ -802,53 +799,47 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         );
       }
 
-      // Ensure we have a valid executor
       if (!this.agentReactExecutor) {
         logger.error(
-          'StarknetAgent: Failed to create a valid executor after attempts'
+          'StarknetAgent (autonomous): Failed to create a valid executor after multiple attempts.'
         );
         return new AIMessage({
           content:
-            'Failed to initialize autonomous execution agent after multiple attempts. Please try again or contact an administrator.',
+            'Failed to initialize the autonomous execution agent after multiple attempts. Please try again or contact an administrator.',
           additional_kwargs: {
             from: 'snak',
             final: true,
-            error: 'executor_creation_failed_retries',
+            error: 'executor_creation_failed_retries_autonomous',
           },
         });
       }
 
-      // ----- Main autonomous execution logic starts here -----
-      // The agentReactExecutor now holds { app, json_config, maxIteration }
       if (!this.agentReactExecutor?.app) {
         logger.error(
-          'StarknetAgent: Autonomous executor created, but app is missing.'
+          'StarknetAgent (autonomous): Executor created, but the app is missing.'
         );
         return new AIMessage({
-          content: 'Failed to initialize autonomous execution agent structure.',
+          content:
+            'Failed to initialize autonomous execution: agent structure is incomplete.',
           additional_kwargs: {
             from: 'snak',
             final: true,
-            error: 'executor_app_missing',
+            error: 'executor_app_missing_autonomous',
           },
         });
       }
 
       const app = this.agentReactExecutor.app;
-      const agentJsonConfig = this.agentReactExecutor.json_config; // Config from agent creator
-      const maxIteration = this.agentReactExecutor.maxIteration; // Max iterations from agent creator
+      const agentJsonConfig = this.agentReactExecutor.json_config;
+      const maxGraphIterations = this.agentReactExecutor.maxIteration; // Renamed for clarity
 
-      // Setup initial conversation state - requires an initial input message
-      // We need a starting point for the autonomous agent. Let's use a generic starter message.
-      // If a specific goal/task is needed, it should be passed into this function in the future.
       const initialHumanMessage = new HumanMessage({
         content:
-          agentJsonConfig?.prompt?.initial_goal || // Use a configured initial goal if available
+          agentJsonConfig?.prompt?.initial_goal ||
           'Start executing the primary objective defined in your system prompt.',
       });
-      conversationHistory = [initialHumanMessage]; // Start history with the initial prompt
+      let conversationHistory: BaseMessage[] = [initialHumanMessage];
 
-      // Define the thread configuration for stateful execution
       const threadConfig = {
         configurable: {
           thread_id: agentJsonConfig?.chat_id || 'autonomous_session',
@@ -856,23 +847,20 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
       };
 
       logger.info(
-        `Starting autonomous execution with max iterations: ${maxIteration}`
+        `Starting autonomous graph execution with max iterations: ${maxGraphIterations}.`
       );
 
-      // Main autonomous loop using graph streaming
       try {
         let finalState: any = null;
 
-        // Use invoke instead of stream. The recursionLimit handles max iterations.
         finalState = await app.invoke(
-          { messages: conversationHistory }, // Initial input to the graph
-          { ...threadConfig, recursionLimit: maxIteration } // Pass thread and recursion limit
+          { messages: conversationHistory },
+          { ...threadConfig, recursionLimit: maxGraphIterations }
         );
 
         logger.debug('Autonomous graph invocation complete.');
-        iterationCount = finalState?.iterations || iterationCount; // Try to get iteration count if available in final state
+        iterationCount = finalState?.iterations || iterationCount;
 
-        // Check for explicit errors in the final state (e.g., token limit error from callModel)
         if (finalState?.messages?.length > 0) {
           const lastMsg = finalState.messages[finalState.messages.length - 1];
           if (
@@ -885,7 +873,6 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
             responseContent =
               lastMsg.content ||
               `Execution stopped due to error: ${lastMsg.additional_kwargs.error}`;
-            // Mark as final if needed
             if (!lastMsg.additional_kwargs.final) {
               if (!lastMsg.additional_kwargs) lastMsg.additional_kwargs = {};
               lastMsg.additional_kwargs.final = true;
@@ -894,59 +881,50 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         }
 
         logger.info(
-          `Autonomous session finished. Iteration count might not be accurate with invoke.`
+          `Autonomous session finished. Iteration count from graph: ${iterationCount}.`
         );
 
-        // Extract final response from the last state
-        if (
-          finalState &&
-          finalState.messages &&
-          finalState.messages.length > 0
-        ) {
-          const lastMessage =
-            finalState.messages[finalState.messages.length - 1];
-          if (lastMessage instanceof AIMessage) {
-            responseContent = lastMessage.content;
-            // Ensure metadata includes final=true if it came from __end__ implicitly
-            if (!lastMessage.additional_kwargs?.final) {
-              if (!lastMessage.additional_kwargs)
-                lastMessage.additional_kwargs = {};
-              lastMessage.additional_kwargs.final = true;
+        if (!responseContent) {
+          if (finalState?.messages?.length > 0) {
+            const lastMessage =
+              finalState.messages[finalState.messages.length - 1];
+            if (lastMessage instanceof AIMessage) {
+              responseContent = lastMessage.content;
+              if (!lastMessage.additional_kwargs?.final) {
+                if (!lastMessage.additional_kwargs)
+                  lastMessage.additional_kwargs = {};
+                lastMessage.additional_kwargs.final = true;
+              }
+            } else {
+              logger.warn(
+                `Autonomous execution ended with a non-AI message: ${lastMessage._getType()}`
+              );
+              responseContent =
+                'Autonomous execution finished, but the final message was not from the AI.';
             }
           } else {
-            logger.warn(
-              `Autonomous execution ended with non-AI message: ${lastMessage._getType()}`
-            );
             responseContent =
-              responseContent || // Use content from loop break if available
-              'Autonomous execution finished, but the final message was not from the AI.';
+              'Autonomous execution completed, but no final state or messages were found.';
           }
-        } else {
-          responseContent =
-            responseContent || // Use content from loop break if available
-            'Autonomous execution completed, but no final state or messages were found.';
         }
-      } catch (graphExecError) {
+      } catch (graphExecError: any) {
         logger.error(
           `Error during autonomous graph execution: ${graphExecError}`
         );
-        // Decide if fallback is needed based on error type
         if (this.isTokenRelatedError(graphExecError)) {
           responseContent =
             'Error: Token limit likely exceeded during autonomous execution.';
         } else {
-          responseContent = `Error during autonomous execution: ${graphExecError instanceof Error ? graphExecError.message : graphExecError}`;
+          responseContent = `Error during autonomous execution: ${graphExecError.message}`;
         }
-        // Use fallback for graph execution errors as well?
         logger.error(
-          `StarknetAgent: Catastrophic error in autonomous execute, using fallback: ${graphExecError}`
+          `StarknetAgent (autonomous): Catastrophic error, using fallback: ${graphExecError}`
         );
         return this.executeSimpleFallback(
           'Autonomous execution failed during graph processing'
         );
       }
 
-      // Return a formatted message
       return new AIMessage({
         content: responseContent,
         additional_kwargs: {
@@ -959,15 +937,13 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
     } catch (error: any) {
       logger.error(`StarknetAgent autonomous execution failed: ${error}`);
 
-      // In case of catastrophic error, use fallback
       if (!fallbackAttempted) {
         logger.error(
-          `StarknetAgent: Catastrophic error in autonomous execute, using fallback: ${error}`
+          `StarknetAgent (autonomous): Catastrophic error, using fallback: ${error}`
         );
         return this.executeSimpleFallback('Autonomous execution failed');
       }
 
-      // If fallback was already attempted, create error message
       return new AIMessage({
         content: `Autonomous execution error: ${error.message}`,
         additional_kwargs: {
@@ -977,7 +953,6 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         },
       });
     } finally {
-      // Restore original mode
       if (this.currentMode !== originalMode) {
         logger.debug(`Restoring original agent mode: ${originalMode}`);
         this.currentMode = originalMode;
@@ -986,50 +961,217 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Get memory configuration
+   * Executes the agent in hybrid mode.
+   * Hybrid mode typically involves an initial autonomous phase followed by interactive steps.
+   * @param initialInput The initial input string to start the hybrid execution.
+   * @returns A promise that resolves to an object containing the execution state and thread ID.
    */
-  public getMemoryConfig(): MemoryConfig {
-    return this.memory;
-  }
+  public async execute_hybrid(initialInput: string): Promise<unknown> {
+    let errorCount = 0;
+    const maxErrors = 3;
+    let fallbackAttempted = false;
+    let originalMode = this.currentMode;
+    const threadId = `hybrid_${Date.now()}`;
 
-  /**
-   * Set memory configuration
-   */
-  public setMemoryConfig(config: MemoryConfig): void {
-    this.memory = { ...this.memory, ...config };
-  }
+    try {
+      logger.debug('StarknetAgent: Starting hybrid mode execution.');
 
-  /**
-   * Validates the user request before execution
-   * @param request The user's request string
-   * @returns Promise<boolean> indicating if request is valid
-   */
-  public async validateRequest(request: string): Promise<boolean> {
-    logger.debug(`Validating request (currently always true): ${request}`);
-    return true;
-  }
+      this.currentMode = AGENT_MODES[AgentMode.HYBRID];
 
-  public async getModelForCurrentTask(
-    messages: BaseMessage[],
-    forceModelType?: string
-  ): Promise<BaseChatModel> {
-    if (!this.modelSelector) {
-      logger.warn(
-        'StarknetAgent: No ModelSelectionAgent available, using default model'
+      if (
+        !this.agentReactExecutor ||
+        this.agentConfig?.mode !== AgentMode.HYBRID // Assuming re-creation if config implies hybrid but executor isn't set for it
+      ) {
+        logger.debug(
+          'StarknetAgent: Creating or re-creating hybrid agent executor.'
+        );
+        try {
+          const agentConfig = this.getAgentConfig();
+          if (!agentConfig) {
+            logger.warn(
+              'StarknetAgent (hybrid): Agent configuration is missing, which is required for hybrid mode.'
+            );
+            throw new Error('Agent configuration is required for hybrid mode.');
+          }
+
+          // Validate essential agent configuration properties for hybrid mode
+          if (!agentConfig.name) {
+            logger.warn(
+              'StarknetAgent (hybrid): Agent name is missing in configuration.'
+            );
+          }
+          if (!(agentConfig as any).bio) {
+            // Consider defining a more specific type for agentConfig
+            logger.warn(
+              'StarknetAgent (hybrid): Agent bio is missing in configuration.'
+            );
+          }
+          if (
+            !Array.isArray((agentConfig as any).objectives) ||
+            (agentConfig as any).objectives.length === 0
+          ) {
+            logger.warn(
+              'StarknetAgent (hybrid): Agent objectives are missing or empty.'
+            );
+          }
+
+          agentConfig.plugins = agentConfig.plugins || []; // Ensure plugins array exists
+
+          this.agentReactExecutor = await createHybridAgent(
+            this,
+            this.modelSelector
+          );
+
+          if (!this.agentReactExecutor) {
+            throw new Error(
+              'Failed to create hybrid agent executor: creation returned null or undefined.'
+            );
+          }
+        } catch (initError) {
+          logger.error(`Failed to initialize hybrid executor: ${initError}`);
+          errorCount++;
+
+          if (errorCount >= maxErrors) {
+            logger.warn(
+              'StarknetAgent (hybrid): Maximum initialization attempts reached, using fallback mode.'
+            );
+            fallbackAttempted = true;
+            return this.executeSimpleFallback(
+              'Hybrid execution initialization failed'
+            );
+          } else {
+            // Allow another attempt or different flow if init fails but not maxed out
+            // For now, we throw to be caught by the main try-catch for hybrid
+            throw initError;
+          }
+        }
+      }
+
+      if (!this.agentReactExecutor?.app) {
+        logger.error(
+          'StarknetAgent (hybrid): Executor created, but app is missing.'
+        );
+        return new AIMessage({
+          content:
+            'Failed to initialize hybrid execution: agent structure is incomplete.',
+          additional_kwargs: {
+            from: 'snak',
+            final: true,
+            error: 'executor_app_missing_hybrid',
+          },
+        });
+      }
+
+      const app = this.agentReactExecutor.app;
+      const threadConfig = {
+        configurable: {
+          thread_id: threadId,
+        },
+        recursionLimit: this.agentReactExecutor.maxIteration,
+      };
+
+      const initialHumanMessage = new HumanMessage({
+        content: initialInput || 'Start executing the primary objective.',
+      });
+
+      logger.info(`Starting hybrid execution with thread ID: ${threadId}.`);
+      let state = await app.invoke(
+        { messages: [initialHumanMessage] },
+        threadConfig
       );
-      throw new Error(
-        'ModelSelectionAgent is not available and no default model is configured'
-      );
+
+      logger.debug('Initial hybrid invocation complete.');
+
+      return {
+        state,
+        threadId,
+      };
+    } catch (error: any) {
+      logger.error(`StarknetAgent hybrid execution failed: ${error}`);
+
+      const errorMsg = error.message || String(error);
+      if (
+        errorMsg.includes('trailing whitespace') ||
+        errorMsg.includes('invalid_request_error')
+      ) {
+        logger.warn(
+          'StarknetAgent (hybrid): Detected API format error (e.g., trailing whitespace).'
+        );
+        return new AIMessage({
+          content:
+            'An error occurred with the AI communication (possible formatting issue). Please try rephrasing your request.',
+          additional_kwargs: {
+            from: 'snak',
+            final: true,
+            error: 'api_format_error',
+          },
+        });
+      }
+
+      if (!fallbackAttempted) {
+        logger.error(
+          `StarknetAgent (hybrid): Catastrophic error, using fallback: ${error}`
+        );
+        return this.executeSimpleFallback('Hybrid execution failed');
+      }
+
+      return new AIMessage({
+        content: `Hybrid execution error: ${error.message}`,
+        additional_kwargs: {
+          from: 'snak',
+          final: true,
+          error: 'hybrid_execution_error',
+        },
+      });
+    } finally {
+      if (this.currentMode !== originalMode) {
+        logger.debug(`Restoring original agent mode: ${originalMode}`);
+        this.currentMode = originalMode;
+      }
     }
+  }
 
-    // Use the model selector to determine the best model
-    const selectedModelType =
-      forceModelType ||
-      (await this.modelSelector.selectModelForMessages(messages));
+  /**
+   * Resumes a paused hybrid execution with new human input.
+   *
+   * @param input The human input to provide to the paused execution.
+   * @param threadId The thread ID of the hybrid execution to resume.
+   * @returns A promise that resolves to an object containing the updated execution state and thread ID.
+   * @throws Will throw an error if the hybrid agent is not initialized or if an error occurs during resumption.
+   */
+  public async resume_hybrid(
+    input: string,
+    threadId: string
+  ): Promise<unknown> {
+    try {
+      logger.debug(`Resuming hybrid execution with thread ID: ${threadId}.`);
 
-    logger.debug(
-      `StarknetAgent: Selected model type for current task: ${selectedModelType}`
-    );
-    return this.modelSelector.getModelForTask(messages, selectedModelType);
+      if (!this.agentReactExecutor?.app) {
+        throw new Error('Hybrid agent application is not initialized.');
+      }
+
+      const app = this.agentReactExecutor.app;
+      const threadConfig = {
+        configurable: {
+          thread_id: threadId,
+        },
+        recursionLimit: this.agentReactExecutor.maxIteration,
+      };
+
+      // Resume execution with the Command containing human input
+      const state = await app.invoke(
+        new Command({ resume: input }),
+        threadConfig
+      );
+
+      logger.debug('Hybrid execution resumed successfully.');
+      return {
+        state,
+        threadId,
+      };
+    } catch (error) {
+      logger.error(`Error resuming hybrid execution: ${error}`);
+      throw error; // Re-throw the error to be handled by the caller
+    }
   }
 }

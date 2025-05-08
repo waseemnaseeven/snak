@@ -4,7 +4,7 @@ export { StarknetAgent } from './agents/core/starknetAgent.js';
 
 // Agent-related exports
 // Interactive agent exports
-export { createAgent } from './agents/modes/interactive.js';
+export { createInteractiveAgent } from './agents/modes/interactive.js';
 
 export { initializeToolsList } from './agents/core/utils.js';
 
@@ -26,8 +26,8 @@ export type {
 } from './tools/signatureTools.js';
 
 // Config exports
-export type { JsonConfig } from './config/jsonConfig.js';
-export { load_json_config, createContextFromJson } from './config/jsonConfig.js';
+export type { AgentConfig } from './config/agentConfig.js';
+export { load_json_config, AgentMode } from './config/agentConfig.js';
 
 // Common exports
 export type { IAgent, AiConfig } from './common/index.js';

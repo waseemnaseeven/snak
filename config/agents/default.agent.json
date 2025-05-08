@@ -25,11 +25,8 @@
     "Understanding of plugin architecture and custom action development"
   ],
   "interval": 30000,
-  "mode": {
-    "interactive": true,
-    "autonomous": false,
-    "maxIteration": 0
-  },
+  "maxIteration": 0,
+  "mode": "hybrid",
   "memory": {
     "enabled": true,
     "shortTermMemorySize": 5

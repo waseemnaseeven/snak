@@ -18,9 +18,27 @@ export interface Token {
 }
 
 /**
+ * Enum for the mode of operation of the agent
+ */
+export enum AgentMode {
+  INTERACTIVE = 'interactive',
+  AUTONOMOUS = 'autonomous',
+  HYBRID = 'hybrid',
+}
+
+/**
+ * Maps mode values to their string representations
+ */
+export const AGENT_MODES = {
+  [AgentMode.AUTONOMOUS]: 'autonomous',
+  [AgentMode.HYBRID]: 'hybrid',
+  [AgentMode.INTERACTIVE]: 'interactive',
+};
+
+/**
  * Interface for the JSON configuration object
  */
-export interface JsonConfig {
+export interface AgentConfig {
   name: string;
   prompt: SystemMessage;
   interval: number;
@@ -28,55 +46,9 @@ export interface JsonConfig {
   plugins: string[];
   memory: MemoryConfig;
   mcpServers?: Record<string, any>;
-  mode: ModeConfig;
-}
-
-/**
- * Type for the mode of operation of the agent
- */
-export interface ModeConfig {
-  interactive: boolean;
-  autonomous: boolean;
+  mode: AgentMode;
   maxIteration: number;
-  metaSelection?: boolean;
 }
-
-/**
- * Updates the mode configuration in the JSON file
- */
-export const updateModeConfig = async (
-  configPath: string,
-  mode: 'interactive' | 'autonomous'
-): Promise<boolean> => {
-  try {
-    // Read the current JSON file
-    const jsonData = await fs.readFile(configPath, 'utf8');
-    const json = JSON.parse(jsonData);
-
-    // Throw error if mode object doesn't exist
-    if (!json.mode) {
-      throw new Error(
-        'Mode configuration is mandatory but missing in config file'
-      );
-    }
-
-    // Update the mode properties
-    if (mode === 'interactive') {
-      json.mode.interactive = true;
-      json.mode.autonomous = false;
-    } else if (mode === 'autonomous') {
-      json.mode.interactive = false;
-      json.mode.autonomous = true;
-    }
-
-    // Write the updated JSON back to the file
-    await fs.writeFile(configPath, JSON.stringify(json, null, 2), 'utf8');
-    return true;
-  } catch (error) {
-    logger.error('Failed to update mode configuration: ', error);
-    return false;
-  }
-};
 
 /**
  * Creates a context string from the JSON configuration object
@@ -107,8 +79,11 @@ export const createContextFromJson = (json: any): string => {
   }
 
   // Check for autonomous mode
-  if (json.mode && json.mode.autonomous) {
-    identityParts.push(`Mode: Autonomous`);
+  if (json.mode) {
+    const mode = parseAgentMode(json.mode);
+    if (mode === AgentMode.AUTONOMOUS || mode === AgentMode.HYBRID) {
+      identityParts.push(`Mode: ${mode}`);
+    }
   }
 
   // Knowledge Section
@@ -120,9 +95,58 @@ export const createContextFromJson = (json: any): string => {
 };
 
 /**
+ * Helper function to parse agent mode from various formats
+ */
+export const parseAgentMode = (modeConfig: any): AgentMode => {
+  // Handle case where modeConfig is a string
+  if (typeof modeConfig === 'string') {
+    const mode = modeConfig.toLowerCase();
+    if (Object.values(AgentMode).includes(mode as AgentMode)) {
+      return mode as AgentMode;
+    }
+    logger.warn(
+      `Invalid mode string "${mode}" - defaulting to "${AgentMode.INTERACTIVE}"`
+    );
+    return AgentMode.INTERACTIVE;
+  }
+
+  // Handle case where modeConfig is an object with mode property
+  if (modeConfig && typeof modeConfig === 'object') {
+    // New format
+    if (modeConfig.mode && typeof modeConfig.mode === 'string') {
+      const mode = modeConfig.mode.toLowerCase();
+      if (Object.values(AgentMode).includes(mode as AgentMode)) {
+        return mode as AgentMode;
+      }
+    }
+
+    // Legacy format with boolean flags
+    if (
+      'interactive' in modeConfig ||
+      'autonomous' in modeConfig ||
+      'hybrid' in modeConfig
+    ) {
+      if (modeConfig.hybrid === true) {
+        return AgentMode.HYBRID;
+      } else if (modeConfig.autonomous === true) {
+        return AgentMode.AUTONOMOUS;
+      } else {
+        return AgentMode.INTERACTIVE;
+      }
+    }
+  }
+
+  // Default case
+  logger.warn(
+    `Could not determine agent mode - defaulting to "${AgentMode.INTERACTIVE}"`
+  );
+  return AgentMode.INTERACTIVE;
+};
+
+/**
  * Validates the JSON configuration object
  */
-export const validateConfig = (config: JsonConfig) => {
+export const validateConfig = (config: AgentConfig) => {
   const requiredFields = [
     'name',
     'interval',
@@ -130,10 +154,11 @@ export const validateConfig = (config: JsonConfig) => {
     'plugins',
     'prompt',
     'mode',
+    'maxIteration',
   ] as const;
 
   for (const field of requiredFields) {
-    if (!config[field as keyof JsonConfig]) {
+    if (!config[field as keyof AgentConfig]) {
       throw new Error(`Missing required field: ${field}`);
     }
   }
@@ -143,19 +168,14 @@ export const validateConfig = (config: JsonConfig) => {
   }
 
   // Validate mode configuration
-  // Log a warning if both modes are enabled but don't change the configuration
-  // This allows the runtime code to control which mode is active
-  if (config.mode.interactive && config.mode.autonomous) {
-    logger.warn(
-      'Both interactive and autonomous modes are enabled in configuration'
+  if (!Object.values(AgentMode).includes(config.mode)) {
+    throw new Error(
+      `Invalid mode "${config.mode}" specified in configuration. Must be one of: ${Object.values(AgentMode).join(', ')}`
     );
   }
 
   // Ensure recursion limit is valid
-  if (
-    typeof config.mode.maxIteration !== 'number' ||
-    config.mode.maxIteration < 0
-  ) {
+  if (typeof config.maxIteration !== 'number' || config.maxIteration < 0) {
     throw new Error(
       'maxIteration must be a positive number in mode configuration'
     );
@@ -194,7 +214,7 @@ export const validateConfig = (config: JsonConfig) => {
  */
 const checkParseJson = async (
   agent_config_name: string
-): Promise<JsonConfig | undefined> => {
+): Promise<AgentConfig> => {
   try {
     // Try multiple possible locations for the config file
     const possiblePaths = [
@@ -262,50 +282,33 @@ const checkParseJson = async (
       );
     }
 
-    const modeConfig: ModeConfig = {
-      interactive: json.mode.interactive !== false,
-      autonomous: json.mode.autonomous === true,
-      maxIteration: json.mode.maxIteration,
-    };
-
-    // Add validation for maxIteration
-    if (
-      typeof modeConfig.maxIteration !== 'number' ||
-      modeConfig.maxIteration < 0
-    ) {
-      throw new Error(
-        'maxIteration must be a positive number in mode configuration'
-      );
-    }
-
-    // Ensure only one mode is enabled
-    if (modeConfig.interactive && modeConfig.autonomous) {
-      logger.warn(
-        'Both interactive and autonomous modes are enabled - setting interactive to true and autonomous to false'
-      );
-      modeConfig.interactive = true;
-      modeConfig.autonomous = false;
-    }
-
     // Create config object
-    const jsonconfig: JsonConfig = {
+    const agentConfig: AgentConfig = {
       prompt: systemMessagefromjson,
       name: json.name,
       interval: json.interval,
       chat_id: json.chat_id,
-      mode: modeConfig,
+      mode: parseAgentMode(json.mode),
       plugins: Array.isArray(json.plugins)
         ? json.plugins.map((tool: string) => tool.toLowerCase())
         : [],
       memory: json.memory || false,
       mcpServers: json.mcpServers || {},
+      maxIteration:
+        typeof json.maxIteration === 'number'
+          ? json.maxIteration
+          : json.mode &&
+              typeof json.mode === 'object' &&
+              typeof json.mode.maxIteration === 'number'
+            ? json.mode.maxIteration
+            : 10,
     };
 
-    if (jsonconfig.plugins.length === 0) {
+    if (agentConfig.plugins.length === 0) {
       logger.warn("No plugins specified in agent's config");
     }
-    validateConfig(jsonconfig);
-    return jsonconfig;
+    validateConfig(agentConfig);
+    return agentConfig;
   } catch (error) {
     logger.error(
       chalk.red(
@@ -313,7 +316,7 @@ const checkParseJson = async (
       )
     );
     logger.error('Failed to parse config : ', error);
-    return undefined;
+    throw error;
   }
 };
 
@@ -322,7 +325,7 @@ const checkParseJson = async (
  */
 export const load_json_config = async (
   agent_config_name: string
-): Promise<JsonConfig | undefined> => {
+): Promise<AgentConfig> => {
   try {
     const json = await checkParseJson(agent_config_name);
     if (!json) {
@@ -331,6 +334,6 @@ export const load_json_config = async (
     return json;
   } catch (error) {
     logger.error(error);
-    return undefined;
+    throw new Error('Failed to load JSON config');
   }
 };
