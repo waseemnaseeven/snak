@@ -85,8 +85,8 @@ const loadCommand = async (): Promise<CommandOptions> => {
     const possibleBasePaths = [
       process.cwd(),
       path.resolve(process.cwd(), '..'),
+      path.resolve(__dirname, '..', '..'),
       path.resolve(__dirname, '..', '..', '..'),
-      path.resolve(__dirname, '..', '..', '..', '..'),
     ];
 
     for (const basePath of possibleBasePaths) {

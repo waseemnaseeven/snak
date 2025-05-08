@@ -3,9 +3,9 @@ import path from 'path';
 import * as dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import pkg from 'pg';
+import * as pg from 'pg';
 import { logger } from '@snakagent/core';
-const { Pool } = pkg;
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -13,12 +13,12 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 
 @Controller('database')
 export class DatabaseController implements OnModuleInit {
-  private database: pkg.Pool;
+  private database: InstanceType<typeof pg.Pool>;
 
   constructor() {}
 
   async onModuleInit() {
-    this.database = await new Pool({
+    this.database = new pg.Pool({
       host: process.env.POSTGRES_HOST,
       user: process.env.POSTGRES_USER,
       password: process.env.POSTGRES_PASSWORD,
