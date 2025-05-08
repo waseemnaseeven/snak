@@ -5,9 +5,9 @@
 .env
 
 # Client
-packages/client/.next
-packages/client/node_modules
-packages/client/dist
+packages/client/.next/
+packages/client/node_modules/
+packages/client/dist/
 packages/client/.env.local
 
 # Logs
