@@ -123,6 +123,7 @@ export const createAgent = async (
       return result;
     };
 
+    console.log('agent prompt ', json_config.prompt);
     const configPrompt = json_config.prompt?.content || '';
     const memoryPrompt = ``;
     const finalPrompt = json_config.memory
@@ -132,6 +133,10 @@ export const createAgent = async (
     async function callModel(
       state: typeof GraphState.State
     ): Promise<{ messages: BaseMessage[] }> {
+      logger.debug('callModel invoked');
+      logger.debug((json_config as any).bio);
+
+      console.log((!(json_config as any).bio))
       if (!json_config) {
         throw new Error('Agent configuration is required but not available');
       }

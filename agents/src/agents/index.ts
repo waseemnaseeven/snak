@@ -17,7 +17,7 @@ export interface AgentSystemConfig {
   agentMode: 'interactive' | 'autonomous';
   signature: string;
   databaseCredentials: any;
-  agentConfigPath?: string;
+  agentConfigPath?: string | JsonConfig;
   debug?: boolean;
 }
 
@@ -47,9 +47,13 @@ export class AgentSystem {
           `AgentSystem: Loading config from: ${this.config.agentConfigPath}`
         );
         try {
-          this.agentConfig = await this.loadAgentConfig(
-            this.config.agentConfigPath
-          );
+          if (typeof this.config.agentConfigPath === 'string') {
+            this.agentConfig = await this.loadAgentConfig(
+              this.config.agentConfigPath
+            );
+          } else {
+            this.agentConfig = this.config.agentConfigPath;
+          }
           logger.debug('AgentSystem: Successfully loaded agent configuration');
         } catch (loadError) {
           logger.error(

@@ -31,3 +31,5 @@ export { load_json_config, createContextFromJson } from './config/jsonConfig.js'
 
 // Common exports
 export type { IAgent, AiConfig } from './common/index.js';
+export type  {AgentSystemConfig} from './agents/index.js';
+export {AgentSystem} from './agents/index.js';

@@ -312,6 +312,7 @@ const localRun = async (): Promise<void> => {
     // Prepare RPC Provider
     const provider = new RpcProvider({ nodeUrl: `${nodeUrl}` });
 
+    console.log(modelsConfigPath)
     // Prepare Agent System configuration ACCORDING TO THE DEFINITION IN agents/src/agents/index.ts
     const agentSystemConfig: AgentSystemConfig = {
       starknetProvider: provider,
