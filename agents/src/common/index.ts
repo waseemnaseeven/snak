@@ -1,5 +1,5 @@
 import { RpcProvider } from 'starknet';
-import { AgentConfig } from '../config/agentConfig.js';
+import { JsonConfig } from '../config/jsonConfig.js';
 
 /**
  * Configuration for AI models used by agents
@@ -59,7 +59,7 @@ export interface IAgent {
 
   getProvider(): RpcProvider;
 
-  getAgentConfig(): AgentConfig;
+  getAgentConfig(): JsonConfig | undefined;
 
   getAgentMode(): string;
 }

@@ -12,11 +12,14 @@
   ],
   "interval": "Your agent interval beetween each transaction of the Agent in ms,",
   "chat_id": "Your Agent Chat-id for isolating memory",
-  "maxIteration": "The number of iterations your agent will execute before stopping",
-  "mode": "The mode of your agent, can be interactive, autonomous or hybrid",
+  "mode": {
+    "interactive": true,
+    "autonomous": false,
+    "maxIteration": 15
+  },
   "memory": {
-    "enabled": "true or false to enable or disable memory",
-    "shortTermMemorySize": "The number of messages your agent will remember"
+    "enabled": true,
+    "shortTermMemorySize": 15
   },
   "plugins": ["Your first plugin", "Your second plugin"],
   "mcpServers": {

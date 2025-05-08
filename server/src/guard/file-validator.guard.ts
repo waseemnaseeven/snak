@@ -63,13 +63,13 @@ export class FileTypeGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<MultipartRequest>();
 
-    if (!request.headers['content-type']?.includes('multipart/form-data')) {
+    if (!request.isMultipart()) {
       throw new ForbiddenException('The request must be multipart');
     }
     await this.ensureUploadDirExists();
 
     try {
-      const parts = await (request as any).parts();
+      const parts = request.parts();
       const uploadedFiles: UploadedFile[] = [];
 
       for await (const part of parts) {

@@ -25,8 +25,11 @@
     "Understanding of plugin architecture and custom action development"
   ],
   "interval": 30000,
-  "maxIteration": 0,
-  "mode": "hybrid",
+  "mode": {
+    "interactive": true,
+    "autonomous": false,
+    "maxIteration": 0
+  },
   "memory": {
     "enabled": true,
     "shortTermMemorySize": 5
@@ -50,10 +53,7 @@
   "mcpServers": {
     "brave-search": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-brave-search"
-      ],
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
       "env": {
         "BRAVE_API_KEY": "BSAgWXjaOOpxLi7o-_2jw3oDJSrVw5K"
       }

@@ -6,10 +6,9 @@ import { loadModelsConfig, ModelsConfig, ApiKeys } from '@snakagent/core';
 import { ChatOpenAI } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { modelSelectorRules } from '../../prompt/prompts.js';
 
 /**
- * Criteria for model selection.
+ * Criteria for model selection
  */
 export interface ModelSelectionCriteria {
   complexity: 'high' | 'medium' | 'low';
@@ -19,60 +18,54 @@ export interface ModelSelectionCriteria {
 }
 
 /**
- * Options for the ModelSelectionAgent.
+ * Options for the model selection agent
  */
 export interface ModelSelectionOptions {
   debugMode?: boolean;
-  useModelSelector?: boolean;
+  useMetaSelection?: boolean;
   modelsConfigPath: string;
 }
 
 /**
- * Represents an operator agent responsible for selecting the appropriate model for different tasks.
+ * Represents an operator agent responsible for selecting the appropriate model for different tasks
  */
 export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
   private models: Record<string, BaseChatModel> = {};
   private debugMode: boolean;
-  private useModelSelector: boolean;
+  private useMetaSelection: boolean;
   private modelsConfig: ModelsConfig | null = null;
   private apiKeys: ApiKeys = {};
   private modelsConfigPath: string;
 
+  // Add a static instance for singleton access
   private static instance: ModelSelectionAgent | null = null;
 
-  /**
-   * Creates an instance of ModelSelectionAgent.
-   * @param {ModelSelectionOptions} options - The options for the agent.
-   */
   constructor(options: ModelSelectionOptions) {
     super('model-selector', AgentType.OPERATOR);
     this.debugMode = options.debugMode || false;
-    this.useModelSelector = options.useModelSelector || false;
+    this.useMetaSelection = options.useMetaSelection || false;
     this.modelsConfigPath = options.modelsConfigPath;
 
+    // Set this instance as the global instance for singleton access
     ModelSelectionAgent.instance = this;
 
     if (this.debugMode) {
       logger.debug(
         `ModelSelectionAgent initialized with options: ${JSON.stringify({
           debugMode: options.debugMode,
-          useModelSelector: options.useModelSelector,
+          useMetaSelection: options.useMetaSelection,
         })}`
       );
     }
   }
 
-  /**
-   * Gets the singleton instance of the ModelSelectionAgent.
-   * @returns {ModelSelectionAgent | null} The singleton instance or null if not initialized.
-   */
+  // Static method to get the current instance
   public static getInstance(): ModelSelectionAgent | null {
     return ModelSelectionAgent.instance;
   }
 
   /**
-   * Initializes the model selection agent by loading configurations, API keys, and models.
-   * @throws {Error} If initialization fails.
+   * Initialize the model selection agent
    */
   public async init(): Promise<void> {
     try {
@@ -88,12 +81,10 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Loads API keys from environment variables.
+   * Load API keys from environment variables
    */
   private loadApiKeys(): void {
-    if (this.debugMode) {
-      logger.debug('Loading API keys from environment variables...');
-    }
+    logger.debug('Loading API keys from environment variables...');
     const PROVIDER_ENV_VAR_MAP: Record<string, string> = {
       openai: 'OPENAI_API_KEY',
       anthropic: 'ANTHROPIC_API_KEY',
@@ -106,9 +97,7 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
       const apiKey = process.env[envVar];
       if (apiKey) {
         this.apiKeys[provider] = apiKey;
-        if (this.debugMode) {
-          logger.debug(`Loaded API key for provider: ${provider}`);
-        }
+        logger.debug(`Loaded API key for provider: ${provider}`);
       } else {
         logger.warn(
           `API key environment variable not found for provider: ${provider} (expected: ${envVar})`
@@ -118,13 +107,10 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Initializes model instances based on the loaded configuration.
-   * @throws {Error} If models configuration is not loaded.
+   * Initialize model instances based on loaded configuration
    */
   private async initializeModels(): Promise<void> {
-    if (this.debugMode) {
-      logger.debug('Initializing AI models...');
-    }
+    logger.debug('Initializing AI models...');
     if (!this.modelsConfig) {
       logger.error(
         'Models configuration is not loaded. Cannot initialize models.'
@@ -134,7 +120,7 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
 
     this.models = {};
     for (const [levelName, levelConfig] of Object.entries(this.modelsConfig)) {
-      const { provider, model_name } = levelConfig as any; // Cast to any if structure is dynamic
+      const { provider, model_name } = levelConfig as any;
       const apiKey = this.apiKeys[provider];
 
       if (!apiKey) {
@@ -149,28 +135,28 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
         const commonConfig = {
           modelName: model_name,
           apiKey: apiKey,
-          verbose: this.debugMode, // Pass debugMode for model verbosity
+          verbose: this.debugMode,
         };
 
         switch (provider.toLowerCase()) {
           case 'openai':
             modelInstance = new ChatOpenAI({
               ...commonConfig,
-              openAIApiKey: apiKey, // Specific key name for OpenAI
+              openAIApiKey: apiKey,
             });
             break;
           case 'anthropic':
             modelInstance = new ChatAnthropic({
               ...commonConfig,
-              anthropicApiKey: apiKey, // Specific key name for Anthropic
+              anthropicApiKey: apiKey,
             });
             break;
           case 'gemini':
             modelInstance = new ChatGoogleGenerativeAI({
               ...commonConfig,
+              apiKey: apiKey,
             });
             break;
-          // Add case for 'deepseek' if a Langchain integration exists or becomes available
           default:
             logger.warn(
               `Unsupported AI provider '${provider}' for model level '${levelName}'. Skipping.`
@@ -180,11 +166,9 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
 
         if (modelInstance) {
           this.models[levelName] = modelInstance;
-          if (this.debugMode) {
-            logger.debug(
-              `Initialized model for level '${levelName}': ${provider} - ${model_name}`
-            );
-          }
+          logger.debug(
+            `Initialized model for level '${levelName}': ${provider} - ${model_name}`
+          );
         }
       } catch (error) {
         logger.error(
@@ -195,8 +179,7 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Verifies that all required models ('fast', 'smart', 'cheap') are initialized.
-   * Logs a warning if any required models are missing.
+   * Verify that required models exist
    */
   private validateModels(): void {
     const requiredModels = ['fast', 'smart', 'cheap'];
@@ -210,24 +193,22 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
 
     if (this.debugMode) {
       logger.debug(
-        `ModelSelectionAgent initialized with models: ${Object.keys(this.models).join(', ')} (Meta selection: ${this.useModelSelector ? 'enabled' : 'disabled'})`
+        `ModelSelectionAgent initialized with models: ${Object.keys(this.models).join(', ')} (Meta selection: ${this.useMetaSelection ? 'enabled' : 'disabled'})`
       );
     }
   }
 
   /**
-   * Selects a model type ('fast', 'smart', 'cheap') based on the provided messages.
-   * If `useModelSelector` is true, it uses the 'fast' model to analyze the messages.
-   * Otherwise, it defaults to 'smart' or uses heuristics if the 'fast' model fails.
-   * @param {BaseMessage[]} messages - The messages to analyze for model selection.
-   * @returns {Promise<string>} The selected model type.
+   * Analyze provided messages and determine which model to use
+   * @param messages The messages to analyze
+   * @returns The selected model type
    */
   public async selectModelForMessages(
     messages: BaseMessage[]
   ): Promise<string> {
-    if (!this.useModelSelector) {
+    if (!this.useMetaSelection) {
       if (this.debugMode) {
-        logger.debug('Meta-selection disabled, using smart model by default.');
+        logger.debug('Meta-selection disabled, using smart model');
       }
       return 'smart';
     }
@@ -235,7 +216,7 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
     if (!messages || messages.length === 0) {
       if (this.debugMode) {
         logger.debug(
-          'No messages provided for model selection; defaulting to "smart".'
+          'No messages provided for model selection, defaulting to "smart"'
         );
       }
       return 'smart';
@@ -244,13 +225,13 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
     try {
       if (this.debugMode) {
         logger.debug(
-          'Meta-selection enabled. Analyzing messages with the "fast" model.'
+          'Meta-selection enabled, analyzing message with fast model'
         );
       }
 
       if (!this.models.fast) {
         logger.error(
-          'Meta-selection is enabled, but the "fast" model is not available. Defaulting to "smart".'
+          'Meta-selection is enabled but fast model is not available'
         );
         return 'smart';
       }
@@ -258,7 +239,7 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
       const lastMessage = messages[messages.length - 1];
       if (!lastMessage) {
         logger.warn(
-          'ModelSelectionAgent: Could not get the last message; defaulting to "smart".'
+          'ModelSelectionAgent: Could not get last message, defaulting to smart.'
         );
         return 'smart';
       }
@@ -273,26 +254,37 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
       let analysisContent = content;
       let nextStepsSection = '';
 
-      // Extract "NEXT STEPS" section for more focused analysis if present
       const nextStepsMatch = content.match(/NEXT STEPS:(.*?)($|(?=\n\n))/s);
       if (nextStepsMatch && nextStepsMatch[1]) {
         nextStepsSection = nextStepsMatch[1].trim();
         if (this.debugMode) {
-          logger.debug(`Extracted NEXT STEPS section: "${nextStepsSection}"`);
+          logger.debug(`Found NEXT STEPS section: "${nextStepsSection}"`);
         }
-        // Prioritize NEXT STEPS for analysis, with some context
-        const truncatedContext = content.substring(0, 300) + '...';
-        analysisContent = `Next planned actions: ${nextStepsSection}\n\nContext: ${truncatedContext}`;
+
+        const truncatedContent = content.substring(0, 300) + '...';
+        analysisContent = `Next planned actions: ${nextStepsSection}\n\nContext: ${truncatedContent}`;
       }
 
       const prompt = new HumanMessage(
-        modelSelectorRules(nextStepsSection, analysisContent)
+        `Analyze this User Input and determine which AI model should handle it.
+${nextStepsSection ? "Focus primarily on the 'Next planned actions' which represents upcoming tasks." : ''}
+Select 'fast' for simple, focused tasks that involve a single action or basic operations.
+Select 'smart' for complex reasoning, creativity, or tasks that might take multiple steps to complete.
+Select 'cheap' for non-urgent, simple tasks that don't require sophisticated reasoning.
+
+Priority is on simplicity - if the task appears to be trying to do too much at once, select 'smart'.
+If the task is properly broken down into one simple step, prefer 'fast' or 'cheap'.
+
+Respond with only one word: 'fast', 'smart', or 'cheap'.
+
+User Input:
+${analysisContent}`
       );
 
       if (this.debugMode) {
-        logger.debug(`Invoking "fast" model for meta-selection analysis.`);
+        logger.debug(`Invoking fast model for meta-selection analysis`);
         logger.debug(
-          `Using ${nextStepsSection ? 'NEXT STEPS-focused' : 'full content'} analysis.`
+          `Using ${nextStepsSection ? 'NEXT STEPS-focused' : 'regular'} analysis`
         );
       }
 
@@ -306,28 +298,27 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
         return modelChoice;
       } else {
         logger.warn(
-          `Invalid model selection response: "${modelChoice}". Defaulting to "smart".`
+          `Invalid model selection response: ${modelChoice}, defaulting to smart`
         );
         return 'smart';
       }
     } catch (error) {
       logger.warn(
-        `Error during meta-selection: ${error}. Falling back to heuristics.`
+        `Error in meta-selection: ${error}, falling back to heuristics`
       );
       return this.selectModelUsingHeuristics(messages);
     }
   }
 
   /**
-   * Selects a model using simple heuristics as a fallback mechanism.
-   * This method is called if meta-selection fails or is disabled and a more nuanced choice than 'smart' is desired.
-   * @param {BaseMessage[]} messages - The messages to analyze.
-   * @returns {string} The selected model type ('fast', 'smart', 'cheap').
+   * Select the model using simple heuristics as a fallback mechanism
+   * @param messages The messages to analyze
+   * @returns The selected model type
    */
   private selectModelUsingHeuristics(messages: BaseMessage[]): string {
     if (!messages || messages.length === 0) {
       logger.warn(
-        'Heuristic selection called with no messages; defaulting to "smart".'
+        'Heuristic selection called with no messages, defaulting to smart.'
       );
       return 'smart';
     }
@@ -335,7 +326,7 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
     const lastMessage = messages[messages.length - 1];
     if (!lastMessage) {
       logger.warn(
-        'Heuristic selection: Could not get the last message; defaulting to "smart".'
+        'Heuristic selection: Could not get last message, defaulting to smart.'
       );
       return 'smart';
     }
@@ -347,7 +338,7 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
           : JSON.stringify(lastMessage.content)
         : '';
 
-    let analysisFocusContent = content; // Content used for heuristic analysis
+    let analysisContent = content;
     let nextStepsContent = '';
 
     const nextStepsMatch = content.match(/NEXT STEPS:(.*?)($|(?=\n\n))/s);
@@ -355,21 +346,21 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
       nextStepsContent = nextStepsMatch[1].trim();
       if (this.debugMode) {
         logger.debug(
-          `Heuristic analysis focusing on NEXT STEPS: "${nextStepsContent}"`
+          `Heuristic analysis found NEXT STEPS: "${nextStepsContent}"`
         );
       }
-      analysisFocusContent = nextStepsContent; // Prioritize NEXT STEPS for heuristics
+      analysisContent = nextStepsContent;
     }
 
-    const criteria = this.analyzeMessageContent(analysisFocusContent);
+    const criteria = this.analyzeMessageContent(analysisContent);
     const modelType = this.selectModelBasedOnCriteria(criteria);
 
     if (this.debugMode) {
       logger.debug(
-        `Heuristic model selection chose: ${modelType} (Complexity: ${criteria.complexity}, Urgency: ${criteria.urgency}, Creativity: ${criteria.creativeRequirement}, Type: ${criteria.taskType})`
+        `Heuristic model selection for task: ${modelType} (complexity: ${criteria.complexity}, urgency: ${criteria.urgency}, creativity: ${criteria.creativeRequirement}, type: ${criteria.taskType})`
       );
       if (nextStepsContent) {
-        logger.debug(`Heuristic selection was based on NEXT STEPS content.`);
+        logger.debug(`Selection was based on NEXT STEPS content`);
       }
     }
 
@@ -377,12 +368,17 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Analyzes message content to determine task characteristics for heuristic model selection.
-   * @param {string} content - The message content to analyze.
-   * @returns {ModelSelectionCriteria} The derived selection criteria.
+   * Analyze message content to determine task characteristics
+   * @param content The message content to analyze
+   * @returns The analysis criteria
    */
   private analyzeMessageContent(content: string): ModelSelectionCriteria {
-    const normalizedContent = (content || '').toLowerCase(); // Ensure content is a string and normalize
+    if (content == null) {
+      logger.warn(
+        'analyzeMessageContent received null/undefined content, returning default criteria.'
+      );
+      content = '';
+    }
 
     const criteria: ModelSelectionCriteria = {
       complexity: 'medium',
@@ -391,93 +387,86 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
       taskType: 'general',
     };
 
-    // Complexity based on length
-    if (normalizedContent.length > 1500) {
+    if (content.length > 1500) {
       criteria.complexity = 'high';
-    } else if (normalizedContent.length < 300) {
+    } else if (content.length < 300) {
       criteria.complexity = 'low';
     }
 
-    // Task type and complexity/creativity adjustments based on keywords
     if (
-      /reason|analyze|explain why|consider|determine|evaluate|assess/.test(
-        normalizedContent
+      content.match(
+        /reason|analyze|explain why|consider|determine|evaluate|assess/i
       )
     ) {
       criteria.taskType = 'reasoning';
-      criteria.complexity = 'high'; // Reasoning tasks are often complex
+      criteria.complexity = 'high';
     }
 
     if (
-      /generate|create|write|draft|compose|design|develop|build/.test(
-        normalizedContent
-      )
+      content.match(/generate|create|write|draft|compose|design|develop|build/i)
     ) {
       criteria.taskType = 'generation';
-      criteria.creativeRequirement = 'high'; // Generation implies creativity
+      criteria.creativeRequirement = 'high';
     }
 
     if (
-      /categorize|classify|identify|determine if|is this|should i|yes or no/.test(
-        normalizedContent
+      content.match(
+        /categorize|classify|identify|determine if|is this|should I|yes or no/i
       )
     ) {
       criteria.taskType = 'classification';
-      criteria.complexity = 'low'; // Classification is often simpler
+      criteria.complexity = 'low';
     }
 
-    // Urgency based on keywords
-    if (/urgent|quickly|immediate|asap|now|fast/.test(normalizedContent)) {
+    if (content.match(/urgent|quickly|immediate|asap|now|fast/i)) {
       criteria.urgency = 'high';
     }
 
-    // Complexity based on keywords
     if (
-      /complicated|complex|difficult|challenging|advanced|multiple steps|in-depth/.test(
-        normalizedContent
+      content.match(
+        /complicated|complex|difficult|challenging|advanced|multiple steps|in-depth/i
       )
     ) {
       criteria.complexity = 'high';
     }
 
-    // Detect multiple actions or steps, indicating higher complexity
     if (
-      /and then|after that|followed by|next,|subsequently|finally,|1\.\s.*\s*2\./.test(
-        normalizedContent
-      )
+      content.match(
+        /and then|after that|followed by|next,|subsequently|finally,/i
+      ) ||
+      content.match(/\d+\.\s.*\d+\.\s/s)
     ) {
       if (this.debugMode) {
         logger.debug(
-          'Detected multiple actions or steps; marking as high complexity.'
+          'Detected multiple actions in a single step - marking as high complexity'
         );
       }
       criteria.complexity = 'high';
     }
 
-    // Simplicity keywords can lower complexity, unless already marked high for other reasons
     if (
-      /simple|straightforward|basic|single|focused|one step|easy/.test(
-        normalizedContent
+      content.match(
+        /simple|straightforward|basic|single|focused|one step|easy/i
       )
     ) {
       if (criteria.complexity !== 'high') {
-        // Don't override if already determined as high
         criteria.complexity = 'low';
       }
     }
+
     return criteria;
   }
 
   /**
-   * Selects the appropriate model type based on the analyzed task criteria.
-   * @param {ModelSelectionCriteria} criteria - The task criteria.
-   * @returns {string} The selected model type ('fast', 'smart', 'cheap').
+   * Select the appropriate model based on task criteria
+   * @param criteria The task criteria
+   * @returns The selected model type
    */
   private selectModelBasedOnCriteria(criteria: ModelSelectionCriteria): string {
-    // Prioritize 'smart' for complex reasoning or creative generation
     if (criteria.complexity === 'high' && criteria.taskType === 'reasoning') {
       return 'smart';
     }
+
     if (
       criteria.creativeRequirement === 'high' &&
       criteria.taskType === 'generation'
@@ -485,32 +474,29 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
       return 'smart';
     }
 
-    // Use 'fast' for low complexity, high urgency tasks or classifications
     if (criteria.complexity === 'low' && criteria.urgency === 'high') {
       return 'fast';
     }
+
     if (criteria.taskType === 'classification') {
-      return 'fast'; // Classifications are generally suited for faster models
+      return 'fast';
     }
 
-    // Use 'cheap' for low complexity tasks if not urgent or classification
     if (criteria.complexity === 'low') {
       return 'cheap';
     }
 
-    // Default to 'smart' for medium complexity or unclassified scenarios
     if (criteria.complexity === 'medium') {
       return 'smart';
     }
 
-    return 'smart'; // Fallback to 'smart'
+    return 'smart';
   }
 
   /**
-   * Gets the appropriate model instance for a given task, based on messages or a forced type.
-   * @param {BaseMessage[]} messages - The messages to analyze for model selection.
-   * @param {string} [forceModelType] - Optional. If provided, this model type will be used, bypassing selection logic.
-   * @returns {Promise<BaseChatModel>} The selected model instance. Falls back to 'smart' or the first available model if the selection is invalid.
+   * Get the appropriate model for a given task based on messages
+   * @param messages The messages to analyze
+   * @returns The selected model instance
    */
   public async getModelForTask(
     messages: BaseMessage[],
@@ -519,30 +505,21 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
     const modelType =
       forceModelType || (await this.selectModelForMessages(messages));
 
-    if (this.models[modelType]) {
-      return this.models[modelType];
-    } else {
+    if (!this.models[modelType]) {
       logger.warn(
-        `Selected model "${modelType}" is not available. Falling back to "smart" or the first available model.`
+        `Selected model "${modelType}" not available, falling back to "smart"`
       );
-      // Fallback logic: try 'smart', then the first model in the list, or throw error if none.
-      if (this.models['smart']) {
-        return this.models['smart'];
-      }
-      const availableModels = Object.values(this.models);
-      if (availableModels.length > 0) {
-        return availableModels[0];
-      }
-      throw new Error('No models available in ModelSelectionAgent.');
+      return this.models['smart'] || Object.values(this.models)[0];
     }
+
+    return this.models[modelType];
   }
 
   /**
-   * Directly invokes a model, performing selection logic if a model type is not forced.
-   * @param {BaseMessage[]} messages - The messages to process.
-   * @param {string} [forceModelType] - Optional. If provided, forces the use of a specific model type.
-   * @returns {Promise<any>} The model's response.
-   * @throws {Error} If the selected or fallback model is unavailable or fails to invoke.
+   * Directly invoke a model with selection logic
+   * @param messages The messages to process
+   * @param forceModelType Optional parameter to force using a specific model type
+   * @returns The model response
    */
   public async invokeModel(
     messages: BaseMessage[],
@@ -551,37 +528,22 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
     const modelType =
       forceModelType || (await this.selectModelForMessages(messages));
 
-    let selectedModel = this.models[modelType];
-
-    if (!selectedModel) {
+    if (!this.models[modelType]) {
       logger.warn(
-        `Selected model "${modelType}" is not available. Attempting to fall back to "smart".`
+        `Selected model "${modelType}" not available, falling back to "smart"`
       );
-      selectedModel = this.models['smart'];
-      if (!selectedModel) {
-        logger.error(
-          `Fallback model "smart" is also not available. Cannot invoke model.`
-        );
-        // Potentially throw an error or return a specific error message structure
-        // depending on how the calling code expects to handle this.
-        throw new Error(
-          'Selected model and fallback "smart" model are unavailable.'
-        );
-      }
+      return this.models['smart'].invoke(messages);
     }
 
     if (this.debugMode) {
-      logger.debug(
-        `Invoking model: ${modelType} (Forced: ${Boolean(forceModelType)}, Actual: ${selectedModel === this.models.smart ? 'smart (fallback)' : modelType})`
-      );
+      logger.debug(`Invoking model: ${modelType}`);
     }
-    return selectedModel.invoke(messages);
+
+    return this.models[modelType].invoke(messages);
   }
 
   /**
-   * Main execution entry point for the agent. Selects a model and returns an AIMessage with the selection.
-   * @param {any} input - Can be a single message, a string (converted to HumanMessage), or an array of BaseMessages.
-   * @returns {Promise<AIMessage>} An AIMessage indicating the selected model type and other relevant metadata.
+   * Main entry point for agent execution
    */
   public async execute(input: any): Promise<AIMessage> {
     const messages: BaseMessage[] = Array.isArray(input)
@@ -590,13 +552,13 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
 
     if (messages.length === 0) {
       logger.warn(
-        'ModelSelectionAgent received an empty message array. Defaulting to "smart" model.'
+        'ModelSelectionAgent received empty message array. Returning default model.'
       );
       return new AIMessage({
         content: 'Selected model type: smart (default due to empty input)',
         additional_kwargs: {
           modelType: 'smart',
-          nextAgent: 'snak', // Assuming 'snak' is the default next agent
+          nextAgent: 'snak',
           from: 'model-selector',
           final: false,
           originalUserQuery: '',
@@ -604,9 +566,8 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
       });
     }
 
-    // Attempt to find the original user query from HumanMessages
     const originalUserMessage = messages.find(
-      (msg): msg is HumanMessage => msg instanceof HumanMessage // Type guard
+      (msg) => msg instanceof HumanMessage
     );
     const originalQuery = originalUserMessage
       ? typeof originalUserMessage.content === 'string'
@@ -615,17 +576,15 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
       : '';
 
     const modelType = await this.selectModelForMessages(messages);
-    const nextAgent = 'snak'; // Define the typical next agent
+    const nextAgent = 'snak';
 
     if (this.debugMode) {
       logger.debug(
-        `ModelSelectionAgent selected model: ${modelType}, routing to: ${nextAgent}.`
+        `ModelSelectionAgent selected model: ${modelType}, routing to: ${nextAgent}`
       );
-      if (originalQuery) {
-        logger.debug(
-          `ModelSelectionAgent preserved original query: "${originalQuery.substring(0, 100)}..."` // Log a snippet
-        );
-      }
+      logger.debug(
+        `ModelSelectionAgent preserved original query: "${originalQuery}"`
+      );
     }
 
     return new AIMessage({
@@ -634,15 +593,14 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
         modelType,
         nextAgent,
         from: 'model-selector',
-        final: false, // This agent typically precedes another
+        final: false,
         originalUserQuery: originalQuery,
       },
     });
   }
 
   /**
-   * Gets the record of available initialized models.
-   * @returns {Record<string, BaseChatModel>} A map of model names to their instances.
+   * Get available models
    */
   public getModels(): Record<string, BaseChatModel> {
     return this.models;

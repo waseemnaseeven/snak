@@ -4,7 +4,7 @@ import {
 } from './supervisor/supervisorAgent.js';
 import { RpcProvider } from 'starknet';
 import { logger } from '@snakagent/core';
-import { AgentConfig, AgentMode } from '../config/agentConfig.js';
+import { JsonConfig } from '../config/jsonConfig.js';
 
 /**
  * Configuration for the agent system initialization
@@ -14,7 +14,7 @@ export interface AgentSystemConfig {
   accountPrivateKey: string;
   accountPublicKey: string;
   modelsConfigPath: string;
-  agentMode: AgentMode;
+  agentMode: 'interactive' | 'autonomous';
   signature: string;
   databaseCredentials: any;
   agentConfigPath?: string;
@@ -27,7 +27,7 @@ export interface AgentSystemConfig {
 export class AgentSystem {
   private supervisorAgent: SupervisorAgent | null = null;
   private config: AgentSystemConfig;
-  private agentConfig: AgentConfig;
+  private agentConfig: JsonConfig | null = null;
 
   constructor(config: AgentSystemConfig) {
     this.config = config;
@@ -35,31 +35,30 @@ export class AgentSystem {
   }
 
   /**
-   * Initializes the agent system.
-   * This involves loading the agent configuration (if provided) and setting up the supervisor agent.
+   * Initialize the agent system
    */
   public async init(): Promise<void> {
     try {
+      logger.debug('AgentSystem: Starting initialization');
+
       // Load agent configuration if path is provided
       if (this.config.agentConfigPath) {
         logger.debug(
-          `AgentSystem: Loading agent configuration from: ${this.config.agentConfigPath}`
+          `AgentSystem: Loading config from: ${this.config.agentConfigPath}`
         );
         try {
           this.agentConfig = await this.loadAgentConfig(
             this.config.agentConfigPath
           );
+          logger.debug('AgentSystem: Successfully loaded agent configuration');
         } catch (loadError) {
           logger.error(
-            `AgentSystem: Failed to load agent configuration: ${loadError}`
+            `AgentSystem: Error during config loading: ${loadError}`
           );
-          // Continue without agentConfig if loading fails
           this.agentConfig = null;
         }
       } else {
-        logger.warn(
-          'AgentSystem: No agentConfigPath provided, proceeding without agent-specific configuration.'
-        );
+        logger.warn('AgentSystem: No agentConfigPath provided');
         this.agentConfig = null;
       }
 
@@ -71,8 +70,7 @@ export class AgentSystem {
           provider: this.config.starknetProvider,
           accountPrivateKey: this.config.accountPrivateKey,
           accountPublicKey: this.config.accountPublicKey,
-          signature: this.config.signature,
-          agentConfig: this.agentConfig,
+          agentConfig: this.agentConfig || undefined,
           db_credentials: this.config.databaseCredentials,
         },
       };
@@ -91,12 +89,9 @@ export class AgentSystem {
   }
 
   /**
-   * Loads agent configuration from the specified file path.
-   * @param configPath The path to the agent configuration file.
-   * @returns A promise that resolves with the parsed AgentConfig.
-   * @throws Will throw an error if the configuration file cannot be read or parsed.
+   * Load agent configuration from the specified path
    */
-  private async loadAgentConfig(configPath: string): Promise<AgentConfig> {
+  private async loadAgentConfig(configPath: string): Promise<JsonConfig> {
     try {
       const fs = await import('fs/promises');
       const configContent = await fs.readFile(configPath, 'utf-8');
@@ -110,11 +105,7 @@ export class AgentSystem {
   }
 
   /**
-   * Executes a command using the agent system.
-   * @param input The input string for the command.
-   * @param config Optional configuration for the execution.
-   * @returns A promise that resolves with the execution result.
-   * @throws Will throw an error if the agent system is not initialized or if execution fails.
+   * Execute a command with the agent system
    */
   public async execute(
     input: string,
@@ -133,17 +124,14 @@ export class AgentSystem {
   }
 
   /**
-   * Retrieves the supervisor agent instance.
-   * @returns The SupervisorAgent instance, or null if not initialized.
+   * Get the supervisor agent
    */
   public getSupervisor(): SupervisorAgent | null {
     return this.supervisorAgent;
   }
 
   /**
-   * Retrieves the Starknet agent (main agent).
-   * @returns The Starknet agent instance.
-   * @throws Will throw an error if the agent system is not initialized.
+   * Get the Starknet agent (main agent)
    */
   public getStarknetAgent(): any {
     if (!this.supervisorAgent) {
@@ -153,10 +141,7 @@ export class AgentSystem {
   }
 
   /**
-   * Retrieves an operator by its ID.
-   * @param id The ID of the operator to retrieve.
-   * @returns The operator instance.
-   * @throws Will throw an error if the agent system is not initialized.
+   * Get an operator by ID
    */
   public getOperator(id: string): any {
     if (!this.supervisorAgent) {
@@ -166,82 +151,17 @@ export class AgentSystem {
   }
 
   /**
-   * Releases resources used by the agent system.
-   * Sets the supervisor agent to null.
+   * Release agent system resources
    */
   public async dispose(): Promise<void> {
     logger.debug('AgentSystem: Disposing resources');
     this.supervisorAgent = null;
     logger.info('AgentSystem: Resources disposed');
   }
-
-  /**
-   * Starts a hybrid execution flow.
-   * @param initialInput The initial input to begin the autonomous execution.
-   * @returns A promise that resolves with the initial state and a thread ID for further interaction.
-   * @throws Will throw an error if the agent system is not initialized.
-   */
-  public async startHybridExecution(
-    initialInput: string
-  ): Promise<{ state: any; threadId: string }> {
-    if (!this.supervisorAgent) {
-      throw new Error('Agent system not initialized. Call init() first.');
-    }
-
-    return await this.supervisorAgent.startHybridExecution(initialInput);
-  }
-
-  /**
-   * Provides input to a paused hybrid execution.
-   * @param input The human input to provide to the execution.
-   * @param threadId The thread ID of the paused execution.
-   * @returns A promise that resolves with the updated state of the execution.
-   * @throws Will throw an error if the agent system is not initialized.
-   */
-  public async provideHybridInput(
-    input: string,
-    threadId: string
-  ): Promise<any> {
-    if (!this.supervisorAgent) {
-      throw new Error('Agent system not initialized. Call init() first.');
-    }
-
-    return await this.supervisorAgent.provideHybridInput(input, threadId);
-  }
-
-  /**
-   * Checks if a hybrid execution is currently waiting for user input.
-   * @param state The current execution state.
-   * @returns True if the execution is waiting for input, false otherwise.
-   * @throws Will throw an error if the agent system is not initialized.
-   */
-  public isWaitingForInput(state: any): boolean {
-    if (!this.supervisorAgent) {
-      throw new Error('Agent system not initialized. Call init() first.');
-    }
-
-    return this.supervisorAgent.isWaitingForInput(state);
-  }
-
-  /**
-   * Checks if a hybrid execution has completed.
-   * @param state The current execution state.
-   * @returns True if the execution is complete, false otherwise.
-   * @throws Will throw an error if the agent system is not initialized.
-   */
-  public isExecutionComplete(state: any): boolean {
-    if (!this.supervisorAgent) {
-      throw new Error('Agent system not initialized. Call init() first.');
-    }
-
-    return this.supervisorAgent.isExecutionComplete(state);
-  }
 }
 
 /**
- * Helper function to create and initialize an instance of the AgentSystem.
- * @param config The configuration for the agent system.
- * @returns A promise that resolves with the initialized AgentSystem instance.
+ * Helper function to create an agent system
  */
 export async function createAgentSystem(
   config: AgentSystemConfig

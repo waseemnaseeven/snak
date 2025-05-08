@@ -1,7 +1,6 @@
 import { StructuredTool } from '@langchain/core/tools';
 import { MultiServerMCPClient } from 'snak-mcps';
 import { logger } from '@snakagent/core';
-import { AgentConfig } from 'config/agentConfig.js';
 
 /**
  * @class MCP_CONTROLLER
@@ -31,21 +30,21 @@ export class MCP_CONTROLLER {
 
   /**
    * @static
-   * @function fromAgentConfig
+   * @function fromJsonConfig
    * @description Creates an MCP_CONTROLLER instance from agent config
-   * @param {any} agentConfig - The agent configuration
+   * @param {any} jsonConfig - The agent configuration
    * @returns {MCP_CONTROLLER} A new MCP_CONTROLLER instance
    */
-  public static fromAgentConfig(agentConfig: AgentConfig): MCP_CONTROLLER {
+  public static fromJsonConfig(jsonConfig: any): MCP_CONTROLLER {
     if (
-      !agentConfig ||
-      !agentConfig.mcpServers ||
-      Object.keys(agentConfig.mcpServers).length === 0
+      !jsonConfig ||
+      !jsonConfig.mcpServers ||
+      Object.keys(jsonConfig.mcpServers).length === 0
     ) {
       throw new Error('Agent configuration must include mcpServers');
     }
 
-    return new MCP_CONTROLLER(agentConfig.mcpServers);
+    return new MCP_CONTROLLER(jsonConfig.mcpServers);
   }
 
   /**

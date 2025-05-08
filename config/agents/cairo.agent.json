@@ -25,8 +25,11 @@
     "Provides concise, log-style output at each step to describe current actions without fluff"
   ],
   "interval": 7000,
-  "maxIteration": 20,
-  "mode": "autonomous",
+  "mode": {
+    "interactive": false,
+    "autonomous": true,
+    "maxIteration": 20
+  },
   "memory": {
     "enabled": true,
     "shortTermMemorySize": 15

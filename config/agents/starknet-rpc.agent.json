@@ -19,8 +19,12 @@
     "I stay updated with the evolving Starknet protocol and RPC standards."
   ],
   "interval": 15000,
-  "maxIteration": 15,
-  "mode": "hybrid",
+  "mode": {
+    "interactive": true,
+    "autonomous": false,
+    "maxIteration": 15,
+    "metaSelection": true
+  },
   "memory": {
     "enabled": true,
     "shortTermMemorySize": 15

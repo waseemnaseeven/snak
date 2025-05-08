@@ -38,6 +38,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
+<<<<<<< HEAD
       - name: Ensure database and server dependencies
         run: |
           echo "Adding explicit pg dependencies"
@@ -48,6 +49,10 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --force
+=======
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+>>>>>>> 762d2fe0442091d3a084388f533ed71ddd71855a
 
       - name: Build packages in order
         run: |
@@ -111,6 +116,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
+<<<<<<< HEAD
       - name: Ensure database and server dependencies
         run: |
           echo "Adding explicit pg dependencies"
@@ -124,3 +130,10 @@ jobs:
 
       - name: Build server
         run: pnpm build
+=======
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build server
+        run: pnpm build
+>>>>>>> 762d2fe0442091d3a084388f533ed71ddd71855a

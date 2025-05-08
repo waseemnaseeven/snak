@@ -10,11 +10,11 @@ import { config } from 'dotenv';
 import { Postgres } from '@snakagent/database';
 import {
   load_json_config,
-  AgentMode,
-  AgentConfig,
-  AGENT_MODES,
-} from './src/config/agentConfig.js';
+  updateModeConfig,
+  JsonConfig,
+} from './src/config/jsonConfig.js';
 import { createBox } from './src/prompt/formatting.js';
+import { addTokenInfoToBox } from './src/token/tokenTracking.js';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import * as fs from 'fs';
@@ -23,10 +23,8 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { logger } from '@snakagent/core';
 import { DatabaseCredentials } from './src/tools/types/database.js';
-import { formatAgentResponse } from './src/agents/core/utils.js';
 
 import { AgentSystem, AgentSystemConfig } from './src/agents/index.js';
-import { hybridInitialPrompt } from './src/prompt/prompts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -172,6 +170,23 @@ function loadEnvVars(): Record<string, string> | undefined {
 }
 
 /**
+ * Formats agent response for display
+ */
+const formatAgentResponse = (response: string): string => {
+  if (typeof response !== 'string') return response;
+
+  return response
+    .split('\n')
+    .map((line) => {
+      if (line.includes('•')) {
+        return `  ${line.trim()}`;
+      }
+      return line;
+    })
+    .join('\n');
+};
+
+/**
  * Main function to run the application
  */
 const localRun = async (): Promise<void> => {
@@ -191,7 +206,7 @@ const localRun = async (): Promise<void> => {
     const { agentPath, modelsConfigPath } = await loadCommand();
 
     // Load initial agent config
-    let json_config: AgentConfig = await load_json_config(agentPath);
+    let json_config: JsonConfig | undefined = await load_json_config(agentPath);
     if (!json_config) {
       throw new Error(`Failed to load agent configuration from ${agentPath}`);
     }
@@ -213,12 +228,59 @@ const localRun = async (): Promise<void> => {
       );
     }
 
-    // Use the mode from agent configuration
-    const agentMode = json_config.mode;
+    // Ask for mode
+    const { mode } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'mode',
+        message: 'Select operation mode:',
+        choices: [
+          {
+            name: `Interactive Mode`,
+            value: 'interactive',
+            short: 'Interactive',
+          },
+          { name: `Autonomous Mode`, value: 'autonomous', short: 'Autonomous' },
+        ],
+      },
+    ]);
+    const agentMode = mode;
 
     clearScreen();
     console.log(logo);
     const spinner = createSpinner('Initializing Agent System').start();
+
+    // Update config file on disk if needed
+    try {
+      spinner.stop();
+
+      const modeToUpdate = agentMode;
+      const updateSpinner = createSpinner(
+        `Updating configuration to ${modeToUpdate} mode`
+      ).start();
+
+      const updateSuccess = await updateModeConfig(agentPath, modeToUpdate);
+      if (updateSuccess) {
+        updateSpinner.success({
+          text: `Configuration updated to ${modeToUpdate} mode`,
+        });
+
+        // Reload config from disk
+        json_config = await load_json_config(agentPath);
+        if (!json_config) {
+          throw new Error(
+            `Failed to reload agent configuration after update from ${agentPath}`
+          );
+        }
+      } else {
+        updateSpinner.warn({
+          text: `Failed to update configuration, continuing with current settings`,
+        });
+      }
+    } catch (updateError) {
+      spinner.error({ text: `Failed to update configuration: ${updateError}` });
+      logger.warn('Continuing with potentially outdated mode configuration.');
+    }
 
     // Setup database credentials from environment variables
     const database: DatabaseCredentials = {
@@ -250,14 +312,14 @@ const localRun = async (): Promise<void> => {
     // Prepare RPC Provider
     const provider = new RpcProvider({ nodeUrl: `${nodeUrl}` });
 
-    console.log(modelsConfigPath)
     // Prepare Agent System configuration ACCORDING TO THE DEFINITION IN agents/src/agents/index.ts
     const agentSystemConfig: AgentSystemConfig = {
       starknetProvider: provider,
       accountPrivateKey: process.env.STARKNET_PRIVATE_KEY!,
       accountPublicKey: process.env.STARKNET_PUBLIC_ADDRESS!,
       modelsConfigPath, // Already loaded
-      agentMode: agentMode,
+      agentMode:
+        json_config?.mode?.autonomous === true ? 'autonomous' : 'interactive', // Use autonomous flag or default to interactive
       signature: '', // TODO: Implement signature handling
       databaseCredentials: database,
       agentConfigPath: agentPath, // Pass the PATH to the agent config file
@@ -275,7 +337,7 @@ const localRun = async (): Promise<void> => {
     });
 
     // --- Execution Logic based on mode ---
-    if (agentMode === AGENT_MODES[AgentMode.INTERACTIVE]) {
+    if (agentMode === 'interactive') {
       console.log(chalk.dim('\nStarting interactive session...\n'));
       console.log(
         chalk.dim(`- Config: ${chalk.bold(path.basename(agentPath))}`)
@@ -309,10 +371,59 @@ const localRun = async (): Promise<void> => {
 
         try {
           // Execute through the supervisor agent which will route appropriately
-          await agentSystem.execute(user);
+          const result = await agentSystem.execute(user);
 
-          // Removing duplicate response formatting and logging since it's now handled
-          // consistently in all mode files (interactive.ts, autonomous.ts, hybrid.ts)
+          // Extract the response from the result
+          let aiResponse;
+          if (result && result.messages && result.messages.length > 0) {
+            aiResponse = result.messages[result.messages.length - 1].content;
+          } else {
+            aiResponse = String(result);
+          }
+
+          if (typeof aiResponse === 'string') {
+            let mainResponse = aiResponse;
+            let nextStepsContent: string | null = null;
+            // Use a more robust regex to split, accounting for whitespace and case
+            const nextStepsMarkerRegex = /\\s*NEXT\\s+STEPS:\\s*/i;
+            const parts = aiResponse.split(nextStepsMarkerRegex);
+
+            if (parts.length > 1) {
+              // If split produces more than one part, the marker was found
+              mainResponse = parts[0].trim(); // Everything before the marker
+              nextStepsContent = parts[1].trim(); // Everything after the marker
+            } else {
+              // Marker not found, the whole response is the main response
+              mainResponse = aiResponse.trim();
+            }
+
+            // Format and print the main response box
+            const mainBoxContent = createBox(
+              'Agent Response',
+              formatAgentResponse(mainResponse) // Format only the main part
+            );
+            // Add token information to the main box
+            const mainBoxWithTokens = addTokenInfoToBox(mainBoxContent);
+            process.stdout.write(mainBoxWithTokens);
+
+            // Format and print the "Next Steps" box if it exists and is not empty
+            if (nextStepsContent && nextStepsContent.length > 0) {
+              const nextStepsBoxContent = createBox(
+                'Agent Next Steps',
+                formatAgentResponse(nextStepsContent) // Format only the next steps part
+              );
+              // Do not add token info here, it's part of the main generation stats
+              process.stdout.write(nextStepsBoxContent);
+            }
+          } else {
+            logger.error('Invalid response type received:', aiResponse);
+            console.log(
+              createBox('Received invalid response type from agent system.', {
+                title: 'Error',
+                isError: true,
+              })
+            );
+          }
         } catch (error: any) {
           console.error(chalk.red('Error processing request'));
           logger.error('Error during agent execution:', error);
@@ -324,7 +435,7 @@ const localRun = async (): Promise<void> => {
           );
         }
       }
-    } else if (agentMode === AGENT_MODES[AgentMode.AUTONOMOUS]) {
+    } else if (agentMode === 'autonomous') {
       console.log(chalk.dim('\nStarting autonomous session...\n'));
       console.log(
         chalk.dim(`- Config: ${chalk.bold(path.basename(agentPath))}`)
@@ -333,7 +444,7 @@ const localRun = async (): Promise<void> => {
 
       try {
         // Verify autonomous mode is enabled in the configuration
-        if (json_config?.mode !== AgentMode.AUTONOMOUS) {
+        if (!json_config?.mode?.autonomous) {
           throw new Error('Autonomous mode is disabled in agent configuration');
         }
 
@@ -350,185 +461,6 @@ const localRun = async (): Promise<void> => {
       } catch (error) {
         console.error(chalk.red('Error in autonomous mode'));
         logger.error(
-          createBox(error.message, { title: 'Error', isError: true })
-        );
-      }
-    } else if (agentMode === AGENT_MODES[AgentMode.HYBRID]) {
-      console.log(chalk.dim('\nStarting hybrid session...\n'));
-      console.log(
-        chalk.dim(`- Config: ${chalk.bold(path.basename(agentPath))}`)
-      );
-      console.log(chalk.yellow('Running hybrid mode...\n'));
-
-      try {
-        if (!agentSystem) {
-          throw new Error('Agent system not initialized');
-        }
-
-        // Use a predefined prompt instead of asking the user
-        const initialPrompt = hybridInitialPrompt;
-
-        console.log(
-          chalk.yellow('\nStarting hybrid execution automatically...\n')
-        );
-
-        // Démarrer l'exécution hybride
-        const { state, threadId } =
-          await agentSystem.startHybridExecution(initialPrompt);
-        console.log(
-          chalk.green(`Hybrid execution started with thread ID: ${threadId}`)
-        );
-
-        // État de l'exécution
-        let currentState = state;
-        let isRunning = true;
-
-        // Fonction pour afficher le dernier message
-        const displayLastMessage = () => {
-          if (currentState.messages && currentState.messages.length > 0) {
-            const lastMessage =
-              currentState.messages[currentState.messages.length - 1];
-
-            // Skip logging if message has already been logged by the hybrid agent
-            if (lastMessage.additional_kwargs?.logged === true) {
-              return;
-            }
-
-            const content =
-              typeof lastMessage.content === 'string'
-                ? lastMessage.content
-                : JSON.stringify(lastMessage.content);
-
-            // Replace box display with simple log
-            logger.info(`Agent Response:\n\n${formatAgentResponse(content)}`);
-
-            // Mark message as logged to prevent duplicate logging
-            if (!lastMessage.additional_kwargs) {
-              lastMessage.additional_kwargs = {};
-            }
-            lastMessage.additional_kwargs.logged = true;
-          }
-        };
-
-        // Boucle principale d'interaction
-        while (isRunning) {
-          // Afficher le dernier message
-          displayLastMessage();
-
-          // Vérifier si l'agent attend une entrée
-          if (agentSystem.isWaitingForInput(currentState)) {
-            console.log(chalk.yellow('\nAgent is waiting for input.\n'));
-
-            // Demander l'entrée utilisateur
-            const { userInput } = await inquirer.prompt([
-              {
-                type: 'input',
-                name: 'userInput',
-                message: chalk.green('User:'),
-                validate: (value) => {
-                  if (!value.trim()) return 'Please enter a valid response';
-                  if (value.toLowerCase() === 'exit') return true;
-                  return true;
-                },
-              },
-            ]);
-
-            // Sortir si l'utilisateur tape "exit"
-            if (userInput.toLowerCase() === 'exit') {
-              console.log(chalk.blue('\nExiting hybrid mode...\n'));
-              isRunning = false;
-              break;
-            }
-
-            console.log(chalk.yellow('\nProcessing your input...\n'));
-
-            // Fournir l'entrée à l'agent et continuer l'exécution
-            try {
-              const result = await agentSystem.provideHybridInput(
-                userInput,
-                threadId
-              );
-              currentState = result.state;
-            } catch (inputError) {
-              console.error(chalk.red('Error processing your input:'));
-              console.error(
-                createBox(inputError.message, { title: 'Error', isError: true })
-              );
-            }
-          }
-          // Vérifier si l'exécution est terminée
-          else if (agentSystem.isExecutionComplete(currentState)) {
-            console.log(chalk.green('\nHybrid execution completed.\n'));
-            isRunning = false;
-          }
-          // Si l'agent est encore en train de travailler, attendre un peu
-          else {
-            console.log(
-              chalk.dim(
-                '\nAgent is working autonomously. Press Ctrl+C to exit.\n'
-              )
-            );
-
-            // Option pour continuer ou interrompre
-            const { action } = await inquirer.prompt([
-              {
-                type: 'list',
-                name: 'action',
-                message: 'What would you like to do?',
-                choices: [
-                  { name: 'Wait for next update', value: 'wait' },
-                  { name: 'Force provide input', value: 'input' },
-                  { name: 'Exit hybrid mode', value: 'exit' },
-                ],
-              },
-            ]);
-
-            if (action === 'exit') {
-              console.log(chalk.blue('\nExiting hybrid mode...\n'));
-              isRunning = false;
-            } else if (action === 'input') {
-              // Permettre à l'utilisateur de fournir une entrée même si l'agent n'en a pas demandé
-              const { userInput } = await inquirer.prompt([
-                {
-                  type: 'input',
-                  name: 'userInput',
-                  message: chalk.green('Your input (forced interruption):'),
-                  validate: (value) =>
-                    value.trim() ? true : 'Please enter a valid input',
-                },
-              ]);
-
-              console.log(
-                chalk.yellow('\nInterrupting agent with your input...\n')
-              );
-
-              try {
-                const result = await agentSystem.provideHybridInput(
-                  userInput,
-                  threadId
-                );
-                currentState = result.state;
-              } catch (inputError) {
-                console.error(chalk.red('Error processing your interrupt:'));
-                console.error(
-                  createBox(inputError.message, {
-                    title: 'Error',
-                    isError: true,
-                  })
-                );
-              }
-            } else {
-              // Attendre et vérifier l'état à nouveau
-              console.log(chalk.dim('Waiting for update...'));
-              // Vous pourriez implémenter une attente plus sophistiquée ici
-              await new Promise((resolve) => setTimeout(resolve, 2000));
-            }
-          }
-        }
-      } catch (error) {
-        console.error(chalk.red('Error in hybrid mode'));
-        logger.error('Hybrid mode error:', error);
-        console.error(
           createBox(error.message, { title: 'Error', isError: true })
         );
       }
