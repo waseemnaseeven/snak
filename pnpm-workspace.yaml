@@ -1,8 +1,4 @@
 packages:
-  - 'client'
-  - 'server'
-  - 'agents'
+  - 'packages/*'
   - 'plugins/*'
   - 'mcps/*'
-  - 'core'
-  - 'packages/*'

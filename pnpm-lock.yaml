@@ -133,7 +133,38 @@ importers:
         specifier: ^8.25.0
         version: 8.30.1(eslint@9.24.0(jiti@1.21.7))(typescript@5.8.3)
 
-  agents:
+  mcps/snak:
+    dependencies:
+      '@fastify/cors':
+        specifier: ^9.0.1
+        version: 9.0.1
+      '@fastify/type-provider-json-schema-to-ts':
+        specifier: ^3.0.0
+        version: 3.0.0(fastify@4.29.1)(json-schema-to-ts@3.1.1)
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.7.0
+        version: 1.10.1
+      fastify:
+        specifier: ^4.28.1
+        version: 4.29.1
+      starknet:
+        specifier: ^6.23.1
+        version: 6.24.1(encoding@0.1.13)
+      zod:
+        specifier: ^3.24.2
+        version: 3.24.3
+    devDependencies:
+      '@snakagent/agents':
+        specifier: workspace:*
+        version: link:../../packages/agent
+      '@types/node':
+        specifier: ^22.13.10
+        version: 22.14.1
+      typescript:
+        specifier: ^5.8.2
+        version: 5.8.3
+
+  packages/agent:
     dependencies:
       '@huggingface/transformers':
         specifier: ^3.4.0
@@ -167,67 +198,67 @@ importers:
         version: link:../core
       '@snakagent/database':
         specifier: workspace:*
-        version: link:../packages/database
+        version: link:../database
       '@snakagent/plugin-argent':
         specifier: workspace:*
-        version: link:../plugins/argent
+        version: link:../../plugins/argent
       '@snakagent/plugin-artpeace':
         specifier: workspace:*
-        version: link:../plugins/artpeace
+        version: link:../../plugins/artpeace
       '@snakagent/plugin-atlantic':
         specifier: workspace:*
-        version: link:../plugins/atlantic
+        version: link:../../plugins/atlantic
       '@snakagent/plugin-avnu':
         specifier: workspace:*
-        version: link:../plugins/avnu
+        version: link:../../plugins/avnu
       '@snakagent/plugin-braavos':
         specifier: workspace:*
-        version: link:../plugins/braavos
+        version: link:../../plugins/braavos
       '@snakagent/plugin-cairocoder':
         specifier: workspace:*
-        version: link:../plugins/cairocoder
+        version: link:../../plugins/cairocoder
       '@snakagent/plugin-chat-pool':
         specifier: workspace:*
-        version: link:../plugins/chat-pool
+        version: link:../../plugins/chat-pool
       '@snakagent/plugin-contract':
         specifier: workspace:*
-        version: link:../plugins/contract
+        version: link:../../plugins/contract
       '@snakagent/plugin-erc20':
         specifier: workspace:*
-        version: link:../plugins/erc20
+        version: link:../../plugins/erc20
       '@snakagent/plugin-erc721':
         specifier: workspace:*
-        version: link:../plugins/erc721
+        version: link:../../plugins/erc721
       '@snakagent/plugin-fibrous':
         specifier: workspace:*
-        version: link:../plugins/fibrous
+        version: link:../../plugins/fibrous
       '@snakagent/plugin-okx':
         specifier: workspace:*
-        version: link:../plugins/okx
+        version: link:../../plugins/okx
       '@snakagent/plugin-openzeppelin':
         specifier: workspace:*
-        version: link:../plugins/openzeppelin
+        version: link:../../plugins/openzeppelin
       '@snakagent/plugin-opus':
         specifier: workspace:*
-        version: link:../plugins/opus
+        version: link:../../plugins/opus
       '@snakagent/plugin-rpc':
         specifier: workspace:*
-        version: link:../plugins/rpc
+        version: link:../../plugins/rpc
       '@snakagent/plugin-scarb':
         specifier: workspace:*
-        version: link:../plugins/scarb
+        version: link:../../plugins/scarb
       '@snakagent/plugin-token':
         specifier: workspace:*
-        version: link:../plugins/token
+        version: link:../../plugins/token
       '@snakagent/plugin-transaction':
         specifier: workspace:*
-        version: link:../plugins/transaction
+        version: link:../../plugins/transaction
       '@snakagent/plugin-unruggable':
         specifier: workspace:*
-        version: link:../plugins/unruggable
+        version: link:../../plugins/unruggable
       '@snakagent/plugin-vesu':
         specifier: workspace:*
-        version: link:../plugins/vesu
+        version: link:../../plugins/vesu
       discord.js:
         specifier: ^14.17.3
         version: 14.18.0
@@ -247,7 +278,7 @@ importers:
         specifier: ^0.1.2
         version: 0.1.2(@modelcontextprotocol/sdk@1.10.1)(encoding@0.1.13)(langchain@0.3.22(@langchain/anthropic@0.3.18(@langchain/core@0.3.45(openai@4.95.0(encoding@0.1.13)(ws@8.18.1)(zod@3.24.3)))(encoding@0.1.13))(@langchain/core@0.3.45(openai@4.95.0(encoding@0.1.13)(ws@8.18.1)(zod@3.24.3)))(@langchain/deepseek@0.0.1(@langchain/core@0.3.45(openai@4.95.0(encoding@0.1.13)(ws@8.18.1)(zod@3.24.3)))(encoding@0.1.13)(ws@8.18.1))(@langchain/google-genai@0.1.12(@langchain/core@0.3.45(openai@4.95.0(encoding@0.1.13)(ws@8.18.1)(zod@3.24.3)))(zod@3.24.3))(@langchain/ollama@0.1.6(@langchain/core@0.3.45(openai@4.95.0(encoding@0.1.13)(ws@8.18.1)(zod@3.24.3))))(axios@1.8.4)(encoding@0.1.13)(handlebars@4.7.8)(openai@4.95.0(encoding@0.1.13)(ws@8.18.1)(zod@3.24.3))(ws@8.18.1))(openai@4.95.0(encoding@0.1.13)(ws@8.18.1)(zod@3.24.3))(react@19.1.0)(ws@8.18.1)(zod-to-json-schema@3.24.5(zod@3.24.3))(zod@3.24.3)
 
-  client:
+  packages/client:
     dependencies:
       '@radix-ui/react-select':
         specifier: ^2.1.5
@@ -326,14 +357,14 @@ importers:
         specifier: ^5
         version: 5.8.3
 
-  core:
+  packages/core:
     dependencies:
       '@langchain/core':
         specifier: ^0.3.42
         version: 0.3.45(openai@4.95.0(encoding@0.1.13)(ws@8.18.1)(zod@3.24.3))
       '@types/pg':
         specifier: ^8.11.11
-        version: 8.11.13
+        version: 8.15.0
       pg:
         specifier: ^8.13.3
         version: 8.14.1
@@ -346,37 +377,6 @@ importers:
       zod:
         specifier: ^3.22.4
         version: 3.24.3
-
-  mcps/snak:
-    dependencies:
-      '@fastify/cors':
-        specifier: ^9.0.1
-        version: 9.0.1
-      '@fastify/type-provider-json-schema-to-ts':
-        specifier: ^3.0.0
-        version: 3.0.0(fastify@4.29.1)(json-schema-to-ts@3.1.1)
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.7.0
-        version: 1.10.1
-      fastify:
-        specifier: ^4.28.1
-        version: 4.29.1
-      starknet:
-        specifier: ^6.23.1
-        version: 6.24.1(encoding@0.1.13)
-      zod:
-        specifier: ^3.24.2
-        version: 3.24.3
-    devDependencies:
-      '@snakagent/agents':
-        specifier: workspace:*
-        version: link:../../agents
-      '@types/node':
-        specifier: ^22.13.10
-        version: 22.14.1
-      typescript:
-        specifier: ^5.8.2
-        version: 5.8.3
 
   packages/database:
     dependencies:
@@ -391,23 +391,81 @@ importers:
         specifier: latest
         version: 5.8.3
 
+  packages/server:
+    dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.36.3
+        version: 0.36.3(encoding@0.1.13)
+      '@fastify/multipart':
+        specifier: ^9.0.3
+        version: 9.0.3
+      '@nestjs/common':
+        specifier: ^11.0.7
+        version: 11.0.20(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/config':
+        specifier: ^4.0.0
+        version: 4.0.2(@nestjs/common@11.0.20(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
+      '@nestjs/core':
+        specifier: ^11.0.7
+        version: 11.0.20(@nestjs/common@11.0.20(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/websockets@11.1.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/platform-fastify':
+        specifier: ^11.0.7
+        version: 11.0.20(@nestjs/common@11.0.20(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.0.20)
+      '@nestjs/schedule':
+        specifier: ^5.0.1
+        version: 5.0.1(@nestjs/common@11.0.20(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.0.20)
+      '@nestjs/throttler':
+        specifier: ^6.4.0
+        version: 6.4.0(@nestjs/common@11.0.20(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.0.20)(reflect-metadata@0.2.2)
+      '@snakagent/agents':
+        specifier: workspace:*
+        version: link:../agent
+      '@snakagent/core':
+        specifier: workspace:*
+        version: link:../core
+      class-transformer:
+        specifier: ^0.5.1
+        version: 0.5.1
+      class-validator:
+        specifier: ^0.14.1
+        version: 0.14.1
+      fastify:
+        specifier: ^5.2.1
+        version: 5.3.1
+      helmet:
+        specifier: ^8.0.0
+        version: 8.1.0
+      pg:
+        specifier: ^8.12.0
+        version: 8.14.1
+      rxjs:
+        specifier: ^7.8.1
+        version: 7.8.2
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.0
+        version: 8.15.0
+      typescript:
+        specifier: ^5.7.3
+        version: 5.8.3
+
   plugins/argent:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
 
   plugins/artpeace:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
 
   plugins/atlantic:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
 
   plugins/avnu:
     dependencies:
@@ -416,19 +474,19 @@ importers:
         version: 3.0.2(ethers@6.13.5)(moment@2.30.1)(qs@6.14.0)(starknet@6.24.1(encoding@0.1.13))
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
 
   plugins/braavos:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
 
   plugins/cairocoder:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
       '@snakagent/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -450,7 +508,7 @@ importers:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
       '@snakagent/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -459,7 +517,7 @@ importers:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
       '@snakagent/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -468,19 +526,19 @@ importers:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
 
   plugins/erc721:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
 
   plugins/fibrous:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
       fibrous-router-sdk:
         specifier: 0.4.3
         version: 0.4.3(encoding@0.1.13)
@@ -489,31 +547,31 @@ importers:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
 
   plugins/openzeppelin:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
 
   plugins/opus:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
 
   plugins/rpc:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
 
   plugins/scarb:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
       '@snakagent/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -550,77 +608,25 @@ importers:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
 
   plugins/transaction:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
 
   plugins/unruggable:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../packages/core
 
   plugins/vesu:
     dependencies:
       '@snakagent/core':
         specifier: workspace:*
-        version: link:../../core
-
-  server:
-    dependencies:
-      '@anthropic-ai/sdk':
-        specifier: ^0.36.3
-        version: 0.36.3(encoding@0.1.13)
-      '@fastify/multipart':
-        specifier: ^9.0.3
-        version: 9.0.3
-      '@nestjs/common':
-        specifier: ^11.0.7
-        version: 11.0.20(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/config':
-        specifier: ^4.0.0
-        version: 4.0.2(@nestjs/common@11.0.20(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
-      '@nestjs/core':
-        specifier: ^11.0.7
-        version: 11.0.20(@nestjs/common@11.0.20(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/websockets@11.1.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/platform-fastify':
-        specifier: ^11.0.7
-        version: 11.0.20(@nestjs/common@11.0.20(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.0.20)
-      '@nestjs/schedule':
-        specifier: ^5.0.1
-        version: 5.0.1(@nestjs/common@11.0.20(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.0.20)
-      '@nestjs/throttler':
-        specifier: ^6.4.0
-        version: 6.4.0(@nestjs/common@11.0.20(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.0.20)(reflect-metadata@0.2.2)
-      '@snakagent/agents':
-        specifier: workspace:*
-        version: link:../agents
-      '@snakagent/core':
-        specifier: workspace:*
-        version: link:../core
-      class-transformer:
-        specifier: ^0.5.1
-        version: 0.5.1
-      class-validator:
-        specifier: ^0.14.1
-        version: 0.14.1
-      fastify:
-        specifier: ^5.2.1
-        version: 5.3.1
-      helmet:
-        specifier: ^8.0.0
-        version: 8.1.0
-      rxjs:
-        specifier: ^7.8.1
-        version: 7.8.2
-    devDependencies:
-      typescript:
-        specifier: ^5.7.3
-        version: 5.8.3
+        version: link:../../packages/core
 
 packages:
 
@@ -13210,7 +13216,7 @@ snapshots:
 
   dotenv-expand@12.0.1:
     dependencies:
-      dotenv: 16.4.7
+      dotenv: 16.5.0
 
   dotenv@16.4.7: {}
 
@@ -13696,7 +13702,7 @@ snapshots:
       cross-spawn: 7.0.6
       get-stream: 6.0.0
       human-signals: 2.1.0
-      is-stream: 2.0.0
+      is-stream: 2.0.1
       merge-stream: 2.0.0
       npm-run-path: 4.0.1
       onetime: 5.1.2
@@ -16233,7 +16239,7 @@ snapshots:
       array-differ: 3.0.0
       array-union: 2.1.0
       arrify: 2.0.1
-      minimatch: 3.0.5
+      minimatch: 3.1.2
 
   mustache@4.2.0: {}
 

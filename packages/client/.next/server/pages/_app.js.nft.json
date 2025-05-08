@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "files": [
+    "../../../../../node_modules/.pnpm/next@15.1.4_@babel+core@7.26.10_@opentelemetry+api@1.9.0_@playwright+test@1.52.0_react-dom@19_q3je4r2ww3mqviwkcyjqrak4pq/node_modules/next/dist/pages/_app.js",
+    "../../../../../node_modules/.pnpm/react@19.1.0/node_modules/react/cjs/react-jsx-runtime.development.js",
+    "../../../../../node_modules/.pnpm/react@19.1.0/node_modules/react/cjs/react-jsx-runtime.production.js",
+    "../../../../../node_modules/.pnpm/react@19.1.0/node_modules/react/cjs/react.development.js",
+    "../../../../../node_modules/.pnpm/react@19.1.0/node_modules/react/cjs/react.production.js",
+    "../../../../../node_modules/.pnpm/react@19.1.0/node_modules/react/index.js",
+    "../../../../../node_modules/.pnpm/react@19.1.0/node_modules/react/jsx-runtime.js",
+    "../../../../../node_modules/.pnpm/react@19.1.0/node_modules/react/package.json",
+    "../../../../../package.json",
+    "../../../node_modules/react",
+    "../../package.json",
+    "../webpack-runtime.js"
+  ]
+}
