@@ -43,9 +43,11 @@ pnpm install
 ### Configuration
 
 1.  Create a `.env` file by copying `.env.example`:
+
 ```bash
 cp .env.example .env
 ```
+
 Then, fill in the necessary values in your `.env` file:
 
 ```env

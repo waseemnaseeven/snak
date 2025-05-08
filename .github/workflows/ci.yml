@@ -70,7 +70,7 @@ jobs:
 
       - name: Check formatting with Prettier
         run: |
-          pnpm prett
+          pnpm prettier --check "mcps/**/*.{ts,tsx}"
           pnpm prettier --check "plugins/**/*.{ts,tsx}"
           pnpm prettier --check "packages/**/*.{ts,tsx}"
 
