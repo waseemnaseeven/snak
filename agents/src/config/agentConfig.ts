@@ -59,7 +59,7 @@ export const createContextFromJson = (json: any): string => {
       'Error while trying to parse your context from the config file.'
     );
   }
-  console.log('json', JSON.stringify(json.bio));
+
   const contextParts: string[] = [];
 
   // Objectives Section
