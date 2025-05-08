@@ -27,7 +27,7 @@ export interface AgentSystemConfig {
 export class AgentSystem {
   private supervisorAgent: SupervisorAgent | null = null;
   private config: AgentSystemConfig;
-  private agentConfig: AgentConfig;
+  private agentConfig: AgentConfig | null;
 
   constructor(config: AgentSystemConfig) {
     this.config = config;
@@ -63,6 +63,9 @@ export class AgentSystem {
         this.agentConfig = null;
       }
 
+      if (!this.agentConfig) {
+        throw new Error('Agent configuration is required');
+      }
       // Create the config object for SupervisorAgent
       const supervisorConfigObject: SupervisorAgentConfig = {
         modelsConfigPath: this.config.modelsConfigPath,
@@ -71,7 +74,6 @@ export class AgentSystem {
           provider: this.config.starknetProvider,
           accountPrivateKey: this.config.accountPrivateKey,
           accountPublicKey: this.config.accountPublicKey,
-          signature: this.config.signature,
           agentConfig: this.agentConfig,
           db_credentials: this.config.databaseCredentials,
         },

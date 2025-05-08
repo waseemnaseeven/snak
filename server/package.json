@@ -33,6 +33,7 @@
     "fastify": "^5.2.1",
     "helmet": "^8.0.0",
     "rxjs": "^7.8.1",
+    "@langchain/core": "^0.3.42",
     "@snakagent/agents": "workspace:*",
     "@snakagent/core": "workspace:*",
     "@snakagent/database": "workspace:*"

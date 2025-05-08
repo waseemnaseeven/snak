@@ -84,7 +84,7 @@ export namespace Postgres {
       port: db.port,
     });
 
-    pool.on('error', (err) => {
+    pool.on('error', (err : any) => {
       console.error('something bad has happened!', err.stack);
     });
   }
@@ -123,7 +123,9 @@ export namespace Postgres {
         throw new Error('Connection pool not initialized!transaction');
       }
       client = await pool.connect();
-
+      if (!client) {
+        throw new Error('Failed to acquire a client from the pool');
+      }
       await client.query('BEGIN;');
       for (const q of qs) {
         res = await client.query(q.query, q.values);

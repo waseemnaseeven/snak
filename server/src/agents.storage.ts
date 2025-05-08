@@ -1,12 +1,62 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigurationService } from '../config/configuration.js';
-import {
-  StarknetAgent,
-  AgentConfig,
-  createContextFromJson,
-} from '@snakagent/agents';
+import { StarknetAgent, AgentConfig, AgentMode} from '@snakagent/agents';
 import { Postgres } from '@snakagent/database';
 import { SystemMessage } from '@langchain/core/messages';
+
+export const createContextFromJson = (json: AgentConfigJson): string => {
+  if (!json) {
+    throw new Error(
+      'Error while trying to parse your context from the config file.'
+    );
+  }
+  const contextParts: string[] = [];
+
+  // Objectives Section
+
+  // Identity Section
+  const identityParts: string[] = [];
+  if (json.name) {
+    identityParts.push(`Name: ${json.name}`);
+    contextParts.push(`Your name : [${json.name}]`);
+  }
+  if (json.prompt.bio) {
+    identityParts.push(`Bio: ${json.prompt.bio}`);
+    contextParts.push(`Your Bio : [${json.prompt.bio}]`);
+  }
+
+  if (Array.isArray(json.prompt.objectives)) {
+    contextParts.push(
+      `Your objectives : [${json.prompt.objectives.join(']\n[')}]`
+    );
+  }
+
+  // Knowledge Section
+  if (Array.isArray(json.prompt.knowledge)) {
+    contextParts.push(
+      `Your knowledge : [${json.prompt.knowledge.join(']\n[')}]`
+    );
+  }
+
+  return contextParts.join('\n');
+};
+
+export interface AgentPrompt {
+  bio: string;
+  lore: string[];
+  objectives: string[];
+  knowledge: string[];
+}
+export interface AgentConfigJson {
+  name: string;
+  prompt: AgentPrompt;
+  plugins: string[];
+  interval: number;
+  memory: {
+    enabled: boolean;
+    short_term_memory_size: number;
+  };
+}
 
 export interface AgentPrompt {
   bio: string;
@@ -135,7 +185,7 @@ export class AgentStorage {
     }
   }
 
-  private async createAgent(agent_config: AgentConfig): Promise<StarknetAgent> {
+  private async createAgent(agent_config: any): Promise<StarknetAgent> {
     try {
       const database = {
         database: process.env.POSTGRES_DB as string,
@@ -148,7 +198,7 @@ export class AgentStorage {
       const systemMessagefromjson = new SystemMessage(
         createContextFromJson(agent_config.prompt)
       );
-      const json_config: JsonConfig = {
+      const json_config: AgentConfig = {
         name: agent_config.name,
         prompt: systemMessagefromjson,
         plugins: agent_config.plugins,
@@ -158,11 +208,7 @@ export class AgentStorage {
           enabled: agent_config.memory.enabled,
           shortTermMemorySize: agent_config.memory.short_term_memory_size,
         },
-        mode: {
-          interactive: true,
-          autonomous: false,
-          maxIteration: 15,
-        },
+        mode: AgentMode.AUTONOMOUS,
       };
 
       const agent = new StarknetAgent({
