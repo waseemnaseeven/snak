@@ -1,7 +1,8 @@
 import { setupTestEnvironment } from '../utils/helper.js';
 import { RpcProvider } from 'starknet';
-import { StarknetAgentInterface, JsonConfig } from '@snakagent/core';
+import { StarknetAgentInterface, AgentConfig } from '@snakagent/core';
 import { SystemMessage } from '@langchain/core/messages';
+import { AgentMode } from '@core/src/common/agent.js';
 
 setupTestEnvironment();
 
@@ -16,18 +17,14 @@ export const createMockStarknetAgent = (): StarknetAgentInterface => {
     password: 'test_password',
     port: 5432,
   };
-  const json_config: JsonConfig = {
+  const agent_config: AgentConfig = {
     name: 'MockAgent',
     prompt: mockSystemMessage,
     interval: 1000,
     chat_id: 'mock_chat_id',
     plugins: [],
     memory: false,
-    mode: {
-      interactive: true,
-      autonomous: false,
-      maxIteration: 15,
-    },
+    mode: AgentMode.INTERACTIVE,
   };
 
   return {
@@ -41,7 +38,7 @@ export const createMockStarknetAgent = (): StarknetAgentInterface => {
       signature: '',
     }),
     getProvider: () => provider,
-    getAgentConfig: () => json_config,
+    getAgentConfig: () => agent_config,
     getDatabaseCredentials: () => db_credentials,
   };
 };
@@ -57,18 +54,14 @@ export const createMockInvalidStarknetAgent = (): StarknetAgentInterface => {
     password: 'test_password',
     port: 5432,
   };
-  const json_config: JsonConfig = {
+  const agent_config: AgentConfig = {
     name: 'MockAgent',
     prompt: mockSystemMessage,
     interval: 1000,
     chat_id: 'mock_chat_id',
     plugins: [],
     memory: false,
-    mode: {
-      interactive: true,
-      autonomous: false,
-      maxIteration: 15,
-    },
+    mode: AgentMode.INTERACTIVE,
   };
 
   return {
@@ -80,7 +73,7 @@ export const createMockInvalidStarknetAgent = (): StarknetAgentInterface => {
       signature: '',
     }),
     getProvider: () => provider,
-    getAgentConfig: () => json_config,
+    getAgentConfig: () => agent_config,
     getDatabaseCredentials: () => db_credentials,
   };
 };
