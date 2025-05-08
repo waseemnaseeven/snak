@@ -40,10 +40,8 @@
     "test": "./scripts/run_all_test.sh",
     "dev": "lerna run --scope @snakagent/agents start --",
     "dev:server": "lerna run dev --scope \"@snakagent/server\" --scope \"@snakagent/client\"",
-    "lint": "lerna run lint",
     "lint:client": "lerna run lint --scope \"@snakagent/client\"",
     "lint:server": "lerna run lint --scope \"@snakagent/server\"",
-    "lint:plugins": "lerna run lint --scope \"@snakagent/plugins-*\"",
     "lint:agents": "lerna run lint --scope \"@snakagent/agents\"",
     "prettier:all": "lerna run format",
     "node:server": "node ./mcps/snak/dist/index.js"

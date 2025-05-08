@@ -5,10 +5,10 @@
 .env
 
 # Client
-/client/.next
-/client/node_modules
-/client/dist
-/client/.env.local
+packages/client/.next
+packages/client/node_modules
+packages/client/dist
+packages/client/.env.local
 
 # Logs
 logs
@@ -54,3 +54,4 @@ plugins/scarb/src/workspace/
 
 # Database
 packages/database/data
+packages/database/data/pg_wal/
