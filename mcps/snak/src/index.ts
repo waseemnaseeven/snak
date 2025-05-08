@@ -1,11 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { RpcProvider } from 'starknet';
-import { StarknetAgent, registerTools, StarknetTool } from '@snakagent/agents';
+import { StarknetAgent, registerTools, StarknetTool, AgentMode } from '@snakagent/agents';
 import path from 'path';
 import * as dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { SystemMessage } from '@langchain/core/messages';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -43,7 +44,20 @@ export const RegisterToolInServer = async (allowed_tools: string[]) => {
     accountPublicKey: process.env.STARKNET_PUBLIC_ADDRESS as string,
     signature: 'key',
     db_credentials: database,
-    agentConfig: undefined,
+    agentConfig:
+      {
+        name: 'snak',
+        prompt: new SystemMessage('You are a helpful assistant'),
+        interval: 1000,
+        chat_id: 'snak',
+        plugins: [],
+        memory: {
+          enabled: true,
+          shortTermMemorySize: 10,
+        },
+        mode: AgentMode.INTERACTIVE,
+        maxIteration: 0
+      }
   });
   await agent.init();
 

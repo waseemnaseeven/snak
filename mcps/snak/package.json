@@ -12,7 +12,6 @@
     "clean:dist": "rm -rf dist",
     "clean:all": "pnpm clean && pnpm clean:dist",
     "format": "prettier --write \"src/**/*.ts\"",
-    "format": "prettier --write \"./**/*.ts\"",
     "prepublishOnly": "npm run format && npm run build",
     "prepack": "npm run build",
     "lint": "eslint \"src/**/*.ts\" --fix"

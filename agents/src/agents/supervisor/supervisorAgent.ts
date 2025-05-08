@@ -1,4 +1,3 @@
-// agents/supervisor/supervisorAgent.ts
 import {
   BaseAgent,
   AgentType,
@@ -19,6 +18,7 @@ import {
   AGENT_MODES,
 } from '../../config/jsonConfig.js';
 import { RpcProvider } from 'starknet';
+import { MCPOperatorAgent } from '../operators/mcp/mcpOperatorAgent.js';
 
 /**
  * Configuration for the SupervisorAgent.
@@ -40,6 +40,7 @@ export class SupervisorAgent extends BaseAgent {
   private modelSelectionAgent: ModelSelectionAgent | null = null;
   private starknetAgent: StarknetAgent | null = null;
   private toolsOrchestrator: ToolsOrchestrator | null = null;
+  private mcpOperatorAgent: MCPOperatorAgent | null = null;
   private memoryAgent: MemoryAgent | null = null;
   private workflowController: WorkflowController | null = null;
   private config: SupervisorAgentConfig;
@@ -144,6 +145,16 @@ export class SupervisorAgent extends BaseAgent {
       this.operators.set(this.toolsOrchestrator.id, this.toolsOrchestrator);
       logger.debug('SupervisorAgent: ToolsOrchestrator initialized');
 
+
+      logger.debug('SupervisorAgent: Initializing MCPOperatorAgent...');
+      this.mcpOperatorAgent = new MCPOperatorAgent({
+        starknetAgent: this.starknetAgent,
+        agentConfig: agentConfig,
+      });
+      await this.mcpOperatorAgent.init();
+      this.operators.set(this.mcpOperatorAgent.id, this.mcpOperatorAgent);
+      logger.debug('SupervisorAgent: MCPOperatorAgent initialized');
+
       logger.debug('SupervisorAgent: Initializing WorkflowController...');
       await this.initializeWorkflowController();
       logger.debug('SupervisorAgent: WorkflowController initialized');
@@ -194,6 +205,10 @@ export class SupervisorAgent extends BaseAgent {
         allAgents['tools'] = this.toolsOrchestrator;
       }
 
+      if (this.mcpOperatorAgent) {
+        allAgents['mcp'] = this.mcpOperatorAgent;
+      }
+
       if (!allAgents['snak']) {
         throw new Error(
           'WorkflowController requires at least the Starknet execution agent (snak).'
@@ -202,7 +217,7 @@ export class SupervisorAgent extends BaseAgent {
 
       const maxIterations = 15;
       const workflowTimeout = 60000; // 60 seconds
-      const entryPoint = 'snak'; // Default entry point
+      const entryPoint = 'supervisor';
 
       logger.debug(
         `SupervisorAgent: WorkflowController configured with maxIterations=${maxIterations}, timeout=${workflowTimeout}ms, entryPoint='${entryPoint}'`
@@ -273,10 +288,9 @@ export class SupervisorAgent extends BaseAgent {
   ): Promise<any> {
     this.executionDepth++;
     const depthIndent = '  '.repeat(this.executionDepth);
-    logger.debug(
-      `${depthIndent}SupervisorAgent[Depth:${this.executionDepth}]: Executing task`
-    );
+    logger.debug(`${depthIndent}SupervisorAgent[Depth:${this.executionDepth}]: Executing task`);
 
+    // Prevent recursion loops
     if (this.executionDepth > 3) {
       logger.warn(
         `${depthIndent}SupervisorAgent: Maximum execution depth (${this.executionDepth}) reached. Attempting direct execution via StarknetAgent.`
@@ -340,6 +354,41 @@ export class SupervisorAgent extends BaseAgent {
       message = new HumanMessage('Unrecognized input format');
     }
 
+    // Skip intent analysis if we're already in a routed execution
+    if (!config?.routedBy && this.executionDepth === 1) {
+      try {
+        // Analyze query to determine appropriate agent
+        const content = typeof message.content === 'string' 
+          ? message.content 
+          : JSON.stringify(message.content);
+        
+        logger.debug(`${depthIndent}SupervisorAgent: Analyzing query intent for: "${content.substring(0, 100)}..."`);
+        
+        // Direct routing for MCP-related queries
+        if (content.toLowerCase().includes('mcp') &&
+            (content.toLowerCase().includes('server') || 
+             content.toLowerCase().includes('list') || 
+             content.toLowerCase().includes('add') || 
+             content.toLowerCase().includes('config'))) {
+          
+          logger.debug(`${depthIndent}SupervisorAgent: Detected MCP-related query based on keywords`);
+          
+          // IMPORTANT: Direct execution rather than workflow routing
+          if (this.mcpOperatorAgent) {
+            logger.debug(`${depthIndent}SupervisorAgent: Directly executing query with MCPOperatorAgent`);
+            const result = await this.mcpOperatorAgent.execute(message);
+            this.executionDepth--;
+            return result;
+          } else {
+            logger.warn(`${depthIndent}SupervisorAgent: MCPOperatorAgent not available for MCP query`);
+          }
+        }
+      } catch (error) {
+        logger.error(`${depthIndent}SupervisorAgent: Error during intent analysis: ${error}`);
+        // Continue with normal workflow on error
+      }
+    }
+    
     if (config?.modelType) {
       logger.debug(
         `SupervisorAgent: Using provided model type: ${config.modelType}`

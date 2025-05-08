@@ -219,7 +219,7 @@ const localRun = async (): Promise<void> => {
 
     clearScreen();
     console.log(logo);
-    const spinner = createSpinner('Initializing Agent System').start();
+    const spinner = createSpinner('Initializing Agent System\n').start();
 
     // Setup database credentials from environment variables
     const database: DatabaseCredentials = {
@@ -233,7 +233,7 @@ const localRun = async (): Promise<void> => {
     // Initialize Database Connection Pool FIRST
     try {
       await Postgres.connect(database);
-      spinner.update({ text: 'Database connection pool initialized' });
+      spinner.update({ text: 'Database connection pool initialized\n' });
       logger.info('Database connection pool initialized successfully.');
     } catch (dbError) {
       spinner.error({ text: 'Failed to initialize database connection pool' });

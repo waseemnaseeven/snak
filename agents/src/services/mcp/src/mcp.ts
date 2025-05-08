@@ -9,6 +9,7 @@ import { logger } from '@snakagent/core';
  * @property {StructuredTool[]} tools - Array of structured tools available from the MCP servers
  */
 export class MCP_CONTROLLER {
+  [x: string]: any;
   private client: MultiServerMCPClient;
   private tools: StructuredTool[] = [];
 

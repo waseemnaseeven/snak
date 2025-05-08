@@ -121,7 +121,12 @@ NODE_ENV="development" # "development" or "production"
   ],
   "interval": "Your agent interval beetween each transaction of the Agent in ms,",
   "chat_id": "Your Agent Chat-id for isolating memory",
-  "autonomous": "Your agent is autonomous or not",
+  "maxIteration": "The number of iterations your agent will execute before stopping",
+  "mode": "The mode of your agent, can be interactive, autonomous or hybrid",
+  "memory": {
+    "enabled": "true or false to enable or disable memory",
+    "shortTermMemorySize": "The number of messages your agent will remember"
+  },
   "plugins": ["Your first plugin", "Your second plugin"],
   "mcpServers": {
     "nxp_server_example": {

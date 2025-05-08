@@ -25,7 +25,7 @@ export interface StarknetAgentConfig {
   accountPrivateKey: string;
   signature: string;
   db_credentials: DatabaseCredentials;
-  agentConfig?: AgentConfig;
+  agentConfig: AgentConfig;
   memory?: MemoryConfig;
   modelSelector?: ModelSelectionAgent;
 }

@@ -20,11 +20,20 @@
   ],
   "interval": 15000,
   "maxIteration": 15,
-  "mode": "hybrid",
+  "mode": "interactive",
   "memory": {
     "enabled": true,
     "shortTermMemorySize": 15
   },
   "chat_id": "ethereum_rpc",
-  "plugins": ["rpc"]
+  "plugins": ["rpc"],
+  "mcpServers": {
+    "brave-search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": "BSAgWXjaOOpxLi7o-_2jw3oDJSrVw5K"
+      }
+    }
+  }
 }
