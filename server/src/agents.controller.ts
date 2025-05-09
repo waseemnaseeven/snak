@@ -1,29 +1,18 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Logger,
-  NotFoundException,
-  Post,
-  Req,
-  UseGuards,
-  UseInterceptors,
-} from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import {
   AgentAddRequestDTO,
   AgentDeleteRequestDTO,
   AgentRequestDTO,
+  CreateConversationRequestDTO,
+  ConversationsRequestDTO,
+  getMessagesFromConversationIdDTO,
+  DeleteConversationRequestDTO,
 } from './dto/agents.js';
 import { AgentService } from './services/agent.service.js';
-import { AgentResponseInterceptor } from './interceptors/response.js';
-import { FileTypeGuard } from './guard/file-validator.guard.js';
-import { promises as fs } from 'fs';
-import { getFilename } from './utils/index.js';
 import { AgentStorage } from './agents.storage.js';
 import { metrics } from '@snakagent/core';
 import { Reflector } from '@nestjs/core';
 import errorMap from './utils/error.js';
-import { FastifyRequest } from 'fastify';
 // import { Postgres } from '@snakagent/database';
 
 export class ServerError extends Error {
@@ -39,8 +28,13 @@ export class ServerError extends Error {
   }
 }
 
+export interface AgentResponse {
+  status: 'success' | 'failure';
+  data?: unknown;
+}
+
 @Controller('agents')
-@UseInterceptors(AgentResponseInterceptor)
+// @UseInterceptors(AgentResponseInterceptor)
 export class AgentsController {
   constructor(
     private readonly agentService: AgentService,
@@ -49,20 +43,27 @@ export class AgentsController {
   ) {}
 
   @Post('request')
-  async handleUserRequest(@Body() userRequest: AgentRequestDTO) {
+  async handleUserRequest(
+    @Body() userRequest: AgentRequestDTO
+  ): Promise<AgentResponse> {
     try {
       const route = this.reflector.get('path', this.handleUserRequest);
-      const agent = this.agentFactory.getAgent(userRequest.agent);
+      const agent = this.agentFactory.getAgent(userRequest.agent_id);
       if (!agent) {
         throw new ServerError('E01TA400');
       }
       const action = this.agentService.handleUserRequest(agent, userRequest);
-      return await metrics.metricsAgentResponseTime(
-        userRequest.agent,
+      await metrics.metricsAgentResponseTime(
+        userRequest.agent_id.toString(),
         'key',
         route,
         action
       );
+      const response: AgentResponse = {
+        status: 'success',
+        data: action,
+      };
+      return response;
     } catch (error) {
       console.log(process.env.POSTGRES_USER);
       console.log('Error in handleUserRequest:', error);
@@ -71,96 +72,157 @@ export class AgentsController {
   }
 
   @Post('delete_agent')
-  async deleteAgent(@Body() userRequest: AgentDeleteRequestDTO) {
+  async deleteAgent(
+    @Body() userRequest: AgentDeleteRequestDTO
+  ): Promise<AgentResponse> {
     try {
-      const agent = this.agentFactory.getAgent(userRequest.agent);
+      const agent = this.agentFactory.getAgent(userRequest.agent_id);
       if (!agent) {
         throw new ServerError('E01TA400');
       }
-      await this.agentFactory.deleteAgent(userRequest.agent);
-      console.log('Agent deleted:', userRequest.agent);
-      return { status: 'success', data: 'Agent deleted' };
+      await this.agentFactory.deleteAgent(userRequest.agent_id);
+      console.log('Agent deleted:', userRequest.agent_id);
+      const response: AgentResponse = {
+        status: 'success',
+        data: `Agent ${userRequest.agent_id} deleted`,
+      };
+      return response;
     } catch (error) {
       throw new ServerError('E04TA100');
     }
   }
 
   @Post('add_agent')
-  async addAgent(@Body() userRequest: AgentAddRequestDTO) {
+  async addAgent(
+    @Body() userRequest: AgentAddRequestDTO
+  ): Promise<AgentResponse> {
     try {
       await this.agentFactory.addAgent(userRequest.agent);
-      return { status: 'success', data: 'Agent added' };
+      console.log('Agent added:', userRequest.agent);
+      const response: AgentResponse = {
+        status: 'success',
+        data: `Agent ${userRequest.agent.name} added`,
+      };
+      return response;
     } catch (error) {
       console.log('Error in addAgent:', error);
       throw new ServerError('E02TA200');
     }
   }
 
-  @Get('health')
-  async getAgentHealth() {
-    return { status: 'success', data: 'Agent is healthy' };
-  }
-
-  @Post('upload_large_file')
-  @UseGuards(
-    new FileTypeGuard([
-      'application/json',
-      'application/zip',
-      'image/jpeg',
-      'image/png',
-    ])
-  )
-
-  async uploadFile(@Req() req: FastifyRequest) {
-    const logger = new Logger('Upload service');
-    req.log.info('File upload request received');
-    logger.debug({ message: 'The file has been uploaded' });
-    return { status: 'success', data: 'The file has been uploaded.' };
-  }
-
-  
-
-  @Post('delete_large_file')
-  async deleteUploadFile(@Body() filename: { filename: string }) {
-    const logger = new Logger('Upload service');
-
-    const path = process.env.PATH_UPLOAD_DIR;
-    if (!path) throw new Error(`PATH_UPLOAD_DIR must be defined in .env file`);
-
-    const fullPath = await getFilename(filename.filename);
-    const normalizedPath = fullPath.normalize();
-
+  @Post('create_conversation')
+  async createConversation(
+    @Body() userRequest: CreateConversationRequestDTO
+  ): Promise<AgentResponse> {
     try {
-      await fs.access(normalizedPath);
-    } catch {
-      throw new NotFoundException(`File not found : ${path}`);
-    }
-
-    try {
-      await fs.unlink(fullPath);
-      logger.debug({ message: `File ${filename.filename} has been deleted` });
-      return { status: 'success', data: 'The file has been deleted.' };
-    } catch (error) {
-      logger.error('Error delete file', {
-        error: {
-          message: error.message,
-          name: error.name,
-          stack: error.stack,
-        },
-        filePath: fullPath,
-      });
-      switch (error.code) {
-        case 'ENOENT':
-          throw new NotFoundException(
-            `File not found : ${path}${filename.filename}`
-          ); // HttpException(404)
-        case 'EACCES':
-          throw new Error(
-            `Insufficient permits for ${path}${filename.filename}`
-          ); // HttpException(403)
-        default:
-          throw new Error(`Deletion error : ${error.message}`); // throw personalised error
+      const agent = this.agentFactory.getAgent(userRequest.agent_id);
+      if (!agent) {
+        throw new ServerError('E01TA400');
       }
+
+      const conversation =
+        await this.agentService.createConversation(userRequest);
+      const response: AgentResponse = {
+        status: 'success',
+        data: conversation,
+      };
+      return response;
+    } catch (error) {
+      throw new ServerError('E02TA200');
     }
+  }
+
+  @Post('delete_conversation')
+  async deleteConversation(
+    @Body() userRequest: DeleteConversationRequestDTO
+  ): Promise<AgentResponse> {
+    try {
+      const agent = this.agentFactory.getAgent(userRequest.agent_id);
+      if (!agent) {
+        throw new ServerError('E01TA400');
+      }
+
+      await this.agentService.deleteConversation(userRequest.conversation_id);
+      const response: AgentResponse = {
+        status: 'success',
+        data: `Conversation ${userRequest.conversation_id} deleted`,
+      };
+      return response;
+    } catch (error) {
+      throw new ServerError('E02TA200');
+    }
+  }
+
+  @Post('get_conversations_from_agent_id')
+  async getConversationsFromAgentId(
+    @Body() userRequest: ConversationsRequestDTO
+  ): Promise<AgentResponse> {
+    try {
+      const agent = this.agentFactory.getAgent(userRequest.agent_id);
+      if (!agent) {
+        throw new ServerError('E01TA400');
+      }
+      const conversations = await this.agentService.getConversationsFromAgentId(
+        userRequest.agent_id
+      );
+      const response: AgentResponse = {
+        status: 'success',
+        data: conversations,
+      };
+      return response;
+    } catch (error) {
+      console.log('Error in getAllConversations:', error);
+      throw new ServerError('E05TA100');
+    }
+  }
+
+  @Post('get_messages_from_conversation_id')
+  async getMessagesFromConversationId(
+    @Body() userRequest: getMessagesFromConversationIdDTO
+  ): Promise<AgentResponse> {
+    try {
+      const agent = this.agentFactory.getAgent(userRequest.agent_id);
+      if (!agent) {
+        throw new ServerError('E01TA400');
+      }
+      const messages = await this.agentService.getMessageFromConversation(
+        userRequest.conversation_id
+      );
+      const response: AgentResponse = {
+        status: 'success',
+        data: messages,
+      };
+      return response;
+    } catch (error) {
+      console.log('Error in getMessagesFromConversationName:', error);
+      throw new ServerError('E05TA100');
+    }
+  }
+
+  @Post('get_agents')
+  async getAgents(): Promise<AgentResponse> {
+    try {
+      const agents = await this.agentService.getAllAgents();
+      if (!agents) {
+        throw new ServerError('E01TA400');
+      }
+      const response: AgentResponse = {
+        status: 'success',
+        data: agents,
+      };
+      return response;
+    } catch (error) {
+      console.log('Error in getAgents:', error);
+      throw new ServerError('E05TA100');
+    }
+  }
+
+  @Get('health')
+  async getAgentHealth(): Promise<AgentResponse> {
+    const response: AgentResponse = {
+      status: 'success',
+      data: 'Agent is healthy',
+    };
+    return response;
   }
 }

@@ -1,18 +1,59 @@
 import { IsNotEmpty } from 'class-validator';
 
-export class AgentRequestDTO {
-  @IsNotEmpty()
-  request: string;
-  @IsNotEmpty()
-  agent: string;
+export interface Message {
+  conversation_id: number;
+  sender_type: string;
+  content: string;
+  status: string;
 }
 
-class AgentMemory {
+export class AgentRequestDTO {
+  @IsNotEmpty()
+  request: Message;
+  @IsNotEmpty()
+  agent_id: number;
+}
+
+// TODO add agentgs to the request(to be able to devide the request to the agent,
+// and also create same convesation name but for two distinc agents)
+export class CreateConversationRequestDTO {
+  @IsNotEmpty()
+  conversation_name: string;
+  @IsNotEmpty()
+  agent_id: number;
+}
+
+export class DeleteConversationRequestDTO {
+  @IsNotEmpty()
+  conversation_id: number;
+  @IsNotEmpty()
+  agent_id: number;
+}
+
+export class ConversationsFromConversationIdDTO {
+  @IsNotEmpty()
+  conversation_id: number;
+}
+
+// Only to get all the conversations
+export class ConversationsRequestDTO {
+  @IsNotEmpty()
+  agent_id: number;
+}
+
+export class getMessagesFromConversationIdDTO {
+  @IsNotEmpty()
+  conversation_id: number;
+  @IsNotEmpty()
+  agent_id: number;
+}
+
+interface AgentMemory {
   enabled: boolean;
   short_term_memory_size: number;
 }
 
-class AgentPrompt {
+interface AgentPrompt {
   bio: string;
   lore: string[];
   objectives: string[];
@@ -34,7 +75,7 @@ export class InitializesRequestDTO {
 
 export class AgentDeleteRequestDTO {
   @IsNotEmpty()
-  agent: string;
+  agent_id: number;
 }
 
 export class AgentAddRequestDTO {

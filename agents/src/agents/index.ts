@@ -5,7 +5,46 @@ import {
 import { RpcProvider } from 'starknet';
 import { logger } from '@snakagent/core';
 import { AgentConfig, AgentMode } from '../config/agentConfig.js';
+import { Postgres } from '@snakagent/database';
+export interface Conversation {
+  conversation_name: string;
+}
 
+export interface Message {
+  conversation_id: number;
+  sender_type: string;
+  content: string;
+  status: string;
+}
+
+export interface ConversationResponse {
+  conversation_id: number;
+  conversation_name: string;
+}
+
+export interface OutputResponse {
+  index: number;
+  type: string;
+  text: string;
+}
+export interface Response {
+  output: Message;
+  input: Message;
+}
+
+export interface ErrorResponse {
+  statusCode: number;
+  name: string;
+  errorCode: string;
+  errorMessage: string;
+}
+
+export interface ServerState {
+  index: number;
+  type: string;
+  status: string;
+  text: string;
+}
 /**
  * Configuration for the agent system initialization
  */
@@ -115,6 +154,46 @@ export class AgentSystem {
     }
   }
 
+  private async check_if_conversation_exists(
+    conversation_id: number
+  ): Promise<boolean> {
+    try {
+      const conversation_q = new Postgres.Query(
+        `SELECT EXISTS(SELECT 1 FROM conversation WHERE conversation_id = $1)`,
+        [conversation_id]
+      );
+
+      const conversation_q_res = await Postgres.query<boolean>(
+        conversation_q
+      ).catch((error) => {
+        throw new Error(`Error checking conversation existence: ${error}`);
+      });
+      logger.debug('Conversation exists:', conversation_q_res);
+      return true;
+    } catch (error) {
+      logger.error(error);
+      throw error;
+    }
+  }
+  private async insert_message_into_db(message: Message): Promise<number> {
+    try {
+      const message_q = new Postgres.Query(
+        `
+        INSERT INTO message (conversation_id, sender_type, content) VALUES ($1, $2, $3) RETURNING message_id`,
+        [message.conversation_id, message.sender_type, message.content]
+      );
+      const message_q_res = await Postgres.query<number>(message_q);
+      console.log(
+        `Message inserted into DB: ${JSON.stringify((message_q_res[0] as any).message_id)}`
+      );
+      logger.debug(`Messagfe inserted into DB: ${message_q_res[0]}`);
+      return message_q_res[0];
+    } catch (error) {
+      logger.error(error);
+      throw error;
+    }
+  }
+
   /**
    * Executes a command using the agent system.
    * @param input The input string for the command.
@@ -123,7 +202,7 @@ export class AgentSystem {
    * @throws Will throw an error if the agent system is not initialized or if execution fails.
    */
   public async execute(
-    input: string,
+    message: Message,
     config?: Record<string, any>
   ): Promise<any> {
     if (!this.supervisorAgent) {
@@ -131,7 +210,27 @@ export class AgentSystem {
     }
 
     try {
-      return await this.supervisorAgent.execute(input, config);
+      Postgres.connect(this.config.databaseCredentials);
+      logger.debug(
+        `AgentSystem: Executing command with input: ${JSON.stringify(message)}`
+      );
+      const response = await this.supervisorAgent.execute(
+        message.content,
+        config
+      );
+      logger.debug(JSON.stringify(response));
+      await this.check_if_conversation_exists(message.conversation_id);
+      await this.insert_message_into_db(message);
+      if (typeof response === 'string') {
+        const r_msg: Message = {
+          conversation_id: message.conversation_id,
+          sender_type: 'ai',
+          content: response,
+          status: 'success',
+        };
+        await this.insert_message_into_db(r_msg);
+      }
+      return response;
     } catch (error) {
       logger.error(`AgentSystem: Execution error: ${error}`);
       throw error;
