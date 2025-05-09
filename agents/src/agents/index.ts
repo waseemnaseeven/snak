@@ -17,7 +17,7 @@ export interface AgentSystemConfig {
   agentMode: AgentMode;
   signature: string;
   databaseCredentials: any;
-  agentConfigPath?: string;
+  agentConfigPath?: string | AgentConfig;
   debug?: boolean;
 }
 
@@ -46,9 +46,13 @@ export class AgentSystem {
           `AgentSystem: Loading agent configuration from: ${this.config.agentConfigPath}`
         );
         try {
-          this.agentConfig = await this.loadAgentConfig(
-            this.config.agentConfigPath
-          );
+          if (typeof this.config.agentConfigPath === 'string') {
+            this.agentConfig = await this.loadAgentConfig(
+              this.config.agentConfigPath
+            );
+          } else {
+            this.agentConfig = this.config.agentConfigPath;
+          }
         } catch (loadError) {
           logger.error(
             `AgentSystem: Failed to load agent configuration: ${loadError}`

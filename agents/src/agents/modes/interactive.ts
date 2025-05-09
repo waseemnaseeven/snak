@@ -5,7 +5,7 @@ import {
   ChatPromptTemplate,
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
-import { logger } from '@snakagent/core';
+import { logger, AgentConfig } from '@snakagent/core';
 import { StarknetAgentInterface } from '../../tools/tools.js';
 import {
   initializeToolsList,
@@ -17,7 +17,6 @@ import { estimateTokens } from '../../token/tokenTracking.js';
 import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
 import { SupervisorAgent } from '../supervisor/supervisorAgent.js';
 import { baseSystemPrompt, interactiveRules } from '../../prompt/prompts.js';
-
 /**
  * Retrieves the memory agent instance from the SupervisorAgent.
  * @returns A promise that resolves to the memory agent instance or null if not found or an error occurs.
@@ -48,7 +47,7 @@ export const createInteractiveAgent = async (
   modelSelector: ModelSelectionAgent | null
 ) => {
   try {
-    const agent_config = starknetAgent.getAgentConfig();
+    const agent_config: AgentConfig = starknetAgent.getAgentConfig();
     if (!agent_config) {
       throw new Error('Agent configuration is required');
     }
@@ -132,20 +131,11 @@ User Memory Context:
     async function callModel(
       state: typeof GraphState.State
     ): Promise<{ messages: BaseMessage[] }> {
+      logger.debug('Calling model with state:', state);
+      logger.debug(JSON.stringify(agent_config));
+      logger.debug('test');
       if (!agent_config) {
         throw new Error('Agent configuration is required but not available');
-      }
-      if (
-        !agent_config.name ||
-        !(agent_config as any).bio ||
-        !Array.isArray((agent_config as any).objectives) ||
-        (agent_config as any).objectives.length === 0 ||
-        !Array.isArray((agent_config as any).knowledge) ||
-        (agent_config as any).knowledge.length === 0
-      ) {
-        throw new Error(
-          'Agent configuration is incomplete (name, bio, objectives, or knowledge missing)'
-        );
       }
 
       const interactiveSystemPrompt = `
@@ -153,7 +143,7 @@ User Memory Context:
         ${interactiveRules}
         Available tools: ${toolsList.map((tool) => tool.name).join(', ')}
       `;
-
+      logger.debug('stopping');
       const prompt = ChatPromptTemplate.fromMessages([
         [
           'system',
@@ -177,7 +167,6 @@ User Memory Context:
           messages: filteredMessages,
           memories: state.memories || '',
         });
-
         const estimatedTokens = estimateTokens(JSON.stringify(formattedPrompt));
         let currentMessages = filteredMessages;
         let currentFormattedPrompt = formattedPrompt;

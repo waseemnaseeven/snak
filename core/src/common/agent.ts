@@ -42,7 +42,7 @@ export enum AgentMode {
 /**
  * Interface for the JSON configuration object
  */
-export interface AgentConfig {
+export interface RawAgentConfig {
   name: string;
   bio?: string;
   objectives?: string[];
@@ -54,6 +54,25 @@ export interface AgentConfig {
   memory: boolean;
   mcpServers?: Record<string, any>;
   mode: AgentMode;
+}
+
+export interface MemoryConfig {
+  enabled?: boolean;
+  shortTermMemorySize?: number;
+  maxIteration?: number;
+  embeddingModel?: string;
+}
+
+export interface AgentConfig {
+  name: string;
+  prompt: SystemMessage;
+  interval: number;
+  chat_id: string;
+  plugins: string[];
+  memory: MemoryConfig;
+  mcpServers?: Record<string, any>;
+  mode: AgentMode;
+  maxIteration: number;
 }
 
 export interface DatabaseCredentials {

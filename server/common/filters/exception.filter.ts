@@ -9,6 +9,7 @@ import {
 import { FastifyReply } from 'fastify';
 import { BaseError } from '../errors/base.error.js';
 import { ConfigurationService } from '../../config/configuration.js';
+import { ServerError } from '../../src/agents.controller.js';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -26,10 +27,20 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       stack: exception.stack,
     });
 
+    if (exception instanceof ServerError) {
+      // Handle your custom error
+      return response.status(exception.statusCode).send({
+        statusCode: 500,
+        name: exception.name,
+        errorCode: exception.errorCode,
+        errorMessage : exception.message // Include your custom code in the response
+      });
+    }
+
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       return response.status(status).send({
-        statusCode: status,
+        statusCode: 100,
         message: exception.message,
         error: exception.name,
       });

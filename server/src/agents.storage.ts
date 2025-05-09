@@ -1,45 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigurationService } from '../config/configuration.js';
-import { StarknetAgent, AgentConfig, AgentMode} from '@snakagent/agents';
+import {
+  AgentConfig,
+  AgentMode,
+  AgentSystem,
+  AgentSystemConfig,
+  createContextFromJson
+} from '@snakagent/agents';
 import { Postgres } from '@snakagent/database';
 import { SystemMessage } from '@langchain/core/messages';
-
-export const createContextFromJson = (json: AgentConfigJson): string => {
-  if (!json) {
-    throw new Error(
-      'Error while trying to parse your context from the config file.'
-    );
-  }
-  const contextParts: string[] = [];
-
-  // Objectives Section
-
-  // Identity Section
-  const identityParts: string[] = [];
-  if (json.name) {
-    identityParts.push(`Name: ${json.name}`);
-    contextParts.push(`Your name : [${json.name}]`);
-  }
-  if (json.prompt.bio) {
-    identityParts.push(`Bio: ${json.prompt.bio}`);
-    contextParts.push(`Your Bio : [${json.prompt.bio}]`);
-  }
-
-  if (Array.isArray(json.prompt.objectives)) {
-    contextParts.push(
-      `Your objectives : [${json.prompt.objectives.join(']\n[')}]`
-    );
-  }
-
-  // Knowledge Section
-  if (Array.isArray(json.prompt.knowledge)) {
-    contextParts.push(
-      `Your knowledge : [${json.prompt.knowledge.join(']\n[')}]`
-    );
-  }
-
-  return contextParts.join('\n');
-};
 
 export interface AgentPrompt {
   bio: string;
@@ -66,12 +35,13 @@ export interface AgentPrompt {
 }
 @Injectable()
 export class AgentStorage {
-  private agentConfigs: AgentConfig[] = [];
-  private agentInstances: Map<string, StarknetAgent> = new Map();
+  private agentConfigs: AgentConfigJson[] = [];
+  private agentInstances: Map<string, AgentSystem> = new Map();
   private initialized: boolean = false;
   private initPromise: Promise<void>;
   constructor(private readonly config: ConfigurationService) {
     this.initPromise = this.initialize();
+    
   }
 
   private async initalize_database() {
@@ -168,11 +138,29 @@ export class AgentStorage {
     }
   }
 
+  // After being return by the database the agent prompt is a string
+  private parseAgentPrompt(agent_prompt: any): AgentPrompt {
+    const str_without_double_quote: string = agent_prompt.replace(/"/g, '');
+    const agent_prompt_split: string[] = str_without_double_quote.split('{');
+    for (let i = 0; i < agent_prompt_split.length; i++) {
+      agent_prompt_split[i] = agent_prompt_split[i].replace(/}/g, '');
+    }
+    const AgentPrompt: AgentPrompt = {
+      bio: agent_prompt_split[0],
+      lore: agent_prompt_split[1].split(','),
+      objectives: agent_prompt_split[2].split(','),
+      knowledge: agent_prompt_split[3].split(','),
+    };
+    return AgentPrompt;
+  }
   private async init_agents_config() {
     try {
       const q = new Postgres.Query(`SELECT * FROM agents`);
-      const q_res = await Postgres.query<AgentConfig>(q);
+      const q_res = await Postgres.query<AgentConfigJson>(q);
       this.agentConfigs = [...q_res];
+      q_res.forEach((agent) => {
+        agent.prompt = this.parseAgentPrompt(agent.prompt);
+      });
       console.log('Agent configurations loaded:', this.agentConfigs);
       for (const agentConfig of this.agentConfigs) {
         await this.createAgent(agentConfig);
@@ -185,7 +173,7 @@ export class AgentStorage {
     }
   }
 
-  private async createAgent(agent_config: any): Promise<StarknetAgent> {
+  private async createAgent(agent_config: any): Promise<AgentSystem> {
     try {
       const database = {
         database: process.env.POSTGRES_DB as string,
@@ -195,6 +183,9 @@ export class AgentStorage {
         port: parseInt(process.env.POSTGRES_PORT as string),
       };
 
+      console.log('Creating agent:', agent_config.name);
+      console.log('Agent config:', agent_config);
+      console.log('Agent config prompt:', agent_config.prompt);
       const systemMessagefromjson = new SystemMessage(
         createContextFromJson(agent_config.prompt)
       );
@@ -208,19 +199,26 @@ export class AgentStorage {
           enabled: agent_config.memory.enabled,
           shortTermMemorySize: agent_config.memory.short_term_memory_size,
         },
-        mode: AgentMode.AUTONOMOUS,
+        maxIteration: 15,
+        mode: AgentMode.INTERACTIVE,
       };
 
-      const agent = new StarknetAgent({
-        provider: this.config.starknet.provider,
+      
+      const config: AgentSystemConfig = {
+        starknetProvider: this.config.starknet.provider,
         accountPrivateKey: this.config.starknet.privateKey,
         accountPublicKey: this.config.starknet.publicKey,
-        agentConfig: json_config,
-        db_credentials: database,
-      });
+        modelsConfigPath : "/Users/hijodelaluna/snak_package/config/models/default.models.json",
+        agentMode: json_config.mode,
+        signature: "",
+        databaseCredentials: database,
+        agentConfigPath: json_config,
+      };
+      
+      const agent = new AgentSystem(config);
 
-      // Store for later reuse
       await agent.init();
+      // Store for later reuse
       if (this.agentInstances.has(agent_config.name)) {
         console.log('Agent already exists, skipping creation.');
         const existingAgent = this.agentInstances.get(agent_config.name);
@@ -237,19 +235,24 @@ export class AgentStorage {
     }
   }
 
-  public async addAgent(agent_config: AgentConfig): Promise<void> {
+  public async addAgent(agent_config: AgentConfigJson): Promise<void> {
     console.log('Adding agent:', agent_config);
     if (!this.initialized) {
       await this.initPromise;
     }
     const q = new Postgres.Query(
-      `INSERT INTO agents (name, prompt, interval, plugins, memory) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      `INSERT INTO agents (name, prompt, interval, plugins, memory) 
+       VALUES ($1, ROW($2, $3, $4, $5), $6, $7, ROW($8, $9)) RETURNING *`,
       [
         agent_config.name,
-        agent_config.prompt,
+        agent_config.prompt.bio,
+        agent_config.prompt.lore,
+        agent_config.prompt.objectives,
+        agent_config.prompt.knowledge,
         agent_config.interval,
         agent_config.plugins,
-        agent_config.memory,
+        agent_config.memory.enabled,
+        agent_config.memory.short_term_memory_size,
       ]
     );
     const q_res = await Postgres.query<AgentConfig>(q);
@@ -257,14 +260,14 @@ export class AgentStorage {
     await this.createAgent(agent_config);
   }
 
-  public getAgent(name: string): StarknetAgent | undefined {
+  public getAgent(name: string): AgentSystem | undefined {
     if (!this.initialized) {
       return undefined;
     }
     return this.agentInstances.get(name);
   }
 
-  public getAllAgents(): StarknetAgent[] | undefined {
+  public getAllAgents(): AgentSystem[] | undefined {
     if (!this.initialized) {
       return undefined;
     }
