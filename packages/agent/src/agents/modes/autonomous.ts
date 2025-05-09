@@ -23,6 +23,7 @@ import {
   baseSystemPrompt,
   finalAnswerRules,
 } from '../../prompt/prompts.js';
+import { TokenTracker } from '../../token/tokenTracking.js';
 
 /**
  * @typedef {Object} GraphStateShape
@@ -223,6 +224,7 @@ export const createAutonomousAgent = async (
           `Autonomous agent invoking model (${selectedModelType}) with ${filteredMessages.length} messages.`
         );
         const result: unknown = await boundModel.invoke(formattedPrompt);
+        TokenTracker.trackCall(formattedPrompt, result, selectedModelType);
 
         let finalResultMessages: BaseMessage[];
 
