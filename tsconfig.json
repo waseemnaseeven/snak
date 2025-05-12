@@ -6,8 +6,9 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "removeComments": true,
-    "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "useDefineForClassFields": false,
     "allowSyntheticDefaultImports": true,
     "target": "ES2020",
     "sourceMap": true,
@@ -26,11 +27,11 @@
     "paths": {
       "@config/*": ["config/*"],
       "@plugins/*": ["plugins/*"],
-      "@server/*": ["server/*"],
-      "@client/*": ["client/*"],
-      "@agents/*": ["agents/*"],
+      "@server/*": ["packages/server/*"],
+      "@client/*": ["packages/client/*"],
+      "@agents/*": ["packages/agents/*"],
       "@mcp/*": ["mcps/*"],
-      "@core/*": ["core/*"]
+      "@core/*": ["packages/core/*"]
     }
   }
 }

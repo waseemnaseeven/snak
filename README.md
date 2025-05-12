@@ -3,7 +3,7 @@
     <!-- For users in dark mode, load a white logo -->
     <source media="(prefers-color-scheme: dark)" srcset="https://github.com/KasarLabs/brand/blob/main/projects/snak/snak-full-white-alpha.png?raw=true">
     <!-- Default image for light mode -->
-    <img src="https://github.com/KasarLabs/brand/blob/main/projects/snak/snak-full-black-alpha.png?raw=true" width="150" alt="Snak Logo">
+    <img src="https://github.com/KasarLabs/brand/blob/main/projects/snak/snak-full-black-alpha.png?raw=true" width="200" alt="Snak Logo">
   </picture>
 
 <p>
@@ -22,7 +22,7 @@
 </p>
 </div>
 
-A toolkit for creating AI agents that can interact with the Starknet blockchain. Available as both an NPM package and a ready-to-use NestJS server with a web interface. Supports multiple AI providers including Anthropic, OpenAI, Google Gemini, and Ollama.
+A Agent Engine for creating powerful and secure AI Agents powered by Starknet. Available as both an NPM package and a ready-to-use backend.
 
 ## Quick Start
 
@@ -43,10 +43,12 @@ pnpm install
 ### Configuration
 
 1.  Create a `.env` file by copying `.env.example`:
-    ```bash
-    cp .env.example .env
-    ```
-    Then, fill in the necessary values in your `.env` file:
+
+```bash
+cp .env.example .env
+```
+
+Then, fill in the necessary values in your `.env` file:
 
 ```env
 # --- Starknet configuration (mandatory) ---
@@ -74,15 +76,14 @@ DEEPSEEK_API_KEY="YOUR_DEEPSEEK_API_KEY"
 
 # --- General Agent Configuration (mandatory) ---
 SERVER_API_KEY="YOUR_SERVER_API_KEY" # A secret key for your agent server API
-SERVER_PORT="3001" # Default port is 3001
+SERVER_PORT="3001"
 
 # --- PostgreSQL Database Configuration (mandatory) ---
 POSTGRES_USER="admin"
 POSTGRES_PASSWORD="admin"
 POSTGRES_ROOT_DB="postgres" # Database used to create/manage the application database
 POSTGRES_HOST="localhost"
-POSTGRES_PORT="5432"
-# The application database name (often the same as your agent config name, e.g., "default") will be created automatically.
+POSTGRES_PORT="5454"
 
 # --- LangSmith Tracing (Optional) ---
 # Set LANGSMITH_TRACING=true to enable tracing
@@ -90,10 +91,6 @@ LANGSMITH_TRACING=false
 LANGSMITH_ENDPOINT="https://api.smith.langchain.com"
 LANGSMITH_API_KEY="YOUR_LANGSMITH_API_KEY" # (Only needed if LANGSMITH_TRACING=true)
 LANGSMITH_PROJECT="Snak" # (Optional project name for LangSmith)
-
-# --- Cairo Generation Service (Optional) ---
-# CAIRO_GENERATION_API_URL="YOUR_CAIRO_GENERATION_API_ENDPOINT"
-# PATH_UPLOAD_DIR="./cairo_test" # Directory for generated Cairo code
 
 # --- Node Environment ---
 NODE_ENV="development" # "development" or "production"
