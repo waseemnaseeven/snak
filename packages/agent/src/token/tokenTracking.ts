@@ -2,6 +2,35 @@ import { logger } from '@snakagent/core';
 import type { AIMessage } from '@langchain/core/messages';
 
 export class TokenTracker {
+  // Add static session counters
+  private static sessionPromptTokens: number = 0;
+  private static sessionResponseTokens: number = 0;
+  private static sessionTotalTokens: number = 0;
+
+  /**
+   * Resets the session token counters
+   */
+  public static resetSessionCounters(): void {
+    this.sessionPromptTokens = 0;
+    this.sessionResponseTokens = 0;
+    this.sessionTotalTokens = 0;
+  }
+
+  /**
+   * Returns the current session token usage
+   */
+  public static getSessionTokenUsage(): {
+    promptTokens: number;
+    responseTokens: number;
+    totalTokens: number;
+  } {
+    return {
+      promptTokens: this.sessionPromptTokens,
+      responseTokens: this.sessionResponseTokens,
+      totalTokens: this.sessionTotalTokens,
+    };
+  }
+
   /**
    * Suit et enregistre l'utilisation des tokens en utilisant les métadonnées de LangChain
    */
@@ -54,6 +83,11 @@ export class TokenTracker {
           `Token usage for model [${modelName}]: Prompt tokens: ${input_tokens}, Response tokens: ${output_tokens}, Total tokens: ${total_tokens}`
         );
 
+        // Update session counters
+        this.sessionPromptTokens += input_tokens;
+        this.sessionResponseTokens += output_tokens;
+        this.sessionTotalTokens += total_tokens || input_tokens + output_tokens;
+
         return {
           promptTokens: input_tokens,
           responseTokens: output_tokens,
@@ -75,6 +109,12 @@ export class TokenTracker {
             `Token usage for model [${modelName}]: Prompt tokens: ${promptTokens}, Response tokens: ${completionTokens}, Total tokens: ${totalTokens}`
           );
 
+          // Update session counters
+          this.sessionPromptTokens += promptTokens;
+          this.sessionResponseTokens += completionTokens;
+          this.sessionTotalTokens +=
+            totalTokens || promptTokens + completionTokens;
+
           return {
             promptTokens: promptTokens,
             responseTokens: completionTokens,
@@ -92,6 +132,11 @@ export class TokenTracker {
             `Token usage for model [${modelName}]: Prompt tokens: ${input_tokens}, Response tokens: ${output_tokens}, Total tokens: ${total_tokens}`
           );
 
+          // Update session counters
+          this.sessionPromptTokens += input_tokens;
+          this.sessionResponseTokens += output_tokens;
+          this.sessionTotalTokens += total_tokens;
+
           return {
             promptTokens: input_tokens,
             responseTokens: output_tokens,
@@ -105,7 +150,14 @@ export class TokenTracker {
     logger.warn(
       `No token usage information available for model [${modelName}], using fallback estimation`
     );
-    return this.estimateTokensFromResult(result, modelName);
+    const estimation = this.estimateTokensFromResult(result, modelName);
+
+    // Update session counters with estimation
+    this.sessionPromptTokens += estimation.promptTokens;
+    this.sessionResponseTokens += estimation.responseTokens;
+    this.sessionTotalTokens += estimation.totalTokens;
+
+    return estimation;
   }
 
   /**
@@ -180,6 +232,11 @@ export class TokenTracker {
         `Token usage for model [${modelName}]: Prompt tokens: ${promptTokens}, Response tokens: ${completionTokens}, Total tokens: ${totalTokens}`
       );
 
+      // Update session counters
+      this.sessionPromptTokens += promptTokens;
+      this.sessionResponseTokens += completionTokens;
+      this.sessionTotalTokens += totalTokens || promptTokens + completionTokens;
+
       return {
         promptTokens,
         responseTokens: completionTokens,
@@ -199,6 +256,11 @@ export class TokenTracker {
             ? promptText
             : JSON.stringify(promptText);
         const estimatedPromptTokens = this.estimateTokensFromText(promptString);
+
+        // Update session prompt tokens (response tokens already updated in trackCall)
+        this.sessionPromptTokens += estimatedPromptTokens;
+        this.sessionTotalTokens += estimatedPromptTokens;
+
         return {
           promptTokens: estimatedPromptTokens,
           responseTokens: messageUsage.responseTokens,
@@ -234,6 +296,11 @@ export class TokenTracker {
         `Prompt tokens: ~${promptTokens}, Response tokens: ~${responseTokens}, Total tokens: ~${totalTokens}`
     );
 
+    // Update session counters
+    this.sessionPromptTokens += promptTokens;
+    this.sessionResponseTokens += responseTokens;
+    this.sessionTotalTokens += totalTokens;
+
     return { promptTokens, responseTokens, totalTokens };
   }
 
@@ -267,6 +334,11 @@ export class TokenTracker {
     logger.debug(
       `[SYNC] Token usage for model [${modelName}]: Prompt tokens: ~${promptTokens}, Response tokens: ~${responseTokens}, Total tokens: ~${totalTokens}`
     );
+
+    // Update session counters
+    this.sessionPromptTokens += promptTokens;
+    this.sessionResponseTokens += responseTokens;
+    this.sessionTotalTokens += totalTokens;
 
     return { promptTokens, responseTokens, totalTokens };
   }
