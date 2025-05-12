@@ -18,6 +18,16 @@ export interface ModelLevelConfig {
    * An optional description for this model level.
    */
   description?: string;
+
+  /**
+   * The maximum number of input tokens per request.
+   */
+  max_input_tokens?: number;
+
+  /**
+   * The maximum number of output tokens per request.
+   */
+  max_output_tokens?: number;
 }
 
 /**

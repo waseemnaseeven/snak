@@ -20,10 +20,10 @@
   ],
   "interval": 15000,
   "maxIteration": 15,
-  "mode": "interactive",
+  "mode": "hybrid",
   "memory": {
     "enabled": true,
-    "shortTermMemorySize": 15
+    "shortTermMemorySize": 10
   },
   "chat_id": "ethereum_rpc",
   "plugins": ["rpc"]
