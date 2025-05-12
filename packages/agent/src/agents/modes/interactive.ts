@@ -203,11 +203,7 @@ User Memory Context:
               : modelForThisTask;
 
           const result = await boundModel.invoke(currentFormattedPrompt);
-          TokenTracker.trackCall(
-            currentFormattedPrompt,
-            result,
-            selectedModelType
-          );
+          TokenTracker.trackCall(result, selectedModelType);
           return formatAIMessageResult(result);
         } else {
           const existingModelSelector = ModelSelectionAgent.getInstance();
@@ -222,7 +218,7 @@ User Memory Context:
                 ? smartModel.bindTools(toolsList)
                 : smartModel;
             const result = await boundSmartModel.invoke(currentFormattedPrompt);
-            TokenTracker.trackCall(currentFormattedPrompt, result, 'smart');
+            TokenTracker.trackCall(result, 'smart');
             return formatAIMessageResult(result);
           } else {
             logger.warn(
@@ -262,11 +258,7 @@ User Memory Context:
                   ? emergencyModel.bindTools(toolsList)
                   : emergencyModel;
               const result = await boundEmergencyModel.invoke(emergencyPrompt);
-              TokenTracker.trackCall(
-                emergencyPrompt,
-                result,
-                'smart_emergency'
-              );
+              TokenTracker.trackCall(result, 'smart_emergency');
               return formatAIMessageResult(result);
             } else {
               throw new Error(

@@ -32,7 +32,8 @@
   "license": "ISC",
   "description": "The Agent Kit engine of Snak",
   "dependencies": {
-    "@snakagent/database": "workspace:*",
+    "@anthropic-ai/sdk": "^0.36.3",
+    "@google/generative-ai": "^0.24.1",
     "@huggingface/transformers": "^3.4.0",
     "@langchain/anthropic": "^0.3.11",
     "@langchain/community": "^0.3.34",
@@ -43,6 +44,7 @@
     "@langchain/ollama": "^0.1.4",
     "@langchain/openai": "^0.3.17",
     "@snakagent/core": "workspace:*",
+    "@snakagent/database": "workspace:*",
     "@snakagent/plugin-argent": "workspace:*",
     "@snakagent/plugin-artpeace": "workspace:*",
     "@snakagent/plugin-atlantic": "workspace:*",
@@ -63,12 +65,15 @@
     "@snakagent/plugin-transaction": "workspace:*",
     "@snakagent/plugin-unruggable": "workspace:*",
     "@snakagent/plugin-vesu": "workspace:*",
+    "axios": "^1.8.2",
     "discord.js": "^14.17.3",
+    "gpt-tokenizer": "^2.9.0",
     "inquirer": "^12.4.1",
     "langchain": "^0.3.10",
     "mem0ai": "^2.1.9",
     "nanospinner": "^1.2.2",
-    "snak-mcps": "^0.1.2"
+    "snak-mcps": "^0.1.2",
+    "tiktoken": "^1.0.21"
   },
   "gitHead": "92aedfbed422f736e1890cff065f6f2890e8befd"
 }

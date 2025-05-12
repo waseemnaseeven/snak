@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { ModelsConfig } from '../types/modelsConfig.js';
+import { ModelsConfig } from '../types/models/modelsConfig.js';
 
 /**
  * Loads and validates the models configuration from a JSON file.

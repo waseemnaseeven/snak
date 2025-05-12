@@ -269,7 +269,7 @@ export const createHybridAgent = async (
       );
 
       const result: BaseMessage = await boundModel.invoke(formattedPrompt);
-      TokenTracker.trackCall(formattedPrompt, result, selectedModelType);
+      TokenTracker.trackCall(result, selectedModelType);
       logger.debug(`Hybrid agent: Model invocation complete`);
 
       let resultMessage: AIMessage;

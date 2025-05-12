@@ -304,7 +304,7 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
         .trim()
         .replace(/^["']|["']$/g, '');
 
-      TokenTracker.trackCall(prompt, response, 'fast_meta_selector');
+      TokenTracker.trackCall(response, 'fast_meta_selector');
 
       if (['fast', 'smart', 'cheap'].includes(modelChoice)) {
         if (this.debugMode) {

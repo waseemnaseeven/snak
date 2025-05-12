@@ -1,3 +1,5 @@
+import { ModelProviders } from './models.js';
+
 /**
  * Configuration for a single AI model level.
  */
@@ -5,7 +7,7 @@ export interface ModelLevelConfig {
   /**
    * The provider of the AI model (e.g., "openai", "anthropic", "gemini").
    */
-  provider: string;
+  provider: ModelProviders;
 
   /**
    * The specific name of the model (e.g., "gpt-4o-mini", "claude-3-haiku-20240307", "gemini-1.5-flash").
