@@ -7,6 +7,10 @@ import type { AIMessage } from '@langchain/core/messages';
  * Offers fallback estimation when explicit token counts are unavailable.
  */
 export class TokenTracker {
+  // Constants for token estimation heuristic
+  private static readonly TOKENS_PER_WORD = 1.3;
+  private static readonly TOKENS_PER_SPECIAL_CHAR = 0.5;
+
   // Static session counters
   private static sessionPromptTokens: number = 0;
   private static sessionResponseTokens: number = 0;
@@ -52,6 +56,14 @@ export class TokenTracker {
     result: any,
     modelName: string = 'unknown_model'
   ): { promptTokens: number; responseTokens: number; totalTokens: number } {
+    // Handle null or undefined result early
+    if (result == null) {
+      logger.warn(
+        `trackCall received null or undefined result for model [${modelName}]. Returning zero tokens.`
+      );
+      return { promptTokens: 0, responseTokens: 0, totalTokens: 0 };
+    }
+
     let messageToProcess: AIMessage | null = null;
 
     // Attempt to find an AIMessage within the result
@@ -155,19 +167,17 @@ export class TokenTracker {
       }
     }
 
-    // Fallback estimation if no token data found
     logger.warn(
       `No token usage information available for model [${modelName}], using fallback estimation.`
     );
     const estimation = this.estimateTokensFromResult(result);
 
-    // Update session counters with estimation
     this.sessionPromptTokens += estimation.promptTokens; // Note: Fallback currently only estimates response tokens
     this.sessionResponseTokens += estimation.responseTokens;
     this.sessionTotalTokens += estimation.totalTokens;
 
     logger.debug(
-      `[FALLBACK ESTIMATE] Token usage for model [${modelName}]: ` +
+      `Token estimation fallback for model [${modelName}]: ` +
         `Response tokens: ~${estimation.responseTokens} (prompt unknown)`
     );
 
@@ -189,29 +199,25 @@ export class TokenTracker {
   } {
     let responseText = '';
 
-    // Extract response text from various possible formats
     if (typeof result === 'string') {
       responseText = result;
     } else if (Array.isArray(result)) {
-      // Join content from all messages in the array
       responseText = result
         .map((msg) =>
           typeof msg === 'object' && msg.content
             ? typeof msg.content === 'string'
               ? msg.content
-              : JSON.stringify(msg.content) // Handle non-string content
+              : JSON.stringify(msg.content)
             : ''
         )
         .join(' ');
     } else if (result && typeof result === 'object') {
-      // Handle object results (like AIMessage or others)
       if ('content' in result) {
         responseText =
           typeof result.content === 'string'
             ? result.content
             : JSON.stringify(result.content);
       } else {
-        // Fallback to stringifying the whole object if content isn't directly accessible
         responseText = JSON.stringify(result);
       }
     }
@@ -282,7 +288,7 @@ export class TokenTracker {
         // Update session counters for the estimated prompt tokens
         // Note: sessionResponseTokens were already updated in the trackCall above
         this.sessionPromptTokens += estimatedPromptTokens;
-        this.sessionTotalTokens += estimatedPromptTokens; // Add estimated prompt to total
+        this.sessionTotalTokens += estimatedPromptTokens;
 
         logger.debug(
           `[ESTIMATED PROMPT] Token usage for model [${modelName}]: ` +
@@ -297,26 +303,21 @@ export class TokenTracker {
         };
       }
 
-      // If trackCall returned full usage or prompt estimation isn't needed/possible
       return messageUsage;
     }
 
-    // Fallback: Estimate both prompt and response tokens from text content
     const promptString =
       typeof promptText === 'string' ? promptText : JSON.stringify(promptText);
     let responseString = '';
 
-    // Try to extract response text from common structures
     if (resultObj.generations?.[0]?.[0]?.text) {
       responseString = resultObj.generations[0][0].text;
     } else if (resultObj.content) {
-      // Handle cases where the result object itself might have content (like a direct message)
       responseString =
         typeof resultObj.content === 'string'
           ? resultObj.content
           : JSON.stringify(resultObj.content);
     } else {
-      // Last resort: stringify the entire result object
       responseString = JSON.stringify(resultObj);
     }
 
@@ -329,7 +330,6 @@ export class TokenTracker {
         `Prompt tokens: ~${promptTokens}, Response tokens: ~${responseTokens}, Total tokens: ~${totalTokens}`
     );
 
-    // Update session counters
     this.sessionPromptTokens += promptTokens;
     this.sessionResponseTokens += responseTokens;
     this.sessionTotalTokens += totalTokens;
@@ -347,11 +347,12 @@ export class TokenTracker {
    */
   private static estimateTokensFromText(text: string): number {
     if (!text) return 0;
-    // Simple word count based on whitespace
     const wordCount = text.split(/\s+/).filter(Boolean).length;
-    // Count non-alphanumeric/non-whitespace characters
     const specialChars = (text.match(/[^a-zA-Z0-9\s]/g) || []).length;
-    // Apply heuristic and round up
-    return Math.ceil(wordCount * 1.3 + specialChars * 0.5);
+
+    return Math.ceil(
+      wordCount * this.TOKENS_PER_WORD +
+        specialChars * this.TOKENS_PER_SPECIAL_CHAR
+    );
   }
 }
