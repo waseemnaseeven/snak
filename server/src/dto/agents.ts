@@ -87,3 +87,12 @@ export class AgentAddRequestDTO {
   @IsNotEmpty()
   agent: AgentInitializationDTO;
 }
+
+export class UpdateModelConfigDTO {
+  @IsNotEmpty()
+  provider: string;
+  @IsNotEmpty()
+  model_name: string;
+  @IsNotEmpty()
+  description: string;
+}

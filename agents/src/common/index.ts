@@ -1,6 +1,5 @@
 import { RpcProvider } from 'starknet';
-import { AgentConfig } from '../config/agentConfig.js';
-
+import { AgentConfig } from '@snakagent/core';
 /**
  * Configuration for AI models used by agents
  */

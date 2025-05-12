@@ -49,7 +49,6 @@ export interface RawAgentConfig {
   knowledge?: string[];
   prompt: SystemMessage;
   interval: number;
-  chat_id: string;
   plugins: string[];
   memory: boolean;
   mcpServers?: Record<string, any>;

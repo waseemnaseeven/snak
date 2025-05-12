@@ -9,7 +9,7 @@ import {
 import { FastifyReply } from 'fastify';
 import { BaseError } from '../errors/base.error.js';
 import { ConfigurationService } from '../../config/configuration.js';
-import { ServerError } from '../../src/agents.controller.js';
+import { ServerError } from '../../src/utils/error.js';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -33,7 +33,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         statusCode: 500,
         name: exception.name,
         errorCode: exception.errorCode,
-        errorMessage : exception.message // Include your custom code in the response
+        errorMessage: exception.message, // Include your custom code in the response
       });
     }
 

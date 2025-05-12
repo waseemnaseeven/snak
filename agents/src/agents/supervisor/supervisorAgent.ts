@@ -10,21 +10,19 @@ import { StarknetAgent, StarknetAgentConfig } from '../core/starknetAgent.js';
 import { ToolsOrchestrator } from '../operators/toolOrchestratorAgent.js';
 import { MemoryAgent } from '../operators/memoryAgent.js';
 import { WorkflowController } from './worflowController.js';
-import { DatabaseCredentials, logger, metrics } from '@snakagent/core';
+import { DatabaseCredentials, logger, metrics, AgentConfig, ModelsConfig} from '@snakagent/core';
 import { HumanMessage, BaseMessage } from '@langchain/core/messages';
 import { Tool } from '@langchain/core/tools';
 import {
-  AgentConfig,
   AgentMode,
   AGENT_MODES,
 } from '../../config/agentConfig.js';
 import { RpcProvider } from 'starknet';
-
 /**
  * Configuration for the SupervisorAgent.
  */
 export interface SupervisorAgentConfig {
-  modelsConfigPath: string;
+  modelsConfig: ModelsConfig;
   starknetConfig: StarknetAgentConfig;
   debug?: boolean;
 }
@@ -67,7 +65,7 @@ export class SupervisorAgent extends BaseAgent {
     SupervisorAgent.instance = this;
 
     this.config = {
-      modelsConfigPath: configObject.modelsConfigPath || '',
+      modelsConfig: configObject.modelsConfig || '',
       starknetConfig: configObject.starknetConfig || {
         provider: {} as RpcProvider, // Default empty provider
         accountPublicKey: '',
@@ -98,7 +96,7 @@ export class SupervisorAgent extends BaseAgent {
       this.modelSelectionAgent = new ModelSelectionAgent({
         debugMode: this.debug,
         useModelSelector: true,
-        modelsConfigPath: this.config.modelsConfigPath,
+        modelsConfig: this.config.modelsConfig,
       });
       await this.modelSelectionAgent.init();
       this.operators.set(this.modelSelectionAgent.id, this.modelSelectionAgent);
@@ -600,9 +598,10 @@ export class SupervisorAgent extends BaseAgent {
     }
 
     try {
+      // TODO need to check this is really work cause we normally don't have to put in the agent config we to get if fronm conversation
       const memories = await this.memoryAgent.retrieveRelevantMemories(
         message,
-        this.config.starknetConfig.agentConfig?.chat_id || 'default_chat'
+        'default_chat'
       );
 
       if (memories.length === 0) {

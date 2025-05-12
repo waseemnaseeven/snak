@@ -8,6 +8,7 @@ import { IAgent } from '../interfaces/agent.interface.js';
 import {
   AgentRequestDTO,
   CreateConversationRequestDTO,
+  UpdateModelConfigDTO,
 } from '../dto/agents.js';
 import {
   AgentValidationError,
@@ -53,7 +54,7 @@ export class AgentService implements IAgentService {
 
       this.logger.debug({
         message: 'Agent request processed successfully',
-        result,
+        result: result,
       });
 
       return {
@@ -216,6 +217,20 @@ export class AgentService implements IAgentService {
       this.logger.debug(`All messages:', ${JSON.stringify(res)} `);
       console.log(`All messages:', ${JSON.stringify(res)} `);
       return res;
+    } catch (error) {
+      this.logger.error(error);
+      throw error;
+    }
+  }
+
+  async updateModelsConfig(model: UpdateModelConfigDTO) {
+    try {
+      const q = new Postgres.Query(
+        `UPDATE models_config SET provider = $1, model_name = $2, description = $3 WHERE id = 1`,
+        [model.provider, model.model_name, model.description]
+      );
+      const res = await Postgres.query(q);
+      this.logger.debug(`Models config updated:', ${JSON.stringify(res)} `);
     } catch (error) {
       this.logger.error(error);
       throw error;

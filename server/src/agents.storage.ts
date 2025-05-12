@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigurationService } from '../config/configuration.js';
 import {
-  AgentConfig,
   AgentMode,
   AgentSystem,
   AgentSystemConfig,
@@ -10,6 +9,12 @@ import {
 import { Postgres } from '@snakagent/database';
 import { SystemMessage } from '@langchain/core/messages';
 import { AgentPromptSQL, AgentConfigSQL } from './interfaces/sql_interfaces.js';
+import {
+  logger,
+  AgentConfig,
+  ModelsConfig,
+  ModelLevelConfig,
+} from '@snakagent/core';
 
 export interface AgentConfigJson {
   name: string;
@@ -47,6 +52,12 @@ export class AgentStorage {
               memory BOOLEAN,
               shortTermMemorySize INTEGER
           );`),
+        new Postgres.Query(`
+          CREATE TYPE model AS (
+              provider TEXT,
+              model_name TEXT,
+              description TEXT
+          );`),
         // TODO : Use id as the unique
         new Postgres.Query(`
             CREATE TABLE IF NOT EXISTS agents (
@@ -83,21 +94,79 @@ export class AgentStorage {
             conversation_name TEXT,
             messages message NOT NULL
         );`),
+        new Postgres.Query(`
+            CREATE TABLE IF NOT EXISTS models_config (
+            id SERIAL PRIMARY KEY,
+            fast model NOT NULL,
+            smart model NOT NULL,
+            cheap model NOT NULL
+        );`),
       ];
       for (const query of q) {
         await Postgres.query(query).catch((error) => {
           if (error.code === '42710') {
-            console.log('Table already exists, skipping creation.');
+            logger.debug('Table already exists, skipping creation.');
             return;
           }
-          console.error('Error creating table:', error);
+          logger.error('Error creating table:', error);
         });
       }
-      console.log('Database tables created successfully');
+      logger.debug('Database tables created successfully');
     } catch (error) {
-      console.error('Error during agents_controller initialisation:', error);
+      logger.error('Error during agents_controller initialisation:', error);
       throw error;
     }
+  }
+
+  private async init_models_config() {
+    try {
+      logger.debug('Initializing models configuration');
+      const q = new Postgres.Query(
+        `SELECT EXISTS(SELECT 1 FROM models_config WHERE id = 1)`
+      );
+      const result = await Postgres.query<{ exists: boolean }>(q);
+      if (!result[0].exists) {
+        logger.debug('Models configuration not found, creating default config');
+
+        const fast: ModelLevelConfig = {
+          provider: 'openai',
+          model_name: 'gpt-4o-mini',
+          description: 'Optimized for speed and simple tasks.',
+        };
+        const smart: ModelLevelConfig = {
+          provider: 'anthropic',
+          model_name: 'claude-3-5-sonnet-latest',
+          description: 'Optimized for complex reasoning.',
+        };
+        const cheap: ModelLevelConfig = {
+          provider: 'openai',
+          model_name: 'gpt-4o-mini',
+          description: 'Good cost-performance balance.',
+        };
+        logger.debug('Models configuration not found, creating default config');
+        const q = new Postgres.Query(
+          `INSERT INTO models_config (id, fast, smart, cheap) VALUES (1, ROW($1, $2, $3), ROW($4, $5, $6), ROW($7, $8, $9))`,
+          [
+            fast.provider,
+            fast.model_name,
+            fast.description,
+            smart.provider,
+            smart.model_name,
+            smart.description,
+            cheap.provider,
+            cheap.model_name,
+            cheap.description,
+          ]
+        );
+        await Postgres.query(q);
+      } else {
+        logger.debug('Models configuration already exists, skipping creation.');
+      }
+    } catch (error) {
+      logger.error('Error during agents_controller initialisation:', error);
+      throw error;
+    }
+    1;
   }
 
   private async initialize() {
@@ -105,13 +174,6 @@ export class AgentStorage {
       if (this.initialized) {
         return;
       }
-      console.log('Initializing AgentFactory...');
-      console.log('Connecting to database...');
-      console.log(process.env.POSTGRES_DB);
-      console.log(process.env.POSTGRES_HOST);
-      console.log(process.env.POSTGRES_USER);
-      console.log(process.env.POSTGRES_PASSWORD);
-      console.log(process.env.POSTGRES_PORT);
       await Postgres.connect({
         database: process.env.POSTGRES_DB as string,
         host: process.env.POSTGRES_HOST as string,
@@ -121,10 +183,28 @@ export class AgentStorage {
       });
 
       await this.initalize_database();
+      await this.init_models_config();
       await this.init_agents_config();
       this.initialized = true;
     } catch (error) {
-      console.error('Error during agents_controller initialisation:', error);
+      logger.error('Error during agents_controller initialisation:', error);
+      throw error;
+    }
+  }
+
+  private parseAgentConfig(config: any): ModelLevelConfig {
+    try {
+       const content = config.trim().slice(1, -1);
+       const parts = content.split(',');
+       const model : ModelLevelConfig = {
+         provider: parts[0],
+         model_name: parts[1],
+         description: parts[2],
+        };
+      return model;
+
+    } catch (error) {
+      logger.error('Error parsing agent config:', error);
       throw error;
     }
   }
@@ -146,20 +226,47 @@ export class AgentStorage {
   }
   private async init_agents_config() {
     try {
+      logger.debug('Initializing agents configuration');
       const q = new Postgres.Query(`SELECT * FROM agents`);
       const q_res = await Postgres.query<AgentConfigSQL>(q);
       this.agentConfigs = [...q_res];
       q_res.forEach((agent) => {
         agent.prompt = this.parseAgentPrompt(agent.prompt);
       });
-      console.log('Agent configurations loaded:', this.agentConfigs);
+      logger.debug(
+        `Agents configuration loaded: ${JSON.stringify(this.agentConfigs)}`
+      );
       for (const agentConfig of this.agentConfigs) {
         await this.createAgent(agentConfig);
-        console.log('Agent created:', agentConfig.id);
+        logger.debug(`Agent created: ${JSON.stringify(agentConfig)}`);
       }
       return q_res;
     } catch (error) {
-      console.error('Error during agents_controller initialisation:', error);
+      logger.error('Error during agents_controller initialisation:', error);
+      throw error;
+    }
+  }
+
+  private async get_models_config(): Promise<ModelsConfig> {
+    try {
+
+      const q = new Postgres.Query(`SELECT * FROM models_config WHERE id = 1`);
+      logger.debug(`Query to get models config: ${q}`);
+      const q_res = await Postgres.query<ModelsConfig>(q);
+      if (q_res.length === 0) {
+        throw new Error('No models configuration found');
+      }
+      const fast = this.parseAgentConfig(q_res[0].fast);
+      const smart = this.parseAgentConfig(q_res[0].smart);
+      const cheap = this.parseAgentConfig(q_res[0].cheap);
+      const modelsConfig: ModelsConfig = {
+        fast: fast,
+        smart: smart,
+        cheap: cheap,
+      };
+      return modelsConfig;
+    } catch (error) {
+      logger.error('Error during agents_controller initialisation:', error);
       throw error;
     }
   }
@@ -176,9 +283,9 @@ export class AgentStorage {
         port: parseInt(process.env.POSTGRES_PORT as string),
       };
 
-      console.log('Creating agent:', agent_config.name);
-      console.log('Agent config:', agent_config);
-      console.log('Agent config prompt:', agent_config.prompt);
+      logger.debug(
+        `Creating agent with config: ${JSON.stringify(agent_config)}`
+      );
       const systemMessagefromjson = new SystemMessage(
         createContextFromJson(agent_config.prompt)
       );
@@ -186,7 +293,6 @@ export class AgentStorage {
         name: agent_config.name,
         prompt: systemMessagefromjson,
         plugins: agent_config.plugins,
-        chat_id: 'chat_id', // Need to be removed
         interval: agent_config.interval,
         memory: {
           enabled: agent_config.memory.enabled,
@@ -195,15 +301,14 @@ export class AgentStorage {
         maxIteration: 15,
         mode: AgentMode.INTERACTIVE,
       };
-
+      const modelsConfig = await this.get_models_config();
+      logger.warn(modelsConfig);
       const config: AgentSystemConfig = {
         starknetProvider: this.config.starknet.provider,
         accountPrivateKey: this.config.starknet.privateKey,
         accountPublicKey: this.config.starknet.publicKey,
-        modelsConfigPath:
-          '/Users/hijodelaluna/snak_package/config/models/default.models.json',
+        modelsConfig: modelsConfig,
         agentMode: json_config.mode,
-        signature: '',
         databaseCredentials: database,
         agentConfigPath: json_config,
       };
@@ -213,7 +318,9 @@ export class AgentStorage {
       await agent.init();
       // Store for later reuse
       if (this.agentInstances.has(agent_config.id)) {
-        console.log('Agent already exists, skipping creation.');
+        logger.debug(
+          `Agent with id ${agent_config.id} already exists, returning existing instance`
+        );
         const existingAgent = this.agentInstances.get(agent_config.id);
         if (existingAgent) {
           return existingAgent;
@@ -229,23 +336,11 @@ export class AgentStorage {
   }
 
   public async addAgent(agent_config: AgentConfigJson): Promise<void> {
-    console.log('Adding agent:', agent_config);
+    logger.debug(`Adding agent with config: ${JSON.stringify(agent_config)}`);
     if (!this.initialized) {
       await this.initPromise;
     }
 
-    //     BEGIN;
-
-    // -- Insérer une nouvelle ligne avec un groupe_id incrémenté
-    // INSERT INTO votre_table (name, groupe_id, description)
-    // SELECT
-    //     'nom_à_insérer',  -- Remplacez par la valeur du nom
-    //     COALESCE(MAX(groupe_id), 0) + 1,  -- Trouve le plus grand groupe_id pour ce nom et ajoute 1
-    //     'description_à_insérer'  -- Remplacez par la valeur de la description
-    // FROM votre_table
-    // WHERE name = 'nom_à_insérer';  -- Filtre pour trouver les entrées avec le même nom
-
-    // COMMIT;
     const q = new Postgres.Query(
       `INSERT INTO agents (name, prompt, interval, plugins, memory, group_id) 
 VALUES ($1, ROW($2, $3, $4, $5), $6, $7, ROW($8, $9),     
@@ -271,7 +366,7 @@ VALUES ($1, ROW($2, $3, $4, $5), $6, $7, ROW($8, $9),
       ]
     );
     const q_res = await Postgres.query<AgentConfigSQL>(q);
-    console.log('Agent added:', q_res);
+    logger.debug(`Agent added to database: ${JSON.stringify(q_res)}`);
     await this.createAgent(q_res[0]);
   }
 
@@ -300,7 +395,7 @@ VALUES ($1, ROW($2, $3, $4, $5), $6, $7, ROW($8, $9),
       [id]
     );
     const q_res = await Postgres.query<AgentConfig>(q);
-    console.log('Agent deleted:', q_res);
+    logger.debug(`Agent deleted from database: ${JSON.stringify(q_res)}`);
     if (this.agentInstances.has(id)) {
       this.agentInstances.delete(id);
     }

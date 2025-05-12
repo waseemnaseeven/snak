@@ -3,8 +3,8 @@ import {
   SupervisorAgentConfig,
 } from './supervisor/supervisorAgent.js';
 import { RpcProvider } from 'starknet';
-import { logger } from '@snakagent/core';
-import { AgentConfig, AgentMode } from '../config/agentConfig.js';
+import { logger, AgentConfig, ModelsConfig } from '@snakagent/core';
+import { AgentMode } from '../config/agentConfig.js';
 import { Postgres } from '@snakagent/database';
 export interface Conversation {
   conversation_name: string;
@@ -52,11 +52,10 @@ export interface AgentSystemConfig {
   starknetProvider: RpcProvider;
   accountPrivateKey: string;
   accountPublicKey: string;
-  modelsConfigPath: string;
+  modelsConfig: ModelsConfig;
   agentMode: AgentMode;
-  signature: string;
   databaseCredentials: any;
-  agentConfigPath?: string | AgentConfig;
+  agentConfigPath?: AgentConfig;
   debug?: boolean;
 }
 
@@ -111,7 +110,7 @@ export class AgentSystem {
       }
       // Create the config object for SupervisorAgent
       const supervisorConfigObject: SupervisorAgentConfig = {
-        modelsConfigPath: this.config.modelsConfigPath,
+        modelsConfig: this.config.modelsConfig,
         debug: this.config.debug,
         starknetConfig: {
           provider: this.config.starknetProvider,

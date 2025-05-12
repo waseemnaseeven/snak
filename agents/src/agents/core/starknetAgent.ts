@@ -1,12 +1,11 @@
 import { BaseAgent, AgentType, IModelAgent } from '../core/baseAgent.js';
 import { RpcProvider } from 'starknet';
 import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
-import { logger, metrics } from '@snakagent/core';
+import { logger, metrics, AgentConfig } from '@snakagent/core';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { BaseMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
 import { DatabaseCredentials } from '../../tools/types/database.js';
 import {
-  AgentConfig,
   AgentMode,
   AGENT_MODES,
 } from '../../config/agentConfig.js';
@@ -15,7 +14,6 @@ import { createInteractiveAgent } from '../modes/interactive.js';
 import { createAutonomousAgent } from '../modes/autonomous.js';
 import { createHybridAgent } from '../modes/hybrid.js';
 import { Command } from '@langchain/langgraph';
-
 /**
  * Configuration for StarknetAgent
  */

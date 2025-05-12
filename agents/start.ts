@@ -1,7 +1,3 @@
-// Simple log configuration - set DEBUG=true to enable debug logs
-const DEBUG = process.env.DEBUG === 'true';
-console.log(`Environment variables: DEBUG=${DEBUG}`);
-
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { createSpinner } from 'nanospinner';
@@ -11,7 +7,6 @@ import { Postgres } from '@snakagent/database';
 import {
   load_json_config,
   AgentMode,
-  AgentConfig,
   AGENT_MODES,
 } from './src/config/agentConfig.js';
 import { createBox } from './src/prompt/formatting.js';
@@ -21,19 +16,22 @@ import * as fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { logger } from '@snakagent/core';
+import { logger, AgentConfig, ModelsConfig } from '@snakagent/core';
 import { DatabaseCredentials } from './src/tools/types/database.js';
 import { formatAgentResponse } from './src/agents/core/utils.js';
-
-import { AgentSystem, AgentSystemConfig } from './src/agents/index.js';
+import { AgentSystem, AgentSystemConfig, Message } from './src/agents/index.js';
 import { hybridInitialPrompt } from './src/prompt/prompts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Simple log configuration - set DEBUG=true to enable debug logs
+const DEBUG = process.env.DEBUG === 'true';
+console.log(`Environment variables: DEBUG=${DEBUG}`);
+
 interface CommandOptions {
   agentPath: string;
-  modelsConfigPath: string;
+  modelsConfig: string;
   silentLlm: boolean;
 }
 
@@ -111,9 +109,9 @@ const loadCommand = async (): Promise<CommandOptions> => {
   };
 
   const agentPath = findConfigPath(agentFileName, 'agents');
-  const modelsConfigPath = findConfigPath(modelsFileName, 'models');
+  const modelsConfig = findConfigPath(modelsFileName, 'models');
 
-  return { agentPath, modelsConfigPath, silentLlm };
+  return { agentPath, modelsConfig, silentLlm };
 };
 
 /**
@@ -188,13 +186,32 @@ const localRun = async (): Promise<void> => {
 
   try {
     // Load command line args
-    const { agentPath, modelsConfigPath } = await loadCommand();
+    const { agentPath, modelsConfig } = await loadCommand();
 
     // Load initial agent config
     let json_config: AgentConfig = await load_json_config(agentPath);
     if (!json_config) {
       throw new Error(`Failed to load agent configuration from ${agentPath}`);
     }
+
+    const modelData = await fs.promises.readFile(modelsConfig, 'utf8');
+    if (!modelData) {
+      throw new Error(
+        `Failed to load models configuration from ${modelsConfig}`
+      );
+    }
+    const model_json_config = JSON.parse(modelData) as ModelsConfig;
+    if (!model_json_config) {
+      throw new Error(
+        `Failed to parse models configuration from ${modelsConfig}`
+      );
+    }
+    if (!model_json_config) {
+      throw new Error(
+        `Failed to load models configuration from ${modelsConfig}`
+      );
+    }
+    1;
 
     // Load environment variables
     loadEnvVars();
@@ -250,19 +267,30 @@ const localRun = async (): Promise<void> => {
     // Prepare RPC Provider
     const provider = new RpcProvider({ nodeUrl: `${nodeUrl}` });
 
+    const agent_config: AgentConfig = {
+      name: json_config.name,
+      prompt: json_config.prompt,
+      interval: json_config.interval,
+      plugins: json_config.plugins,
+      memory: json_config.memory,
+      mcpServers: json_config.mcpServers,
+      mode: json_config.mode,
+      maxIteration: json_config.maxIteration,
+    };
+
     // Prepare Agent System configuration ACCORDING TO THE DEFINITION IN agents/src/agents/index.ts
     const agentSystemConfig: AgentSystemConfig = {
       starknetProvider: provider,
       accountPrivateKey: process.env.STARKNET_PRIVATE_KEY!,
       accountPublicKey: process.env.STARKNET_PUBLIC_ADDRESS!,
-      modelsConfigPath, // Already loaded
+      modelsConfig: model_json_config,
       agentMode: agentMode,
-      signature: '', // TODO: Implement signature handling
       databaseCredentials: database,
-      agentConfigPath: agentPath, // Pass the PATH to the agent config file
+      agentConfigPath: agent_config, // Pass the PATH to th1\ agent config file
       debug: DEBUG,
     };
 
+    logger.warn(model_json_config)
     // Create and initialize the agent system
     agentSystem = new AgentSystem(agentSystemConfig);
     await agentSystem.init();
@@ -280,7 +308,7 @@ const localRun = async (): Promise<void> => {
         chalk.dim(`- Config: ${chalk.bold(path.basename(agentPath))}`)
       );
       console.log(
-        chalk.dim(`- Models: ${chalk.bold(path.basename(modelsConfigPath))}\n`)
+        chalk.dim(`- Models: ${chalk.bold(path.basename(modelsConfig))}\n`)
       );
 
       while (true) {
@@ -307,8 +335,14 @@ const localRun = async (): Promise<void> => {
         console.log(chalk.yellow('Processing request...'));
 
         try {
+          const message : Message = {
+            conversation_id : 1,
+            sender_type : 'user',
+            content : user,
+            status : 'success',
+          }
           // Execute through the supervisor agent which will route appropriately
-          await agentSystem.execute(user);
+          await agentSystem.execute(message);
 
           // Removing duplicate response formatting and logging since it's now handled
           // consistently in all mode files (interactive.ts, autonomous.ts, hybrid.ts)

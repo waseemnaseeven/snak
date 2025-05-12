@@ -14,6 +14,7 @@ import { AgentStorage } from './agents.storage.js';
 import { metrics } from '@snakagent/core';
 import { Reflector } from '@nestjs/core';
 import { ServerError } from './utils/error.js';
+import { logger } from 'starknet';
 
 export interface AgentResponse {
   status: 'success' | 'failure';
@@ -21,7 +22,6 @@ export interface AgentResponse {
 }
 
 @Controller('agents')
-// @UseInterceptors(AgentResponseInterceptor)
 export class AgentsController {
   constructor(
     private readonly agentService: AgentService,
@@ -40,20 +40,22 @@ export class AgentsController {
         throw new ServerError('E01TA400');
       }
       const action = this.agentService.handleUserRequest(agent, userRequest);
-      await metrics.metricsAgentResponseTime(
+
+      const response_metrics = await metrics.metricsAgentResponseTime(
         userRequest.agent_id.toString(),
         'key',
         route,
         action
       );
+
       const response: AgentResponse = {
         status: 'success',
-        data: action,
+        data: response_metrics,
       };
+      logger.warn(JSON.stringify(action));
       return response;
     } catch (error) {
-      console.log(process.env.POSTGRES_USER);
-      console.log('Error in handleUserRequest:', error);
+      logger.error('Error in handleUserRequest:', error);
       throw new ServerError('E03TA100');
     }
   }
@@ -64,14 +66,14 @@ export class AgentsController {
   ): Promise<AgentResponse> {
     try {
       await this.agentFactory.addAgent(userRequest.agent);
-      console.log('Agent added:', userRequest.agent);
+      logger.error('Agent added:', userRequest.agent);
       const response: AgentResponse = {
         status: 'success',
         data: `Agent ${userRequest.agent.name} added`,
       };
       return response;
     } catch (error) {
-      console.log('Error in addAgent:', error);
+      logger.error('Error in addAgent:', error);
       throw new ServerError('E02TA200');
     }
   }
@@ -86,7 +88,6 @@ export class AgentsController {
         throw new ServerError('E01TA400');
       }
       await this.agentFactory.deleteAgent(userRequest.agent_id);
-      console.log('Agent deleted:', userRequest.agent_id);
       const response: AgentResponse = {
         status: 'success',
         data: `Agent ${userRequest.agent_id} deleted`,
@@ -112,7 +113,7 @@ export class AgentsController {
           throw new ServerError('E01TA400');
         }
         await this.agentFactory.deleteAgent(agentId);
-        console.log('Agent deleted:', agentId);
+        logger.error('Agent deleted:', agentId);
         const response: AgentResponse = {
           status: 'success',
           data: `Agent ${userRequest.agent_id} deleted`,
@@ -189,7 +190,7 @@ export class AgentsController {
       };
       return response;
     } catch (error) {
-      console.log('Error in getAllConversations:', error);
+      logger.error('Error in getAllConversations:', error);
       throw new ServerError('E05TA100');
     }
   }
@@ -212,7 +213,7 @@ export class AgentsController {
       };
       return response;
     } catch (error) {
-      console.log('Error in getMessagesFromConversationName:', error);
+      logger.error('Error in getMessagesFromConversationName:', error);
       throw new ServerError('E05TA100');
     }
   }
@@ -230,7 +231,7 @@ export class AgentsController {
       };
       return response;
     } catch (error) {
-      console.log('Error in getAgents:', error);
+      logger.error('Error in getAgents:', error);
       throw new ServerError('E05TA100');
     }
   }
@@ -259,7 +260,7 @@ export class AgentsController {
       };
       return response;
     } catch (error) {
-      console.log('Error in handleSupervisorRequest:', error);
+      logger.error('Error in handleSupervisorRequest:', error);
       throw new ServerError('E03TA100');
     }
   }
@@ -277,7 +278,7 @@ export class AgentsController {
       };
       return response;
     } catch (error) {
-      console.log('Error in getAgentStatus:', error);
+      logger.error('Error in getAgentStatus:', error);
       throw new ServerError('E05TA100');
     }
   }
@@ -295,7 +296,7 @@ export class AgentsController {
       };
       return response;
     } catch (error) {
-      console.log('Error in getAgentStatus:', error);
+      logger.error('Error in getAgentStatus:', error);
       throw new ServerError('E05TA100');
     }
   }

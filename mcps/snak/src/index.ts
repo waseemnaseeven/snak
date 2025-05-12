@@ -5,12 +5,12 @@ import {
   StarknetAgent,
   registerTools,
   StarknetTool,
-  AgentConfig,
 } from '@snakagent/agents';
 import path from 'path';
 import * as dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { AgentConfig } from '@snakagent/core';
 import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
