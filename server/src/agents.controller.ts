@@ -7,26 +7,13 @@ import {
   ConversationsRequestDTO,
   getMessagesFromConversationIdDTO,
   DeleteConversationRequestDTO,
+  AgentDeletesRequestDTO,
 } from './dto/agents.js';
 import { AgentService } from './services/agent.service.js';
 import { AgentStorage } from './agents.storage.js';
 import { metrics } from '@snakagent/core';
 import { Reflector } from '@nestjs/core';
-import errorMap from './utils/error.js';
-// import { Postgres } from '@snakagent/database';
-
-export class ServerError extends Error {
-  errorCode: string;
-  statusCode: number;
-  constructor(errorCode: string) {
-    const errorMessage = errorMap.get(errorCode) || 'Unknown error';
-    super(errorMessage);
-    this.name = 'ServerError';
-    this.errorCode = errorCode;
-    this.statusCode = 500;
-    Object.setPrototypeOf(this, ServerError.prototype);
-  }
-}
+import { ServerError } from './utils/error.js';
 
 export interface AgentResponse {
   status: 'success' | 'failure';
@@ -71,6 +58,24 @@ export class AgentsController {
     }
   }
 
+  @Post('init_agent')
+  async addAgent(
+    @Body() userRequest: AgentAddRequestDTO
+  ): Promise<AgentResponse> {
+    try {
+      await this.agentFactory.addAgent(userRequest.agent);
+      console.log('Agent added:', userRequest.agent);
+      const response: AgentResponse = {
+        status: 'success',
+        data: `Agent ${userRequest.agent.name} added`,
+      };
+      return response;
+    } catch (error) {
+      console.log('Error in addAgent:', error);
+      throw new ServerError('E02TA200');
+    }
+  }
+
   @Post('delete_agent')
   async deleteAgent(
     @Body() userRequest: AgentDeleteRequestDTO
@@ -88,25 +93,38 @@ export class AgentsController {
       };
       return response;
     } catch (error) {
-      throw new ServerError('E04TA100');
+      if (error instanceof ServerError) {
+        throw error;
+      }
+      throw new ServerError('E02TA300');
     }
   }
 
-  @Post('add_agent')
-  async addAgent(
-    @Body() userRequest: AgentAddRequestDTO
-  ): Promise<AgentResponse> {
+  @Post('delete_agents')
+  async deleteAgents(
+    @Body() userRequest: AgentDeletesRequestDTO
+  ): Promise<AgentResponse[]> {
     try {
-      await this.agentFactory.addAgent(userRequest.agent);
-      console.log('Agent added:', userRequest.agent);
-      const response: AgentResponse = {
-        status: 'success',
-        data: `Agent ${userRequest.agent.name} added`,
-      };
-      return response;
+      let arr_response: AgentResponse[] = [];
+      for (const agentId of userRequest.agent_id) {
+        const agent = this.agentFactory.getAgent(agentId);
+        if (!agent) {
+          throw new ServerError('E01TA400');
+        }
+        await this.agentFactory.deleteAgent(agentId);
+        console.log('Agent deleted:', agentId);
+        const response: AgentResponse = {
+          status: 'success',
+          data: `Agent ${userRequest.agent_id} deleted`,
+        };
+        arr_response.push(response);
+      }
+      return arr_response;
     } catch (error) {
-      console.log('Error in addAgent:', error);
-      throw new ServerError('E02TA200');
+      if (error instanceof ServerError) {
+        throw error;
+      }
+      throw new ServerError('E02TA300');
     }
   }
 
@@ -216,6 +234,93 @@ export class AgentsController {
       throw new ServerError('E05TA100');
     }
   }
+
+  // TODO: Implement the following methods
+  @Post('requestSupervisor')
+  async handleSupervisorRequest(
+    @Body() userRequest: AgentRequestDTO
+  ): Promise<AgentResponse> {
+    try {
+      const route = this.reflector.get('path', this.handleSupervisorRequest);
+      const agent = this.agentFactory.getAgent(userRequest.agent_id);
+      if (!agent) {
+        throw new ServerError('E01TA400');
+      }
+      const action = this.agentService.handleUserRequest(agent, userRequest);
+      await metrics.metricsAgentResponseTime(
+        userRequest.agent_id.toString(),
+        'key',
+        route,
+        action
+      );
+      const response: AgentResponse = {
+        status: 'success',
+        data: action,
+      };
+      return response;
+    } catch (error) {
+      console.log('Error in handleSupervisorRequest:', error);
+      throw new ServerError('E03TA100');
+    }
+  }
+
+  @Get('get_agent_status')
+  async getAgentStatus(): Promise<AgentResponse> {
+    try {
+      const agents = await this.agentService.getAllAgents();
+      if (!agents) {
+        throw new ServerError('E01TA400');
+      }
+      const response: AgentResponse = {
+        status: 'success',
+        data: agents,
+      };
+      return response;
+    } catch (error) {
+      console.log('Error in getAgentStatus:', error);
+      throw new ServerError('E05TA100');
+    }
+  }
+
+  @Get('get_agent_thread')
+  async getAgentThread(): Promise<AgentResponse> {
+    try {
+      const agents = await this.agentService.getAllAgents();
+      if (!agents) {
+        throw new ServerError('E01TA400');
+      }
+      const response: AgentResponse = {
+        status: 'success',
+        data: agents,
+      };
+      return response;
+    } catch (error) {
+      console.log('Error in getAgentStatus:', error);
+      throw new ServerError('E05TA100');
+    }
+  }
+
+  //   requestSupervisor(human_prompt)
+  // requestAgent(agent_id, human_prompt)
+  // initAgent(agent_config, models_config)
+  // deleteAgent(agent_id)
+  // deleteAgents([agent_ids])
+  // startAgent(agent_id)
+  // stopAgent(agent_id)
+  // pauseAgent(agent_id)
+  // resumeAgent(agent_id)
+  // getAgentStatus(agent_id)
+  // getAgentThread(agent_id, time_range)
+  // storeAgentIteration(agent_id, agent_iteration)
+  // storeHumanInput(agent_id, human_prompt)
+  // storeAgentResponse(agent_id, agent_message)
+  // storeAgentNextStep(agent_id, agent_next_steps)
+  // storeAgentFinalAnswer(agent_id, agent_final_answer)
+  // storeAgentAction(agent_id, agent_action)
+  // interuptAgentThread(agent_id, human_prompt)
+  // resetAgent(agent_id)
+  // cloneAgent(agent_id, new_config)
+  // switchAgentMode(agent_id, agent_mode)
 
   @Get('health')
   async getAgentHealth(): Promise<AgentResponse> {

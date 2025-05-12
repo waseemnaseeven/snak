@@ -78,6 +78,11 @@ export class AgentDeleteRequestDTO {
   agent_id: number;
 }
 
+export class AgentDeletesRequestDTO {
+  @IsNotEmpty()
+  agent_id: number[];
+}
+
 export class AgentAddRequestDTO {
   @IsNotEmpty()
   agent: AgentInitializationDTO;
