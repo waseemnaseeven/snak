@@ -270,6 +270,7 @@ const checkParseJson = async (
       prompt: systemMessagefromjson,
       name: json.name,
       interval: json.interval,
+      chat_id: json.chat_id || '',
       mode: parseAgentMode(json.mode),
       plugins: Array.isArray(json.plugins)
         ? json.plugins.map((tool: string) => tool.toLowerCase())

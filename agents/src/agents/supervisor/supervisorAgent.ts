@@ -10,13 +10,16 @@ import { StarknetAgent, StarknetAgentConfig } from '../core/starknetAgent.js';
 import { ToolsOrchestrator } from '../operators/toolOrchestratorAgent.js';
 import { MemoryAgent } from '../operators/memoryAgent.js';
 import { WorkflowController } from './worflowController.js';
-import { DatabaseCredentials, logger, metrics, AgentConfig, ModelsConfig} from '@snakagent/core';
+import {
+  DatabaseCredentials,
+  logger,
+  metrics,
+  AgentConfig,
+  ModelsConfig,
+} from '@snakagent/core';
 import { HumanMessage, BaseMessage } from '@langchain/core/messages';
 import { Tool } from '@langchain/core/tools';
-import {
-  AgentMode,
-  AGENT_MODES,
-} from '../../config/agentConfig.js';
+import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
 import { RpcProvider } from 'starknet';
 /**
  * Configuration for the SupervisorAgent.
@@ -601,7 +604,7 @@ export class SupervisorAgent extends BaseAgent {
       // TODO need to check this is really work cause we normally don't have to put in the agent config we to get if fronm conversation
       const memories = await this.memoryAgent.retrieveRelevantMemories(
         message,
-        'default_chat'
+        this.config.starknetConfig.agentConfig?.chat_id || 'default_chat'
       );
 
       if (memories.length === 0) {

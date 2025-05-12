@@ -283,6 +283,7 @@ User Memory Context:
             };
           }
         }
+        logger.error(`Model invocation failed: ${error}`);
         throw error;
       }
     }

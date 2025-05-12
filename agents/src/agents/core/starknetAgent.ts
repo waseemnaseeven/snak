@@ -5,10 +5,7 @@ import { logger, metrics, AgentConfig } from '@snakagent/core';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { BaseMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
 import { DatabaseCredentials } from '../../tools/types/database.js';
-import {
-  AgentMode,
-  AGENT_MODES,
-} from '../../config/agentConfig.js';
+import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
 import { MemoryConfig } from '../operators/memoryAgent.js';
 import { createInteractiveAgent } from '../modes/interactive.js';
 import { createAutonomousAgent } from '../modes/autonomous.js';
@@ -465,11 +462,13 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
 
       let result: any;
       try {
+        logger.warn(currentMessages);
         result = await this.agentReactExecutor.invoke(
           { messages: currentMessages },
           { configurable: { thread_id: 'default' } }
         );
 
+        logger.warn('test');
         if (result?.messages?.length > 0) {
           for (let i = result.messages.length - 1; i >= 0; i--) {
             const msg = result.messages[i];
@@ -486,6 +485,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
               }
             }
           }
+          logger.warn('test2');
 
           if (!responseContent) {
             const lastMsg = result.messages[result.messages.length - 1];

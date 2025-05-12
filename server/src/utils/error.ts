@@ -1,4 +1,3 @@
-
 export class ServerError extends Error {
   errorCode: string;
   statusCode: number;
@@ -42,14 +41,13 @@ export class ServerError extends Error {
   }
 }
 
-
 const errorMap: Map<string, string> = new Map([
   // E01 : Resource not found errors
   ['E01TA400', 'Agent not found'],
   ['E01TA410', 'Conversation not found'],
   ['E01TA420', 'Message not found'],
   ['E01TA430', 'Resource not found'],
-  
+
   // E02 : Database operation errors
   ['E02TA100', 'Database read operation failed'],
   ['E02TA110', 'Agent already exists'],
@@ -60,32 +58,32 @@ const errorMap: Map<string, string> = new Map([
   ['E02TA160', 'Agent conversation deletion failed'],
   ['E02TA200', 'Agent operation failed'],
   ['E02TA300', 'Agent deletion operation failed'],
-  
+
   // E03 : Agent execution errors
   ['E03TA100', 'Agent execution failed'],
   ['E03TA110', 'Agent request processing failed'],
   ['E03TA120', 'Agent response generation failed'],
   ['E03TA200', 'Agent execution timed out'],
-  
+
   // E04 : Input validation errors
   ['E04TA100', 'Invalid agent configuration'],
   ['E04TA110', 'Invalid conversation parameters'],
   ['E04TA120', 'Invalid request format'],
-  
+
   // E05 : Data retrieval errors
   ['E05TA100', 'Failed to retrieve data'],
   ['E05TA110', 'Failed to retrieve conversations'],
   ['E05TA120', 'Failed to retrieve messages'],
   ['E05TA130', 'Failed to retrieve agents'],
-  
+
   // E06 : Authentication/Authorization errors
   ['E06TA100', 'Unauthorized access to agent'],
   ['E06TA110', 'Unauthorized access to conversation'],
-  
+
   // E07 : System errors
   ['E07TA100', 'Internal server error'],
   ['E07TA110', 'Service unavailable'],
-  ['E07TA120', 'Metrics recording failed']
+  ['E07TA120', 'Metrics recording failed'],
 ]);
 
 export default ServerError;

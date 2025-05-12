@@ -194,15 +194,14 @@ export class AgentStorage {
 
   private parseAgentConfig(config: any): ModelLevelConfig {
     try {
-       const content = config.trim().slice(1, -1);
-       const parts = content.split(',');
-       const model : ModelLevelConfig = {
-         provider: parts[0],
-         model_name: parts[1],
-         description: parts[2],
-        };
+      const content = config.trim().slice(1, -1);
+      const parts = content.split(',');
+      const model: ModelLevelConfig = {
+        provider: parts[0],
+        model_name: parts[1],
+        description: parts[2],
+      };
       return model;
-
     } catch (error) {
       logger.error('Error parsing agent config:', error);
       throw error;
@@ -249,7 +248,6 @@ export class AgentStorage {
 
   private async get_models_config(): Promise<ModelsConfig> {
     try {
-
       const q = new Postgres.Query(`SELECT * FROM models_config WHERE id = 1`);
       logger.debug(`Query to get models config: ${q}`);
       const q_res = await Postgres.query<ModelsConfig>(q);
@@ -298,6 +296,7 @@ export class AgentStorage {
           enabled: agent_config.memory.enabled,
           shortTermMemorySize: agent_config.memory.short_term_memory_size,
         },
+        chat_id: 'snak_guide',
         maxIteration: 15,
         mode: AgentMode.INTERACTIVE,
       };

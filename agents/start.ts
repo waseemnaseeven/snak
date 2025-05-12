@@ -271,6 +271,7 @@ const localRun = async (): Promise<void> => {
       name: json_config.name,
       prompt: json_config.prompt,
       interval: json_config.interval,
+      chat_id: json_config.chat_id,
       plugins: json_config.plugins,
       memory: json_config.memory,
       mcpServers: json_config.mcpServers,
@@ -290,7 +291,7 @@ const localRun = async (): Promise<void> => {
       debug: DEBUG,
     };
 
-    logger.warn(model_json_config)
+    logger.warn(model_json_config);
     // Create and initialize the agent system
     agentSystem = new AgentSystem(agentSystemConfig);
     await agentSystem.init();
@@ -335,12 +336,12 @@ const localRun = async (): Promise<void> => {
         console.log(chalk.yellow('Processing request...'));
 
         try {
-          const message : Message = {
-            conversation_id : 1,
-            sender_type : 'user',
-            content : user,
-            status : 'success',
-          }
+          const message: Message = {
+            conversation_id: 1,
+            sender_type: 'user',
+            content: user,
+            status: 'success',
+          };
           // Execute through the supervisor agent which will route appropriately
           await agentSystem.execute(message);
 

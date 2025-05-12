@@ -2,7 +2,7 @@ import { StarknetAgentInterface } from '../../tools/tools.js';
 import { createAllowedTools } from '../../tools/tools.js';
 import { createSignatureTools } from '../../tools/signatureTools.js';
 import { MCP_CONTROLLER } from '../../services/mcp/src/mcp.js';
-import { logger, AgentConfig} from '@snakagent/core';
+import { logger, AgentConfig } from '@snakagent/core';
 import { Postgres } from '@snakagent/database/queries';
 import { memory } from '@snakagent/database/queries';
 import { DatabaseCredentials } from '@snakagent/database';

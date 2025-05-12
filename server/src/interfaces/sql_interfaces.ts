@@ -20,7 +20,7 @@ export interface AgentPromptSQL {
   knowledge: string[];
 }
 export interface AgentConfigSQL {
-  id : number;
+  id: number;
   name: string;
   prompt: AgentPromptSQL;
   group_id: number;

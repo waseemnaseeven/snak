@@ -84,7 +84,7 @@ export namespace Postgres {
       port: db.port,
     });
 
-    pool.on('error', (err : any) => {
+    pool.on('error', (err: any) => {
       console.error('something bad has happened!', err.stack);
     });
   }
