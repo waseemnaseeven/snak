@@ -66,7 +66,6 @@ export class AgentsController {
   ): Promise<AgentResponse> {
     try {
       await this.agentFactory.addAgent(userRequest.agent);
-      logger.error('Agent added:', userRequest.agent);
       const response: AgentResponse = {
         status: 'success',
         data: `Agent ${userRequest.agent.name} added`,
