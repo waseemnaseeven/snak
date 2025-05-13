@@ -212,7 +212,7 @@ const localRun = async (): Promise<void> => {
     const nodeUrl = process.env.STARKNET_RPC_URL;
     if (!nodeUrl) {
       throw new Error(
-        "STARKNET_RPC_URL n'est pas défini dans les variables d'environnement"
+        'STARKNET_RPC_URL is not defined in environment variables'
       );
     }
 
@@ -348,18 +348,18 @@ const localRun = async (): Promise<void> => {
           chalk.yellow('\nStarting hybrid execution automatically...\n')
         );
 
-        // Démarrer l'exécution hybride
+        // Start hybrid execution
         const { state, threadId } =
           await agentSystem.startHybridExecution(initialPrompt);
         console.log(
           chalk.green(`Hybrid execution started with thread ID: ${threadId}`)
         );
 
-        // État de l'exécution
+        // Execution state
         let currentState = state;
         let isRunning = true;
 
-        // Fonction pour afficher le dernier message
+        // Function to display the last message
         const displayLastMessage = () => {
           if (currentState.messages && currentState.messages.length > 0) {
             const lastMessage =
@@ -386,16 +386,16 @@ const localRun = async (): Promise<void> => {
           }
         };
 
-        // Boucle principale d'interaction
+        // Main interaction loop
         while (isRunning) {
-          // Afficher le dernier message
+          // Display the last message
           displayLastMessage();
 
-          // Vérifier si l'agent attend une entrée
+          // Check if the agent is waiting for input
           if (agentSystem.isWaitingForInput(currentState)) {
             console.log(chalk.yellow('\nAgent is waiting for input.\n'));
 
-            // Demander l'entrée utilisateur
+            // Ask for user input
             const { userInput } = await inquirer.prompt([
               {
                 type: 'input',
@@ -409,7 +409,7 @@ const localRun = async (): Promise<void> => {
               },
             ]);
 
-            // Sortir si l'utilisateur tape "exit"
+            // Exit if the user types "exit"
             if (userInput.toLowerCase() === 'exit') {
               console.log(chalk.blue('\nExiting hybrid mode...\n'));
               isRunning = false;
@@ -417,7 +417,7 @@ const localRun = async (): Promise<void> => {
 
             console.log(chalk.yellow('\nProcessing your input...\n'));
 
-            // Fournir l'entrée à l'agent et continuer l'exécution
+            // Provide input to the agent and continue execution
             try {
               const result = await agentSystem.provideHybridInput(
                 userInput,
@@ -430,74 +430,20 @@ const localRun = async (): Promise<void> => {
                 createBox(inputError.message, { title: 'Error', isError: true })
               );
             }
-          }
-          // Vérifier si l'exécution est terminée
-          else if (agentSystem.isExecutionComplete(currentState)) {
+          } else if (agentSystem.isExecutionComplete(currentState)) {
             console.log(chalk.green('\nHybrid execution completed.\n'));
             isRunning = false;
           }
-          // Si l'agent est encore en train de travailler, attendre un peu
+          // If the agent is still working, wait a bit
           else {
             console.log(
               chalk.dim(
                 '\nAgent is working autonomously. Press Ctrl+C to exit.\n'
               )
             );
-
-            // Option pour continuer ou interrompre
-            const { action } = await inquirer.prompt([
-              {
-                type: 'list',
-                name: 'action',
-                message: 'What would you like to do?',
-                choices: [
-                  { name: 'Wait for next update', value: 'wait' },
-                  { name: 'Force provide input', value: 'input' },
-                  { name: 'Exit hybrid mode', value: 'exit' },
-                ],
-              },
-            ]);
-
-            if (action === 'exit') {
-              console.log(chalk.blue('\nExiting hybrid mode...\n'));
-              isRunning = false;
-            } else if (action === 'input') {
-              // Permettre à l'utilisateur de fournir une entrée même si l'agent n'en a pas demandé
-              const { userInput } = await inquirer.prompt([
-                {
-                  type: 'input',
-                  name: 'userInput',
-                  message: chalk.green('Your input (forced interruption):'),
-                  validate: (value: string) =>
-                    value.trim() ? true : 'Please enter a valid input',
-                },
-              ]);
-
-              console.log(
-                chalk.yellow('\nInterrupting agent with your input...\n')
-              );
-
-              try {
-                const result = await agentSystem.provideHybridInput(
-                  userInput,
-                  threadId
-                );
-                currentState = result.state;
-              } catch (inputError) {
-                console.error(chalk.red('Error processing your interrupt:'));
-                console.error(
-                  createBox(inputError.message, {
-                    title: 'Error',
-                    isError: true,
-                  })
-                );
-              }
-            } else {
-              // Attendre et vérifier l'état à nouveau
-              console.log(chalk.dim('Waiting for update...'));
-              // Vous pourriez implémenter une attente plus sophistiquée ici
-              await new Promise((resolve) => setTimeout(resolve, 2000));
-            }
+            // Wait and check the status again
+            console.log(chalk.dim('Waiting for update...'));
+            await new Promise((resolve) => setTimeout(resolve, 2000));
           }
         }
 
@@ -658,8 +604,8 @@ const logo = `${chalk.cyan(`
 ${chalk.dim('v0.0.11 by ')}${createLink('Kasar', 'https://kasar.io')}`)}`;
 
 /**
- * Charge les variables d'environnement depuis le fichier .env
- * Les variables définies en ligne de commande ont priorité
+ * Loads environment variables from the .env file
+ * Command line variables take precedence
  */
 function loadEnvVars(): Record<string, string> | undefined {
   // Correctly determine the project root relative to the script
@@ -671,7 +617,7 @@ function loadEnvVars(): Record<string, string> | undefined {
 
   const result = config({
     path: envPath,
-    override: false, // Ne pas écraser les variables définies en ligne de commande
+    override: false, // Do not overwrite variables defined on the command line
   });
 
   if (result.error && !fs.existsSync(envPath)) {
