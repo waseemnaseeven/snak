@@ -158,7 +158,6 @@ export const validateConfig = (config: AgentConfig) => {
   ] as const;
 
   for (const field of requiredFields) {
-	console.log(field, ":",config[field])
     if (config[field as keyof AgentConfig] === undefined) {
       throw new Error(`Missing required field: ${field}`);
     }
