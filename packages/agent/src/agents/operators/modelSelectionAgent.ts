@@ -7,6 +7,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { modelSelectorRules } from '../../prompt/prompts.js';
+import { TokenTracker } from '../../token/tokenTracking.js';
 
 /**
  * Criteria for model selection.
@@ -297,7 +298,13 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
       }
 
       const response = await this.models.fast.invoke([prompt]);
-      const modelChoice = response.content.toString().toLowerCase().trim();
+      const modelChoice = response.content
+        .toString()
+        .toLowerCase()
+        .trim()
+        .replace(/^["']|["']$/g, '');
+
+      TokenTracker.trackCall(response, 'fast_meta_selector');
 
       if (['fast', 'smart', 'cheap'].includes(modelChoice)) {
         if (this.debugMode) {
