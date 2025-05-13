@@ -265,7 +265,7 @@ const checkParseJson = async (
       );
     }
 
-    const json = JSON.parse(jsonData)
+    const json = JSON.parse(jsonData);
     if (!json) {
       throw new Error(`Failed to parse JSON from ${configPath}`);
     }
@@ -280,7 +280,7 @@ const checkParseJson = async (
       throw new Error(
         'Mode configuration is mandatory but missing in config file'
       );
-
+    }
     // Create config object
     const agentConfig: AgentConfig = {
       prompt: systemMessagefromjson,
