@@ -158,7 +158,7 @@ export const validateConfig = (config: AgentConfig) => {
   ] as const;
 
   for (const field of requiredFields) {
-    if (!config[field as keyof AgentConfig]) {
+    if (config[field as keyof AgentConfig] === undefined) {
       throw new Error(`Missing required field: ${field}`);
     }
   }
@@ -265,7 +265,6 @@ const checkParseJson = async (
     }
 
     const json = JSON.parse(jsonData);
-
     if (!json) {
       throw new Error(`Failed to parse JSON from ${configPath}`);
     }
@@ -281,7 +280,6 @@ const checkParseJson = async (
         'Mode configuration is mandatory but missing in config file'
       );
     }
-
     // Create config object
     const agentConfig: AgentConfig = {
       prompt: systemMessagefromjson,
