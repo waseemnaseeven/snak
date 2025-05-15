@@ -201,7 +201,7 @@ export class AgentSystem {
    * @throws Will throw an error if the agent system is not initialized or if execution fails.
    */
   public async execute(
-    message: Message,
+    message: Message | string,
     config?: Record<string, any>
   ): Promise<any> {
     if (!this.supervisorAgent) {
@@ -209,6 +209,15 @@ export class AgentSystem {
     }
 
     try {
+      // TOREMOVE just for now
+      if (typeof message === 'string') {
+        message = {
+          conversation_id: 0,
+          sender_type: 'user',
+          content: message,
+          status: 'success',
+        };
+      }
       Postgres.connect(this.config.databaseCredentials);
       logger.debug(
         `AgentSystem: Executing command with input: ${JSON.stringify(message)}`
