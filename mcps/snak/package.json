@@ -12,7 +12,6 @@
     "clean:dist": "rm -rf dist",
     "clean:all": "pnpm clean && pnpm clean:dist",
     "format": "prettier --write \"src/**/*.ts\"",
-    "format": "prettier --write \"./**/*.ts\"",
     "prepublishOnly": "npm run format && npm run build",
     "prepack": "npm run build",
     "lint": "eslint \"src/**/*.ts\" --fix"
@@ -27,6 +26,7 @@
   },
   "devDependencies": {
     "@snakagent/agents": "workspace:*",
+    "@snakagent/core": "workspace:*",
     "@types/node": "^22.13.10",
     "typescript": "^5.8.2"
   },
