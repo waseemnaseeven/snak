@@ -194,6 +194,8 @@ User Memory Context:
               : modelForThisTask;
 
           const result = await boundModel.invoke(currentFormattedPrompt);
+          logger.info(result);
+
           TokenTracker.trackCall(result, selectedModelType);
           return formatAIMessageResult(result);
         } else {

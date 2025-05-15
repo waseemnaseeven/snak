@@ -171,7 +171,7 @@ export class AgentsController {
     }
   }
 
-  @Post('get_conversations_from_agent_id')
+  @Get('get_conversations_from_agent_id')
   async getConversationsFromAgentId(
     @Body() userRequest: ConversationsRequestDTO
   ): Promise<AgentResponse> {
@@ -194,7 +194,7 @@ export class AgentsController {
     }
   }
 
-  @Post('get_messages_from_conversation_id')
+  @Get('get_messages_from_conversation_id')
   async getMessagesFromConversationId(
     @Body() userRequest: getMessagesFromConversationIdDTO
   ): Promise<AgentResponse> {
@@ -217,7 +217,7 @@ export class AgentsController {
     }
   }
 
-  @Post('get_agents')
+  @Get('get_agents')
   async getAgents(): Promise<AgentResponse> {
     try {
       const agents = await this.agentService.getAllAgents();

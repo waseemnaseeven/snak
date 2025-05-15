@@ -22,6 +22,10 @@ import { formatAgentResponse } from './src/agents/core/utils.js';
 import { AgentSystem, AgentSystemConfig, Message } from './src/agents/index.js';
 import { hybridInitialPrompt } from './src/prompt/prompts.js';
 import { TokenTracker } from './src/token/tokenTracking.js';
+import { agent } from 'supertest';
+
+const DEBUG = process.env.DEBUG === 'true';
+console.log(`Environment variables: DEBUG=${DEBUG}`);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -154,11 +158,17 @@ const localRun = async (): Promise<void> => {
     const { agentPath, modelsConfigPath } = await loadCommand();
 
     // Load initial agent config
-    let json_config: AgentConfig = await load_json_config(agentPath);
-    if (!json_config) {
+    let agent_config: AgentConfig = await load_json_config(agentPath);
+    if (!agent_config) {
       throw new Error(`Failed to load agent configuration from ${agentPath}`);
     }
-
+    const modelData = await fs.promises.readFile(modelsConfigPath, 'utf8');
+    const modelsConfig: ModelsConfig = JSON.parse(modelData) as ModelsConfig;
+    if (!modelsConfig) {
+      throw new Error(
+        `Failed to load models configuration from ${modelsConfig}`
+      );
+    }
     // Load environment variables
     loadEnvVars();
 
@@ -177,7 +187,7 @@ const localRun = async (): Promise<void> => {
     }
 
     // Use the mode from agent configuration
-    const agentMode = json_config.mode;
+    const agentMode = agent_config.mode;
 
     clearScreen();
     console.log(logo);
@@ -218,11 +228,10 @@ const localRun = async (): Promise<void> => {
       starknetProvider: provider,
       accountPrivateKey: process.env.STARKNET_PRIVATE_KEY!,
       accountPublicKey: process.env.STARKNET_PUBLIC_ADDRESS!,
-      modelsConfigPath, // Already loaded
+      modelsConfig: modelsConfig, // Already loaded
       agentMode: agentMode,
-      signature: '', // TODO: Implement signature handling
       databaseCredentials: database,
-      agentConfigPath: agentPath, // Pass the PATH to the agent config file
+      agentConfigPath: agent_config, // Pass the PATH to the agent config file
       debug: DEBUG,
     };
 
@@ -235,7 +244,7 @@ const localRun = async (): Promise<void> => {
 
     spinner.success({
       text: chalk.black(
-        `Agent System "${chalk.cyan(json_config?.name || 'Unknown')}" initialized successfully`
+        `Agent System "${chalk.cyan(agent_config?.name || 'Unknown')}" initialized successfully`
       ),
     });
 
@@ -300,7 +309,7 @@ const localRun = async (): Promise<void> => {
 
       try {
         // Verify autonomous mode is enabled in the configuration
-        if (json_config?.mode !== AgentMode.AUTONOMOUS) {
+        if (agent_config?.mode !== AgentMode.AUTONOMOUS) {
           throw new Error('Autonomous mode is disabled in agent configuration');
         }
 
@@ -491,7 +500,7 @@ const localRun = async (): Promise<void> => {
 
 interface CommandOptions {
   agentPath: string;
-  modelsConfig: string;
+  modelsConfigPath: string;
   silentLlm: boolean;
 }
 
@@ -569,9 +578,9 @@ const loadCommand = async (): Promise<CommandOptions> => {
   };
 
   const agentPath = findConfigPath(agentFileName, 'agents');
-  const modelsConfig = findConfigPath(modelsFileName, 'models');
+  const modelsConfigPath = findConfigPath(modelsFileName, 'models');
 
-  return { agentPath, modelsConfig, silentLlm };
+  return { agentPath, modelsConfigPath, silentLlm };
 };
 
 /**
