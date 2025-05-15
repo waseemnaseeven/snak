@@ -247,7 +247,7 @@ const checkParseJson = async (
       );
     }
 
-    const json = JSON.parse(jsonData);
+    const json = JSON.parse(jsonData); // TODO don't use any type for json
     if (!json) {
       throw new Error(`Failed to parse JSON from ${configPath}`);
     }
@@ -268,7 +268,7 @@ const checkParseJson = async (
       prompt: systemMessagefromjson,
       name: json.name,
       interval: json.interval,
-      chat_id: json.chat_id || '',
+      chat_id: json.chat_id,
       mode: parseAgentMode(json.mode),
       plugins: Array.isArray(json.plugins)
         ? json.plugins.map((tool: string) => tool.toLowerCase())

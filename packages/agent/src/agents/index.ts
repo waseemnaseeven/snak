@@ -65,7 +65,7 @@ export interface AgentSystemConfig {
 export class AgentSystem {
   private supervisorAgent: SupervisorAgent | null = null;
   private config: AgentSystemConfig;
-  private agentConfig: AgentConfig | null;
+  private agentConfig: AgentConfig;
 
   constructor(config: AgentSystemConfig) {
     this.config = config;
@@ -96,18 +96,17 @@ export class AgentSystem {
             `AgentSystem: Failed to load agent configuration: ${loadError}`
           );
           // Continue without agentConfig if loading fails
-          this.agentConfig = null;
         }
       } else {
         logger.warn(
           'AgentSystem: No agentConfigPath provided, proceeding without agent-specific configuration.'
         );
-        this.agentConfig = null;
       }
 
       if (!this.agentConfig) {
         throw new Error('Agent configuration is required');
       }
+
       // Create the config object for SupervisorAgent
       const supervisorConfigObject: SupervisorAgentConfig = {
         modelsConfig: this.config.modelsConfig,
@@ -209,7 +208,7 @@ export class AgentSystem {
     }
 
     try {
-      // TOREMOVE just for now
+      // TODO : make start send a message type instead of string
       if (typeof message === 'string') {
         message = {
           conversation_id: 0,

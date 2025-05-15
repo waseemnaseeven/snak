@@ -5,11 +5,7 @@ import {
   AgentExecutionResponse,
 } from '../interfaces/agent-service.interface.js';
 import { IAgent } from '../interfaces/agent.interface.js';
-import {
-  AgentRequestDTO,
-  CreateConversationRequestDTO,
-  UpdateModelConfigDTO,
-} from '../dto/agents.js';
+import { AgentRequestDTO, UpdateModelConfigDTO } from '../dto/agents.js';
 import {
   AgentValidationError,
   AgentExecutionError,
@@ -101,39 +97,38 @@ export class AgentService implements IAgentService {
     }
   }
 
-  async createConversation(
-    request: CreateConversationRequestDTO
-  ): Promise<void> {
-    try {
-      const is_conversation_exist = await check_if_conversation_exists(
-        request.conversation_name
-      );
+  // TODO: Implement createConversation function to support multiple conversations for the same agent
+  // async createConversation(
+  //   request: CreateConversationRequestDTO
+  // ): Promise<void> {
+  //   try {
+  //     const is_conversation_exist = await check_if_conversation_exists(
+  //       request.conversation_name
+  //     );
 
-      // TODO how to we want to handle  this case in the future of this app
-      if (is_conversation_exist) {
-        this.logger.debug(
-          `Conversation already exists: ${request.conversation_name}`
-        );
-        return;
-      }
-      const q = new Postgres.Query(
-        `INSERT INTO conversation (conversation_name, agent_id) VALUES ($1, $2) RETURNING conversation_id`,
-        [request.conversation_name, request.agent_id]
-      );
-      const res = await Postgres.query<number>(q);
-      this.logger.debug(`Conversation added:', ${JSON.stringify(res)} `);
-    } catch (error) {
-      this.logger.error(error);
-      throw error;
-    }
-  }
+  //     // TODO how to we want to handle  this case in the future of this app
+  //     if (is_conversation_exist) {
+  //       this.logger.debug(
+  //         `Conversation already exists: ${request.conversation_name}`
+  //       );
+  //       return;
+  //     }
+  //     const q = new Postgres.Query(
+  //       `INSERT INTO conversation (conversation_name, agent_id) VALUES ($1, $2) RETURNING conversation_id`,
+  //       [request.conversation_name, request.agent_id]
+  //     );
+  //     const res = await Postgres.query<number>(q);
+  //     this.logger.debug(`Conversation added:', ${JSON.stringify(res)} `);
+  //   } catch (error) {
+  //     this.logger.error(error);
+  //     throw error;
+  //   }
+  // }
 
   async deleteConversation(conversation_id: number): Promise<void> {
     try {
-      const is_conversation_exist = await check_if_conversation_exists(
-        undefined,
-        conversation_id
-      );
+      const is_conversation_exist =
+        await check_if_conversation_exists(conversation_id);
 
       // TODO how to we want to handle  this case in the future of this app
       if (!is_conversation_exist) {
@@ -145,7 +140,6 @@ export class AgentService implements IAgentService {
         [conversation_id]
       );
       const res = await Postgres.query<number>(q);
-      console.log(JSON.stringify(res));
       this.logger.debug(`Conversation deleted:', ${JSON.stringify(res)} `);
     } catch (error) {
       this.logger.error(error);
@@ -155,12 +149,9 @@ export class AgentService implements IAgentService {
 
   async getConversation(conversation_id: number): Promise<ConversationSQL> {
     try {
-      const is_conversation_exist = await check_if_conversation_exists(
-        undefined,
-        conversation_id
-      );
+      const is_conversation_exist =
+        await check_if_conversation_exists(conversation_id);
 
-      // TODO how to we want to handle  this case in the future of this app
       if (!is_conversation_exist) {
         this.logger.debug(`Conversation does not exist: ${conversation_id}`);
         throw new Error(`Conversation does not exist: ${conversation_id}`);
@@ -199,10 +190,8 @@ export class AgentService implements IAgentService {
     conversation_id: number
   ): Promise<MessageSQL[]> {
     try {
-      const is_conversation_exist = await check_if_conversation_exists(
-        undefined,
-        conversation_id
-      );
+      const is_conversation_exist =
+        await check_if_conversation_exists(conversation_id);
 
       // TODO how to we want to handle  this case in the future of this app
       if (!is_conversation_exist) {
@@ -215,7 +204,6 @@ export class AgentService implements IAgentService {
       );
       const res = await Postgres.query<MessageSQL>(q);
       this.logger.debug(`All messages:', ${JSON.stringify(res)} `);
-      console.log(`All messages:', ${JSON.stringify(res)} `);
       return res;
     } catch (error) {
       this.logger.error(error);

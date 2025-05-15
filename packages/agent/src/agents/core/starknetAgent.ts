@@ -462,13 +462,10 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
 
       let result: any;
       try {
-        logger.warn(currentMessages);
         result = await this.agentReactExecutor.invoke(
           { messages: currentMessages },
           { configurable: { thread_id: 'default' } }
         );
-
-        logger.warn('test');
         if (result?.messages?.length > 0) {
           for (let i = result.messages.length - 1; i >= 0; i--) {
             const msg = result.messages[i];
@@ -485,7 +482,6 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
               }
             }
           }
-          logger.warn('test2');
 
           if (!responseContent) {
             const lastMsg = result.messages[result.messages.length - 1];

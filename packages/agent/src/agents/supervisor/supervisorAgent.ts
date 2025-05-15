@@ -601,7 +601,7 @@ export class SupervisorAgent extends BaseAgent {
     }
 
     try {
-      // TODO need to check this is really work cause we normally don't have to put in the agent config we to get if fronm conversation
+      // TODO: Remove chat_id from agent_config and move it to request body to support multiple conversations per agent
       const memories = await this.memoryAgent.retrieveRelevantMemories(
         message,
         this.config.starknetConfig.agentConfig?.chat_id || 'default_chat'

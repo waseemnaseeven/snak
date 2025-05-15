@@ -3,7 +3,6 @@ import {
   AgentAddRequestDTO,
   AgentDeleteRequestDTO,
   AgentRequestDTO,
-  CreateConversationRequestDTO,
   ConversationsRequestDTO,
   getMessagesFromConversationIdDTO,
   DeleteConversationRequestDTO,
@@ -128,27 +127,28 @@ export class AgentsController {
     }
   }
 
-  @Post('create_conversation')
-  async createConversation(
-    @Body() userRequest: CreateConversationRequestDTO
-  ): Promise<AgentResponse> {
-    try {
-      const agent = this.agentFactory.getAgent(userRequest.agent_id);
-      if (!agent) {
-        throw new ServerError('E01TA400');
-      }
+  // TODO: Implement createConversation function to support multiple conversations for the same agent
+  // @Post('create_conversation')
+  // async createConversation(
+  //   @Body() userRequest: CreateConversationRequestDTO
+  // ): Promise<AgentResponse> {
+  //   try {
+  //     const agent = this.agentFactory.getAgent(userRequest.agent_id);
+  //     if (!agent) {
+  //       throw new ServerError('E01TA400');
+  //     }
 
-      const conversation =
-        await this.agentService.createConversation(userRequest);
-      const response: AgentResponse = {
-        status: 'success',
-        data: conversation,
-      };
-      return response;
-    } catch (error) {
-      throw new ServerError('E02TA200');
-    }
-  }
+  //     const conversation =
+  //       await this.agentService.createConversation(userRequest);
+  //     const response: AgentResponse = {
+  //       status: 'success',
+  //       data: conversation,
+  //     };
+  //     return response;
+  //   } catch (error) {
+  //     throw new ServerError('E02TA200');
+  //   }
+  // }
 
   @Post('delete_conversation')
   async deleteConversation(

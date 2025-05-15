@@ -132,9 +132,6 @@ User Memory Context:
     async function callModel(
       state: typeof GraphState.State
     ): Promise<{ messages: BaseMessage[] }> {
-      logger.debug('Calling model with state:', state);
-      logger.debug(JSON.stringify(agent_config));
-      logger.debug('test');
       if (!agent_config) {
         throw new Error('Agent configuration is required but not available');
       }
@@ -144,7 +141,6 @@ User Memory Context:
         ${interactiveRules}
         Available tools: ${toolsList.map((tool) => tool.name).join(', ')}
       `;
-      logger.debug('stopping');
       const prompt = ChatPromptTemplate.fromMessages([
         [
           'system',
@@ -194,7 +190,6 @@ User Memory Context:
               : modelForThisTask;
 
           const result = await boundModel.invoke(currentFormattedPrompt);
-          logger.info(result);
 
           TokenTracker.trackCall(result, selectedModelType);
           return formatAIMessageResult(result);

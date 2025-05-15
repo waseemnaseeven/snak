@@ -248,9 +248,8 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
       }
 
       if (!this.models.fast) {
-        // logger.warn(this.models)
         logger.error(
-          'Meta-selection is enable, but the "fast" model is not available. Defaulting to "smart".'
+          'Meta-selection is enabled, but the "fast" model is not available. Defaulting to "smart".'
         );
         return 'smart';
       }

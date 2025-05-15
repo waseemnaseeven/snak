@@ -22,7 +22,6 @@ import { formatAgentResponse } from './src/agents/core/utils.js';
 import { AgentSystem, AgentSystemConfig, Message } from './src/agents/index.js';
 import { hybridInitialPrompt } from './src/prompt/prompts.js';
 import { TokenTracker } from './src/token/tokenTracking.js';
-import { agent } from 'supertest';
 
 const DEBUG = process.env.DEBUG === 'true';
 console.log(`Environment variables: DEBUG=${DEBUG}`);

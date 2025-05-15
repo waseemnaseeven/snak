@@ -28,19 +28,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     });
 
     if (exception instanceof ServerError) {
-      // Handle your custom error
       return response.status(exception.statusCode).send({
         statusCode: 500,
         name: exception.name,
         errorCode: exception.errorCode,
-        errorMessage: exception.message, // Include your custom code in the response
+        errorMessage: exception.message,
       });
     }
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       return response.status(status).send({
-        statusCode: 100,
+        statusCode: status,
         message: exception.message,
         error: exception.name,
       });
