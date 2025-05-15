@@ -174,24 +174,24 @@ export class AgentSystem {
       throw error;
     }
   }
-  private async insert_message_into_db(message: Message): Promise<number> {
-    try {
-      const message_q = new Postgres.Query(
-        `
-        INSERT INTO message (conversation_id, sender_type, content) VALUES ($1, $2, $3) RETURNING message_id`,
-        [message.conversation_id, message.sender_type, message.content]
-      );
-      const message_q_res = await Postgres.query<number>(message_q);
-      console.log(
-        `Message inserted into DB: ${JSON.stringify((message_q_res[0] as any).message_id)}`
-      );
-      logger.debug(`Messagfe inserted into DB: ${message_q_res[0]}`);
-      return message_q_res[0];
-    } catch (error) {
-      logger.error(error);
-      throw error;
-    }
-  }
+  // private async insert_message_into_db(message: Message): Promise<number> {
+  //   try {
+  //     const message_q = new Postgres.Query(
+  //       `
+  //       INSERT INTO message (conversation_id, sender_type, content) VALUES ($1, $2, $3) RETURNING message_id`,
+  //       [message.conversation_id, message.sender_type, message.content]
+  //     );
+  //     const message_q_res = await Postgres.query<number>(message_q);
+  //     console.log(
+  //       `Message inserted into DB: ${JSON.stringify((message_q_res[0] as any).message_id)}`
+  //     );
+  //     logger.debug(`Messagfe inserted into DB: ${message_q_res[0]}`);
+  //     return message_q_res[0];
+  //   } catch (error) {
+  //     logger.error(error);
+  //     throw error;
+  //   }
+  // }
 
   /**
    * Executes a command using the agent system.
@@ -219,16 +219,16 @@ export class AgentSystem {
       );
       logger.debug(JSON.stringify(response));
       await this.check_if_conversation_exists(message.conversation_id);
-      await this.insert_message_into_db(message);
-      if (typeof response === 'string') {
-        const r_msg: Message = {
-          conversation_id: message.conversation_id,
-          sender_type: 'ai',
-          content: response,
-          status: 'success',
-        };
-        await this.insert_message_into_db(r_msg);
-      }
+      // await this.insert_message_into_db(message);
+      // if (typeof response === 'string') {
+      //   const r_msg: Message = {
+      //     conversation_id: message.conversation_id,
+      //     sender_type: 'ai',
+      //     content: response,
+      //     status: 'success',
+      //   };
+        // await this.insert_message_into_db(r_msg);
+      //}
       return response;
     } catch (error) {
       logger.error(`AgentSystem: Execution error: ${error}`);

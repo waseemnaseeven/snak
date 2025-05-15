@@ -2,16 +2,22 @@
   "fast": {
     "provider": "openai",
     "model_name": "gpt-4o-mini",
-    "description": "Optimized for speed and simple tasks."
+    "description": "Optimized for speed and simple tasks.",
+    "max_input_tokens": 0,
+    "max_output_tokens": 0
   },
   "smart": {
     "provider": "anthropic",
     "model_name": "claude-3-5-sonnet-latest",
-    "description": "Optimized for complex reasoning."
+    "description": "Optimized for complex reasoning.",
+    "max_input_tokens": 0,
+    "max_output_tokens": 0
   },
   "cheap": {
     "provider": "openai",
     "model_name": "gpt-4o-mini",
-    "description": "Good cost-performance balance."
+    "description": "Good cost-performance balance.",
+    "max_input_tokens": 0,
+    "max_output_tokens": 0
   }
 }

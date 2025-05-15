@@ -13,10 +13,11 @@ import {
   truncateToolResults,
   formatAgentResponse,
 } from '../core/utils.js';
-import { estimateTokens } from '../../token/tokenTracking.js';
 import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
 import { SupervisorAgent } from '../supervisor/supervisorAgent.js';
 import { baseSystemPrompt, interactiveRules } from '../../prompt/prompts.js';
+import { TokenTracker } from '../../token/tokenTracking.js';
+
 /**
  * Retrieves the memory agent instance from the SupervisorAgent.
  * @returns A promise that resolves to the memory agent instance or null if not found or an error occurs.
@@ -162,26 +163,12 @@ User Memory Context:
             )
         );
 
-        const formattedPrompt = await prompt.formatMessages({
+        const currentMessages = filteredMessages;
+        const currentFormattedPrompt = await prompt.formatMessages({
           tool_names: toolsList.map((tool) => tool.name).join(', '),
-          messages: filteredMessages,
+          messages: currentMessages,
           memories: state.memories || '',
         });
-        const estimatedTokens = estimateTokens(JSON.stringify(formattedPrompt));
-        let currentMessages = filteredMessages;
-        let currentFormattedPrompt = formattedPrompt;
-
-        if (estimatedTokens > 90000) {
-          logger.warn(
-            `Prompt exceeds safe token limit: ${estimatedTokens} tokens. Truncating messages...`
-          );
-          currentMessages = state.messages.slice(-4);
-          currentFormattedPrompt = await prompt.formatMessages({
-            tool_names: toolsList.map((tool) => tool.name).join(', '),
-            messages: currentMessages,
-            memories: state.memories || '',
-          });
-        }
 
         if (modelSelector) {
           const stateModelType =
@@ -207,6 +194,7 @@ User Memory Context:
               : modelForThisTask;
 
           const result = await boundModel.invoke(currentFormattedPrompt);
+          TokenTracker.trackCall(result, selectedModelType);
           return formatAIMessageResult(result);
         } else {
           const existingModelSelector = ModelSelectionAgent.getInstance();
@@ -221,6 +209,7 @@ User Memory Context:
                 ? smartModel.bindTools(toolsList)
                 : smartModel;
             const result = await boundSmartModel.invoke(currentFormattedPrompt);
+            TokenTracker.trackCall(result, 'smart');
             return formatAIMessageResult(result);
           } else {
             logger.warn(
@@ -260,6 +249,7 @@ User Memory Context:
                   ? emergencyModel.bindTools(toolsList)
                   : emergencyModel;
               const result = await boundEmergencyModel.invoke(emergencyPrompt);
+              TokenTracker.trackCall(result, 'smart_emergency');
               return formatAIMessageResult(result);
             } else {
               throw new Error(

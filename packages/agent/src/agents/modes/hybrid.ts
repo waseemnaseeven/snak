@@ -24,6 +24,7 @@ import {
   baseSystemPrompt,
   finalAnswerRules,
 } from '../../prompt/prompts.js';
+import { TokenTracker } from '../../token/tokenTracking.js';
 
 /**
  * Creates and configures a hybrid agent that can use tools, interact with humans,
@@ -268,6 +269,7 @@ export const createHybridAgent = async (
       );
 
       const result: BaseMessage = await boundModel.invoke(formattedPrompt);
+      TokenTracker.trackCall(result, selectedModelType);
       logger.debug(`Hybrid agent: Model invocation complete`);
 
       let resultMessage: AIMessage;

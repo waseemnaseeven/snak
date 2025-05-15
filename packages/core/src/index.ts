@@ -16,4 +16,6 @@ export type {
   ModelsConfig,
   ApiKeys,
   ModelLevelConfig,
-} from './types/modelsConfig.js';
+} from './types/models/modelsConfig.js';
+
+export { MODELS, ModelProviders } from './types/models/models.js';

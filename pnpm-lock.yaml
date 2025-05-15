@@ -169,6 +169,12 @@ importers:
 
   packages/agent:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.36.3
+        version: 0.36.3(encoding@0.1.13)
+      '@google/generative-ai':
+        specifier: ^0.24.1
+        version: 0.24.1
       '@huggingface/transformers':
         specifier: ^3.4.0
         version: 3.5.1
@@ -177,7 +183,7 @@ importers:
         version: 0.3.20(@langchain/core@0.3.55(openai@4.98.0(encoding@0.1.13)(ws@8.18.2)(zod@3.24.4)))(encoding@0.1.13)
       '@langchain/community':
         specifier: ^0.3.34
-        version: 0.3.42(6jxdtbxrythydmczfskljdunjm)
+        version: 0.3.42(5iwnhkkm4eorg2oqampmzfv65q)
       '@langchain/core':
         specifier: ^0.3.42
         version: 0.3.55(openai@4.98.0(encoding@0.1.13)(zod@3.24.4))
@@ -262,9 +268,15 @@ importers:
       '@snakagent/plugin-vesu':
         specifier: workspace:*
         version: link:../../plugins/vesu
+      axios:
+        specifier: ^1.8.2
+        version: 1.9.0(debug@4.4.0)
       discord.js:
         specifier: ^14.17.3
         version: 14.19.3
+      gpt-tokenizer:
+        specifier: ^2.9.0
+        version: 2.9.0
       inquirer:
         specifier: ^12.4.1
         version: 12.6.1(@types/node@22.15.17)
@@ -273,7 +285,7 @@ importers:
         version: 0.3.24(@langchain/anthropic@0.3.20(@langchain/core@0.3.55(openai@4.98.0(encoding@0.1.13)(ws@8.18.2)(zod@3.24.4)))(encoding@0.1.13))(@langchain/core@0.3.55(openai@4.98.0(encoding@0.1.13)(ws@8.18.2)(zod@3.24.4)))(@langchain/deepseek@0.0.1(@langchain/core@0.3.55(openai@4.98.0(encoding@0.1.13)(ws@8.18.2)(zod@3.24.4)))(encoding@0.1.13)(ws@8.18.2))(@langchain/google-genai@0.1.12(@langchain/core@0.3.55(openai@4.98.0(encoding@0.1.13)(ws@8.18.2)(zod@3.24.4)))(zod@3.24.4))(@langchain/ollama@0.1.6(@langchain/core@0.3.55(openai@4.98.0(encoding@0.1.13)(ws@8.18.2)(zod@3.24.4))))(axios@1.9.0)(encoding@0.1.13)(handlebars@4.7.8)(openai@4.98.0(encoding@0.1.13)(ws@8.18.2)(zod@3.24.4))(ws@8.18.2)
       mem0ai:
         specifier: ^2.1.9
-        version: 2.1.25(@anthropic-ai/sdk@0.39.0(encoding@0.1.13))(@google/genai@0.7.0(encoding@0.1.13))(@langchain/core@0.3.55(openai@4.98.0(encoding@0.1.13)(ws@8.18.2)(zod@3.24.4)))(@mistralai/mistralai@1.6.0(zod@3.24.4))(@qdrant/js-client-rest@1.13.0(typescript@5.8.3))(@supabase/supabase-js@2.49.4)(@types/jest@29.5.14)(@types/pg@8.15.1)(@types/sqlite3@3.1.11)(encoding@0.1.13)(groq-sdk@0.3.0(encoding@0.1.13))(neo4j-driver@5.28.1)(ollama@0.5.15)(pg@8.16.0)(redis@4.7.1)(sqlite3@5.1.7)(ws@8.18.2)
+        version: 2.1.25(@anthropic-ai/sdk@0.36.3(encoding@0.1.13))(@google/genai@0.7.0(encoding@0.1.13))(@langchain/core@0.3.55(openai@4.98.0(encoding@0.1.13)(ws@8.18.2)(zod@3.24.4)))(@mistralai/mistralai@1.6.0(zod@3.24.4))(@qdrant/js-client-rest@1.13.0(typescript@5.8.3))(@supabase/supabase-js@2.49.4)(@types/jest@29.5.14)(@types/pg@8.15.1)(@types/sqlite3@3.1.11)(encoding@0.1.13)(groq-sdk@0.3.0(encoding@0.1.13))(neo4j-driver@5.28.1)(ollama@0.5.15)(pg@8.16.0)(redis@4.7.1)(sqlite3@5.1.7)(ws@8.18.2)
       nanospinner:
         specifier: ^1.2.2
         version: 1.2.2
@@ -306,7 +318,7 @@ importers:
         version: 14.1.0
       next:
         specifier: 15.1.4
-        version: 15.1.4(@babel/core@7.27.1)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 15.1.4(@babel/core@7.27.1)(@opentelemetry/api@1.9.0)(@playwright/test@1.52.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
         specifier: ^19.0.0
         version: 19.1.0
@@ -5422,6 +5434,9 @@ packages:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
     engines: {node: '>= 0.4'}
 
+  gpt-tokenizer@2.9.0:
+    resolution: {integrity: sha512-YSpexBL/k4bfliAzMrRqn3M6+it02LutVyhVpDeMKrC/O9+pCe/5s8U2hYKa2vFLD5/vHhsKc8sOn/qGqII8Kg==}
+
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
@@ -10330,7 +10345,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@langchain/community@0.3.42(6jxdtbxrythydmczfskljdunjm)':
+  '@langchain/community@0.3.42(5iwnhkkm4eorg2oqampmzfv65q)':
     dependencies:
       '@browserbasehq/stagehand': 1.14.0(@playwright/test@1.52.0)(deepmerge@4.3.1)(dotenv@16.5.0)(encoding@0.1.13)(openai@4.98.0(encoding@0.1.13)(ws@8.18.2)(zod@3.24.4))(zod@3.24.4)
       '@ibm-cloud/watsonx-ai': 1.6.5
@@ -10359,7 +10374,7 @@ snapshots:
       jsdom: 26.1.0
       jsonwebtoken: 9.0.2
       lodash: 4.17.21
-      mem0ai: 2.1.25(@anthropic-ai/sdk@0.39.0(encoding@0.1.13))(@google/genai@0.7.0(encoding@0.1.13))(@langchain/core@0.3.55(openai@4.98.0(encoding@0.1.13)(ws@8.18.2)(zod@3.24.4)))(@mistralai/mistralai@1.6.0(zod@3.24.4))(@qdrant/js-client-rest@1.13.0(typescript@5.8.3))(@supabase/supabase-js@2.49.4)(@types/jest@29.5.14)(@types/pg@8.15.1)(@types/sqlite3@3.1.11)(encoding@0.1.13)(groq-sdk@0.3.0(encoding@0.1.13))(neo4j-driver@5.28.1)(ollama@0.5.15)(pg@8.16.0)(redis@4.7.1)(sqlite3@5.1.7)(ws@8.18.2)
+      mem0ai: 2.1.25(@anthropic-ai/sdk@0.36.3(encoding@0.1.13))(@google/genai@0.7.0(encoding@0.1.13))(@langchain/core@0.3.55(openai@4.98.0(encoding@0.1.13)(ws@8.18.2)(zod@3.24.4)))(@mistralai/mistralai@1.6.0(zod@3.24.4))(@qdrant/js-client-rest@1.13.0(typescript@5.8.3))(@supabase/supabase-js@2.49.4)(@types/jest@29.5.14)(@types/pg@8.15.1)(@types/sqlite3@3.1.11)(encoding@0.1.13)(groq-sdk@0.3.0(encoding@0.1.13))(neo4j-driver@5.28.1)(ollama@0.5.15)(pg@8.16.0)(redis@4.7.1)(sqlite3@5.1.7)(ws@8.18.2)
       neo4j-driver: 5.28.1
       pg: 8.16.0
       playwright: 1.52.0
@@ -14257,6 +14272,8 @@ snapshots:
 
   gopd@1.2.0: {}
 
+  gpt-tokenizer@2.9.0: {}
+
   graceful-fs@4.2.11: {}
 
   graphemer@1.4.0: {}
@@ -15773,9 +15790,9 @@ snapshots:
 
   media-typer@1.1.0: {}
 
-  mem0ai@2.1.25(@anthropic-ai/sdk@0.39.0(encoding@0.1.13))(@google/genai@0.7.0(encoding@0.1.13))(@langchain/core@0.3.55(openai@4.98.0(encoding@0.1.13)(ws@8.18.2)(zod@3.24.4)))(@mistralai/mistralai@1.6.0(zod@3.24.4))(@qdrant/js-client-rest@1.13.0(typescript@5.8.3))(@supabase/supabase-js@2.49.4)(@types/jest@29.5.14)(@types/pg@8.15.1)(@types/sqlite3@3.1.11)(encoding@0.1.13)(groq-sdk@0.3.0(encoding@0.1.13))(neo4j-driver@5.28.1)(ollama@0.5.15)(pg@8.16.0)(redis@4.7.1)(sqlite3@5.1.7)(ws@8.18.2):
+  mem0ai@2.1.25(@anthropic-ai/sdk@0.36.3(encoding@0.1.13))(@google/genai@0.7.0(encoding@0.1.13))(@langchain/core@0.3.55(openai@4.98.0(encoding@0.1.13)(ws@8.18.2)(zod@3.24.4)))(@mistralai/mistralai@1.6.0(zod@3.24.4))(@qdrant/js-client-rest@1.13.0(typescript@5.8.3))(@supabase/supabase-js@2.49.4)(@types/jest@29.5.14)(@types/pg@8.15.1)(@types/sqlite3@3.1.11)(encoding@0.1.13)(groq-sdk@0.3.0(encoding@0.1.13))(neo4j-driver@5.28.1)(ollama@0.5.15)(pg@8.16.0)(redis@4.7.1)(sqlite3@5.1.7)(ws@8.18.2):
     dependencies:
-      '@anthropic-ai/sdk': 0.39.0(encoding@0.1.13)
+      '@anthropic-ai/sdk': 0.36.3(encoding@0.1.13)
       '@google/genai': 0.7.0(encoding@0.1.13)
       '@langchain/core': 0.3.55(openai@4.98.0(encoding@0.1.13)(zod@3.24.4))
       '@mistralai/mistralai': 1.6.0(zod@3.24.4)
@@ -16150,7 +16167,7 @@ snapshots:
       neo4j-driver-core: 5.28.1
       rxjs: 7.8.2
 
-  next@15.1.4(@babel/core@7.27.1)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
+  next@15.1.4(@babel/core@7.27.1)(@opentelemetry/api@1.9.0)(@playwright/test@1.52.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
     dependencies:
       '@next/env': 15.1.4
       '@swc/counter': 0.1.3
@@ -16171,6 +16188,7 @@ snapshots:
       '@next/swc-win32-arm64-msvc': 15.1.4
       '@next/swc-win32-x64-msvc': 15.1.4
       '@opentelemetry/api': 1.9.0
+      '@playwright/test': 1.52.0
       sharp: 0.33.5
     transitivePeerDependencies:
       - '@babel/core'

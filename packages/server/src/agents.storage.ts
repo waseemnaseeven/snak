@@ -14,6 +14,7 @@ import {
   AgentConfig,
   ModelsConfig,
   ModelLevelConfig,
+  ModelProviders,
 } from '@snakagent/core';
 
 export interface AgentConfigJson {
@@ -70,6 +71,11 @@ export class AgentStorage {
             memory memory NOT NULL DEFAULT (false, 5)
             );`),
         new Postgres.Query(`
+            CREATE TABLE IF NOT EXISTS agent_iterations (
+            id SERIAL PRIMARY KEY,
+            data JSONB NOT NULL
+            );`),
+        new Postgres.Query(`
             CREATE TABLE IF NOT EXISTS conversation (
             conversation_id SERIAL PRIMARY KEY,
             agent_id INTEGER NOT NULL,
@@ -83,9 +89,11 @@ export class AgentStorage {
             message_id SERIAL PRIMARY KEY,
             conversation_id TEXT NOT NULL,
             content TEXT NOT NULL,
+            agent_iteration_id INTEGER NOT NULL,
             sender_type TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (conversation_id) REFERENCES conversation(conversation_id) ON DELETE CASCADE
+            FOREIGN KEY (agent_iteration_id) REFERENCES agent_iterations(id) ON DELETE CASCADE 
         );`),
         new Postgres.Query(`
             CREATE TABLE IF NOT EXISTS chat (
@@ -129,17 +137,17 @@ export class AgentStorage {
         logger.debug('Models configuration not found, creating default config');
 
         const fast: ModelLevelConfig = {
-          provider: 'openai',
+          provider: ModelProviders.OpenAI,
           model_name: 'gpt-4o-mini',
           description: 'Optimized for speed and simple tasks.',
         };
         const smart: ModelLevelConfig = {
-          provider: 'anthropic',
+          provider: ModelProviders.Anthropic,
           model_name: 'claude-3-5-sonnet-latest',
           description: 'Optimized for complex reasoning.',
         };
         const cheap: ModelLevelConfig = {
-          provider: 'openai',
+          provider: ModelProviders.OpenAI,
           model_name: 'gpt-4o-mini',
           description: 'Good cost-performance balance.',
         };
