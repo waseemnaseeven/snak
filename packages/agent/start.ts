@@ -320,7 +320,6 @@ const localRun = async (): Promise<void> => {
         // In future versions, this should be handled by the SupervisorAgent
         await starknetAgent.execute_autonomous();
         console.log(chalk.green('Autonomous execution completed'));
-
       } catch (error) {
         console.error(chalk.red('Error in autonomous mode'));
         logger.error(
@@ -444,7 +443,6 @@ const localRun = async (): Promise<void> => {
             await new Promise((resolve) => setTimeout(resolve, 2000));
           }
         }
-
       } catch (error) {
         console.error(chalk.red('Error in hybrid mode'));
         logger.error('Hybrid mode error:', error);
