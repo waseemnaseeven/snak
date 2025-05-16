@@ -4,6 +4,7 @@ export const placePixelParamSchema = z.object({
   canvasId: z
     .union([z.number(), z.string()])
     .optional()
+    .nullable()
     .default(0)
     .describe('The id or the unique name of the world to dispose the pixel'),
   xPos: z
@@ -19,6 +20,7 @@ export const placePixelParamSchema = z.object({
   color: z
     .string()
     .optional()
+    .nullable()
     .default('0')
     .describe('The color of the pixel by name or by hexadecimal'),
 });

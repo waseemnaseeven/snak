@@ -20,10 +20,12 @@ export const getAllowanceSchema = z.object({
   assetSymbol: z
     .string()
     .optional()
+    .nullable()
     .describe("The symbol of the token (e.g., 'ETH', 'USDC')"),
   assetAddress: z
     .string()
     .optional()
+    .nullable()
     .describe('The address of the token contract'),
 });
 
