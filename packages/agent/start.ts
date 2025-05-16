@@ -274,8 +274,6 @@ const localRun = async (): Promise<void> => {
 
         if (user.toLowerCase() === 'exit') {
           console.log(chalk.blue('Exiting interactive mode...'));
-          // Display token usage summary before exiting interactive mode
-          displayTokenUsageSummary();
           break;
         }
 
@@ -322,9 +320,6 @@ const localRun = async (): Promise<void> => {
         // In future versions, this should be handled by the SupervisorAgent
         await starknetAgent.execute_autonomous();
         console.log(chalk.green('Autonomous execution completed'));
-
-        // Display token usage at the end of autonomous execution
-        displayTokenUsageSummary();
       } catch (error) {
         console.error(chalk.red('Error in autonomous mode'));
         logger.error(
@@ -448,11 +443,6 @@ const localRun = async (): Promise<void> => {
             await new Promise((resolve) => setTimeout(resolve, 2000));
           }
         }
-
-        // When hybrid mode loop ends, display token usage summary
-        if (!isRunning) {
-          displayTokenUsageSummary();
-        }
       } catch (error) {
         console.error(chalk.red('Error in hybrid mode'));
         logger.error('Hybrid mode error:', error);
@@ -473,9 +463,6 @@ const localRun = async (): Promise<void> => {
   } finally {
     // If we're not already shutting down, clean up here
     if (!isShuttingDown) {
-      // Display token usage summary in the finally block
-      displayTokenUsageSummary();
-
       // Clean up resources
       if (globalAgentSystem) {
         try {

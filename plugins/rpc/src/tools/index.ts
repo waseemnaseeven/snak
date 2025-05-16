@@ -18,6 +18,7 @@ import {
   getClassAtSchema,
   getClassHashAtSchema,
   transactionHashSchema,
+  emptyInputSchema,
 } from '../schema/index.js';
 
 export const registerTools = (StarknetToolRegistry: StarknetTool[]) => {
@@ -26,6 +27,7 @@ export const registerTools = (StarknetToolRegistry: StarknetTool[]) => {
     plugins: 'rpc',
     description:
       'Retrieve the unique identifier (chain ID) of the Starknet network',
+    schema: emptyInputSchema,
     execute: getChainId,
   });
 
@@ -33,6 +35,7 @@ export const registerTools = (StarknetToolRegistry: StarknetTool[]) => {
     name: 'get_syncing_status',
     plugins: 'rpc',
     description: 'Retrieve the syncing status of the Starknet node',
+    schema: emptyInputSchema,
     execute: getSyncingStats,
   });
 
@@ -50,6 +53,7 @@ export const registerTools = (StarknetToolRegistry: StarknetTool[]) => {
     name: 'get_spec_version',
     plugins: 'rpc',
     description: 'Get the current spec version from the Starknet RPC provider',
+    schema: emptyInputSchema,
     execute: getSpecVersion,
   });
 
@@ -83,6 +87,7 @@ export const registerTools = (StarknetToolRegistry: StarknetTool[]) => {
     name: 'get_block_number',
     plugins: 'rpc',
     description: 'Get the current block number from the Starknet network',
+    schema: emptyInputSchema,
     execute: getBlockNumber,
   });
 
