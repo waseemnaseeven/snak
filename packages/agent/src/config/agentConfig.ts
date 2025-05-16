@@ -94,6 +94,36 @@ export const createContextFromJson = (json: any): string => {
   return contextParts.join('\n');
 };
 
+export const deepCopyAgentConfig = (config: AgentConfig): AgentConfig => {
+  if (!config) {
+    throw new Error('Cannot copy null or undefined config');
+  }
+
+  const promptCopy = new SystemMessage(config.prompt.content as string);
+
+  const mcpServersCopy = config.mcpServers
+    ? JSON.parse(JSON.stringify(config.mcpServers))
+    : undefined;
+
+  const memoryCopy = config.memory
+    ? JSON.parse(JSON.stringify(config.memory))
+    : config.memory;
+
+  const configCopy: AgentConfig = {
+    name: config.name,
+    prompt: promptCopy,
+    interval: config.interval,
+    chat_id: config.chat_id,
+    plugins: [...config.plugins],
+    memory: memoryCopy,
+    mcpServers: mcpServersCopy,
+    mode: config.mode,
+    maxIteration: config.maxIteration,
+  };
+
+  return configCopy;
+};
+
 /**
  * Helper function to parse agent mode from various formats
  */
