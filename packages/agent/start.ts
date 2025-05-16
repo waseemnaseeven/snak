@@ -24,7 +24,7 @@ import { hybridInitialPrompt } from './src/prompt/prompts.js';
 import { TokenTracker } from './src/token/tokenTracking.js';
 
 const DEBUG = process.env.DEBUG === 'true';
-console.log(`Environment variables: DEBUG=${DEBUG}`);
+logger.debug(`Environment variables: DEBUG=${DEBUG}`);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

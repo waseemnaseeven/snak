@@ -181,9 +181,6 @@ export class AgentSystem {
         [message.conversation_id, message.sender_type, message.content]
       );
       const message_q_res = await Postgres.query<number>(message_q);
-      console.log(
-        `Message inserted into DB: ${JSON.stringify((message_q_res[0] as any).message_id)}`
-      );
       logger.debug(`Messagfe inserted into DB: ${message_q_res[0]}`);
       return message_q_res[0];
     } catch (error) {

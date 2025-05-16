@@ -31,7 +31,7 @@
     "enabled": true,
     "shortTermMemorySize": 5
   },
-  "chat_id": "tete",
+  "chat_id": "snak_guide",
   "plugins": [
     "argent",
     "fibrous",

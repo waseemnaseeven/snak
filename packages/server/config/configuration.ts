@@ -54,9 +54,6 @@ export class ConfigurationService {
       '..',
       this.config.AI_MODELS_CONFIG_PATH
     );
-
-    console.log(process.env.POSTGRES_USER);
-    console.log('Models config path:', process.cwd());
   }
 
   get port(): number {
