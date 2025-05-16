@@ -27,7 +27,7 @@ import { formatAgentResponse } from './src/agents/core/utils.js';
 
 import { AgentSystem, AgentSystemConfig } from './src/agents/index.js';
 import { hybridInitialPrompt } from './src/prompt/prompts.js';
-import { launchMultiAgent } from './multiAgentLauncher.js';
+import { launchMultiAgent } from './src/multi-agent/multiAgentLauncher.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

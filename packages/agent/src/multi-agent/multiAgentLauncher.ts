@@ -1,13 +1,13 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
-import { createBox } from './src/prompt/formatting.js';
-import { load_json_config } from './src/index.js';
+import { createBox } from '../prompt/formatting.js';
+import { load_json_config } from '../index.js';
 import { logger } from '@snakagent/core';
 import { EventEmitter } from 'events';
-import { StarknetAgent } from './src/index.js';
+import { StarknetAgent } from '../index.js';
 import { RpcProvider } from 'starknet';
-import { ModelSelectionAgent } from './src/agents/operators/modelSelectionAgent.js';
+import { ModelSelectionAgent } from '../agents/operators/modelSelectionAgent.js';
 import { deepCopyAgentConfig } from 'config/agentConfig.js';
 
 interface MultiAgentConfig {
