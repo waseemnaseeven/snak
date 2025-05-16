@@ -2,7 +2,7 @@ import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { BaseMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
 import { logger } from '@snakagent/core';
 import { BaseAgent, AgentType, IModelAgent } from '../core/baseAgent.js';
-import { loadModelsConfig, ModelsConfig, ApiKeys } from '@snakagent/core';
+import { ModelsConfig, ApiKeys } from '@snakagent/core';
 import { ChatOpenAI } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
@@ -25,7 +25,7 @@ export interface ModelSelectionCriteria {
 export interface ModelSelectionOptions {
   debugMode?: boolean;
   useModelSelector?: boolean;
-  modelsConfigPath: string;
+  modelsConfig: ModelsConfig;
 }
 
 /**
@@ -37,7 +37,6 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
   private useModelSelector: boolean;
   private modelsConfig: ModelsConfig | null = null;
   private apiKeys: ApiKeys = {};
-  private modelsConfigPath: string;
 
   private static instance: ModelSelectionAgent | null = null;
 
@@ -49,7 +48,7 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
     super('model-selector', AgentType.OPERATOR);
     this.debugMode = options.debugMode || false;
     this.useModelSelector = options.useModelSelector || false;
-    this.modelsConfigPath = options.modelsConfigPath;
+    this.modelsConfig = options.modelsConfig;
 
     ModelSelectionAgent.instance = this;
 
@@ -77,7 +76,6 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
    */
   public async init(): Promise<void> {
     try {
-      this.modelsConfig = await loadModelsConfig(this.modelsConfigPath);
       this.loadApiKeys();
       await this.initializeModels();
       this.validateModels();

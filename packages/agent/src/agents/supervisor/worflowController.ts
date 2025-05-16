@@ -947,7 +947,9 @@ export class WorkflowController {
     config?: Record<string, any>
   ): Promise<AsyncIterable<any>> {
     this.executionId = crypto.randomUUID().substring(0, 8);
-    logger.debug(`WorkflowController[Exec:${this.executionId}]: Starting streaming`);
+    logger.debug(
+      `WorkflowController[Exec:${this.executionId}]: Starting streaming`
+    );
 
     if (!this.initialized) {
       throw new Error('WorkflowController is not initialized');
@@ -955,21 +957,25 @@ export class WorkflowController {
 
     const message = typeof input === 'string' ? new HumanMessage(input) : input;
     const threadId = config?.threadId || this.executionId;
-    const streamMode = config?.streamMode || "values";
-    
-    logger.debug(`WorkflowController[Exec:${this.executionId}]: Using thread ID: ${threadId}, streamMode: ${streamMode}`);
-    
+    const streamMode = config?.streamMode || 'values';
+
+    logger.debug(
+      `WorkflowController[Exec:${this.executionId}]: Using thread ID: ${threadId}, streamMode: ${streamMode}`
+    );
+
     const initialAgent = 'snak'; // Tous les flux commencent avec l'agent 'snak'
-    
+
     const runConfig = {
       configurable: { thread_id: threadId },
       recursionLimit: this.maxIterations * 2,
       streamMode,
-      ...(config || {})
+      ...(config || {}),
     };
 
-    logger.debug(`WorkflowController[Exec:${this.executionId}]: Starting stream with initial agent: ${initialAgent}`);
-    
+    logger.debug(
+      `WorkflowController[Exec:${this.executionId}]: Starting stream with initial agent: ${initialAgent}`
+    );
+
     return this.workflow.stream(
       {
         messages: [message],
@@ -994,7 +1000,9 @@ export class WorkflowController {
     config?: Record<string, any>
   ): Promise<AsyncIterable<any>> {
     this.executionId = crypto.randomUUID().substring(0, 8);
-    logger.debug(`WorkflowController[Exec:${this.executionId}]: Starting streamEvents`);
+    logger.debug(
+      `WorkflowController[Exec:${this.executionId}]: Starting streamEvents`
+    );
 
     if (!this.initialized) {
       throw new Error('WorkflowController is not initialized');
@@ -1002,11 +1010,11 @@ export class WorkflowController {
 
     const message = typeof input === 'string' ? new HumanMessage(input) : input;
     const threadId = config?.threadId || this.executionId;
-    
+
     const runConfig = {
       configurable: { thread_id: threadId },
       recursionLimit: this.maxIterations * 2,
-      ...(config || {})
+      ...(config || {}),
     };
 
     return this.workflow.streamEvents(

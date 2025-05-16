@@ -41,6 +41,7 @@ export const deployContractSchema = z.object({
   constructorArgs: z
     .array(z.string())
     .optional()
+    .nullable()
     .describe(
       'Arguments for the contract constructor in the order specified by getConstructorParams'
     ),
@@ -69,6 +70,7 @@ export const getConstructorParamsSchema = z.object({
   constructorArgs: z
     .array(z.string())
     .optional()
+    .nullable()
     .describe('Arguments for the contract constructor that need to be ordered'),
 });
 

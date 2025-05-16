@@ -438,7 +438,7 @@ export const createHybridAgent = async (
     return {
       app,
       json_config: agent_config,
-      maxIteration: agent_config.maxIteration || 50
+      maxIteration: agent_config.maxIteration || 50,
     };
   } catch (error) {
     logger.error('Failed to create hybrid agent:', error);

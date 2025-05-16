@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RpcProvider } from 'starknet';
 import { envSchema, type EnvConfig } from './env.validation.js';
-import * as fs from 'fs';
 import * as path from 'path';
 import { ModelsConfig, ModelLevelConfig } from '@snakagent/core'; // Assuming core exports these types
 
@@ -52,21 +51,9 @@ export class ConfigurationService {
     // Resolve and load models config
     this.modelsConfigPath = path.resolve(
       process.cwd(),
+      '..',
       this.config.AI_MODELS_CONFIG_PATH
     );
-    try {
-      const modelsFileContent = fs.readFileSync(this.modelsConfigPath, 'utf-8');
-      this.modelsConfig = JSON.parse(modelsFileContent);
-      this.logger.log(
-        `✅ Models configuration loaded from ${this.modelsConfigPath}`
-      );
-    } catch (error) {
-      this.logger.error(
-        `❌ Failed to load models configuration from ${this.modelsConfigPath}:`,
-        error
-      );
-      throw new Error(`Failed to load models configuration: ${error.message}`);
-    }
   }
 
   get port(): number {

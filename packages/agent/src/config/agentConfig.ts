@@ -3,8 +3,7 @@ import chalk from 'chalk';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
-import { logger } from '@snakagent/core';
-import { MemoryConfig } from '../agents/operators/memoryAgent.js';
+import { logger, AgentConfig } from '@snakagent/core';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,21 +33,6 @@ export const AGENT_MODES = {
   [AgentMode.HYBRID]: 'hybrid',
   [AgentMode.INTERACTIVE]: 'interactive',
 };
-
-/**
- * Interface for the JSON configuration object
- */
-export interface AgentConfig {
-  name: string;
-  prompt: SystemMessage;
-  interval: number;
-  chat_id: string;
-  plugins: string[];
-  memory: MemoryConfig;
-  mcpServers?: Record<string, any>;
-  mode: AgentMode;
-  maxIteration: number;
-}
 
 /**
  * Creates a context string from the JSON configuration object
@@ -150,7 +134,6 @@ export const validateConfig = (config: AgentConfig) => {
   const requiredFields = [
     'name',
     'interval',
-    'chat_id',
     'plugins',
     'prompt',
     'mode',
@@ -264,7 +247,7 @@ const checkParseJson = async (
       );
     }
 
-    const json = JSON.parse(jsonData);
+    const json = JSON.parse(jsonData); // TODO don't use any type for json
     if (!json) {
       throw new Error(`Failed to parse JSON from ${configPath}`);
     }

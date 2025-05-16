@@ -57,16 +57,19 @@ export const registerProjectSchema = z.object({
   existingProgramNames: z
     .array(z.string())
     .optional()
+    .nullable()
     .describe(
       'Array of already existing program names to directly add to the project. If provided, no need to generate code.'
     ),
   projectType: z
     .enum(['contract', 'cairo_program'])
     .optional()
+    .nullable()
     .describe('Type of project (contract or cairo_program)'),
   dependencies: z
     .array(z.string())
     .optional()
+    .nullable()
     .describe('List of project dependencies'),
 });
 

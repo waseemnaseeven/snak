@@ -10,21 +10,22 @@ import { StarknetAgent, StarknetAgentConfig } from '../core/starknetAgent.js';
 import { ToolsOrchestrator } from '../operators/toolOrchestratorAgent.js';
 import { MemoryAgent } from '../operators/memoryAgent.js';
 import { WorkflowController } from './worflowController.js';
-import { DatabaseCredentials, logger, metrics } from '@snakagent/core';
+import {
+  DatabaseCredentials,
+  logger,
+  metrics,
+  AgentConfig,
+  ModelsConfig,
+} from '@snakagent/core';
 import { HumanMessage, BaseMessage } from '@langchain/core/messages';
 import { Tool } from '@langchain/core/tools';
-import {
-  AgentConfig,
-  AgentMode,
-  AGENT_MODES,
-} from '../../config/agentConfig.js';
+import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
 import { RpcProvider } from 'starknet';
-
 /**
  * Configuration for the SupervisorAgent.
  */
 export interface SupervisorAgentConfig {
-  modelsConfigPath: string;
+  modelsConfig: ModelsConfig;
   starknetConfig: StarknetAgentConfig;
   debug?: boolean;
 }
@@ -67,7 +68,7 @@ export class SupervisorAgent extends BaseAgent {
     SupervisorAgent.instance = this;
 
     this.config = {
-      modelsConfigPath: configObject.modelsConfigPath || '',
+      modelsConfig: configObject.modelsConfig || '',
       starknetConfig: configObject.starknetConfig || {
         provider: {} as RpcProvider, // Default empty provider
         accountPublicKey: '',
@@ -98,7 +99,7 @@ export class SupervisorAgent extends BaseAgent {
       this.modelSelectionAgent = new ModelSelectionAgent({
         debugMode: this.debug,
         useModelSelector: true,
-        modelsConfigPath: this.config.modelsConfigPath,
+        modelsConfig: this.config.modelsConfig,
       });
       await this.modelSelectionAgent.init();
       this.operators.set(this.modelSelectionAgent.id, this.modelSelectionAgent);
@@ -125,7 +126,6 @@ export class SupervisorAgent extends BaseAgent {
         provider: this.config.starknetConfig.provider,
         accountPublicKey: this.config.starknetConfig.accountPublicKey,
         accountPrivateKey: this.config.starknetConfig.accountPrivateKey,
-        signature: this.config.starknetConfig.signature,
         modelSelector: this.modelSelectionAgent,
         memory: this.config.starknetConfig.agentConfig?.memory,
         agentConfig: this.config.starknetConfig.agentConfig,
@@ -601,6 +601,7 @@ export class SupervisorAgent extends BaseAgent {
     }
 
     try {
+      // TODO: Remove chat_id from agent_config and move it to request body to support multiple conversations per agent
       const memories = await this.memoryAgent.retrieveRelevantMemories(
         message,
         this.config.starknetConfig.agentConfig?.chat_id || 'default_chat'
@@ -802,8 +803,10 @@ export class SupervisorAgent extends BaseAgent {
   ): Promise<AsyncIterable<any>> {
     this.executionDepth++;
     const depthIndent = '  '.repeat(this.executionDepth);
-    logger.debug(`${depthIndent}SupervisorAgent[Depth:${this.executionDepth}]: Streaming task`);
-    
+    logger.debug(
+      `${depthIndent}SupervisorAgent[Depth:${this.executionDepth}]: Streaming task`
+    );
+
     // Protection contre la récursion infinie
     if (this.executionDepth > 3) {
       this.executionDepth--;
@@ -817,7 +820,11 @@ export class SupervisorAgent extends BaseAgent {
         message = new HumanMessage(input);
       } else if (input instanceof BaseMessage) {
         message = input;
-      } else if (typeof input === 'object' && input !== null && 'content' in input) {
+      } else if (
+        typeof input === 'object' &&
+        input !== null &&
+        'content' in input
+      ) {
         if (typeof input.content === 'string') {
           message = new HumanMessage(input.content);
         } else {
@@ -832,8 +839,13 @@ export class SupervisorAgent extends BaseAgent {
       }
 
       // Enrichir avec le contexte mémoire si disponible
-      if (this.config.starknetConfig.agentConfig?.memory?.enabled !== false && this.memoryAgent) {
-        logger.debug(`${depthIndent}SupervisorAgent: Enriching message with memory context for streaming.`);
+      if (
+        this.config.starknetConfig.agentConfig?.memory?.enabled !== false &&
+        this.memoryAgent
+      ) {
+        logger.debug(
+          `${depthIndent}SupervisorAgent: Enriching message with memory context for streaming.`
+        );
         message = await this.enrichWithMemoryContext(message);
       }
 
@@ -841,12 +853,14 @@ export class SupervisorAgent extends BaseAgent {
         throw new Error('WorkflowController not initialized for streaming');
       }
 
-      logger.debug(`${depthIndent}SupervisorAgent: Streaming via WorkflowController.`);
-      
+      logger.debug(
+        `${depthIndent}SupervisorAgent: Streaming via WorkflowController.`
+      );
+
       // Créer un wrapper pour gérer la profondeur d'exécution à la fin du stream
       const stream = await this.workflowController.stream(message, config);
       const self = this;
-      
+
       return {
         [Symbol.asyncIterator]() {
           const iterator = stream[Symbol.asyncIterator]();
@@ -856,21 +870,27 @@ export class SupervisorAgent extends BaseAgent {
                 const result = await iterator.next();
                 if (result.done) {
                   self.executionDepth--;
-                  logger.debug(`${depthIndent}SupervisorAgent: Streaming finished, depth now ${self.executionDepth}`);
+                  logger.debug(
+                    `${depthIndent}SupervisorAgent: Streaming finished, depth now ${self.executionDepth}`
+                  );
                 }
                 return result;
               } catch (error) {
                 self.executionDepth--;
-                logger.error(`${depthIndent}SupervisorAgent: Streaming error: ${error}`);
+                logger.error(
+                  `${depthIndent}SupervisorAgent: Streaming error: ${error}`
+                );
                 throw error;
               }
-            }
+            },
           };
-        }
+        },
       };
     } catch (error) {
       this.executionDepth--;
-      logger.error(`${depthIndent}SupervisorAgent: Error setting up streaming: ${error}`);
+      logger.error(
+        `${depthIndent}SupervisorAgent: Error setting up streaming: ${error}`
+      );
       throw error;
     }
   }
@@ -885,7 +905,9 @@ export class SupervisorAgent extends BaseAgent {
   ): Promise<AsyncIterable<any>> {
     logger.debug('SupervisorAgent: Entering autonomous streaming mode.');
     if (!this.starknetAgent) {
-      throw new Error('StarknetAgent is not available for autonomous streaming.');
+      throw new Error(
+        'StarknetAgent is not available for autonomous streaming.'
+      );
     }
     return this.starknetAgent.stream_autonomous(config);
   }
@@ -919,9 +941,13 @@ export class SupervisorAgent extends BaseAgent {
     threadId: string,
     config?: Record<string, any>
   ): Promise<AsyncIterable<any>> {
-    logger.debug(`SupervisorAgent: Resuming hybrid streaming for thread ${threadId}.`);
+    logger.debug(
+      `SupervisorAgent: Resuming hybrid streaming for thread ${threadId}.`
+    );
     if (!this.starknetAgent) {
-      throw new Error('StarknetAgent is not available to resume hybrid streaming.');
+      throw new Error(
+        'StarknetAgent is not available to resume hybrid streaming.'
+      );
     }
     return this.starknetAgent.stream_resume_hybrid(input, threadId, config);
   }

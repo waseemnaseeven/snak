@@ -1,21 +1,16 @@
 import { BaseAgent, AgentType, IModelAgent } from '../core/baseAgent.js';
 import { RpcProvider } from 'starknet';
 import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
-import { logger, metrics } from '@snakagent/core';
+import { logger, metrics, AgentConfig } from '@snakagent/core';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { BaseMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
 import { DatabaseCredentials } from '../../tools/types/database.js';
-import {
-  AgentConfig,
-  AgentMode,
-  AGENT_MODES,
-} from '../../config/agentConfig.js';
+import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
 import { MemoryConfig } from '../operators/memoryAgent.js';
 import { createInteractiveAgent } from '../modes/interactive.js';
 import { createAutonomousAgent } from '../modes/autonomous.js';
 import { createHybridAgent } from '../modes/hybrid.js';
 import { Command } from '@langchain/langgraph';
-
 /**
  * Configuration for StarknetAgent
  */
@@ -23,9 +18,8 @@ export interface StarknetAgentConfig {
   provider: RpcProvider;
   accountPublicKey: string;
   accountPrivateKey: string;
-  signature: string;
   db_credentials: DatabaseCredentials;
-  agentConfig?: AgentConfig;
+  agentConfig: AgentConfig;
   memory?: MemoryConfig;
   modelSelector?: ModelSelectionAgent;
 }
@@ -39,7 +33,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   private readonly accountPublicKey: string;
   private readonly signature: string;
   private readonly agentMode: string;
-  private readonly agentConfig: AgentConfig | null;
+  private readonly agentConfig: AgentConfig;
   private readonly db_credentials: DatabaseCredentials;
   private memory: MemoryConfig;
   private currentMode: string;
@@ -53,13 +47,12 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
     this.provider = config.provider;
     this.accountPrivateKey = config.accountPrivateKey;
     this.accountPublicKey = config.accountPublicKey;
-    this.signature = config.signature;
     this.agentMode =
       AGENT_MODES[config.agentConfig?.mode || AgentMode.INTERACTIVE];
     this.db_credentials = config.db_credentials;
     this.currentMode =
       AGENT_MODES[config.agentConfig?.mode || AgentMode.INTERACTIVE];
-    this.agentConfig = config.agentConfig || null;
+    this.agentConfig = config.agentConfig;
     this.memory = config.memory || {};
     this.modelSelector = config.modelSelector || null;
 
@@ -243,7 +236,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
    * Get agent configuration.
    * @returns The agent configuration object, or undefined if not set.
    */
-  public getAgentConfig(): AgentConfig | null {
+  public getAgentConfig(): AgentConfig {
     return this.agentConfig;
   }
 
@@ -473,7 +466,6 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
           { messages: currentMessages },
           { configurable: { thread_id: 'default' } }
         );
-
         if (result?.messages?.length > 0) {
           for (let i = result.messages.length - 1; i >= 0; i--) {
             const msg = result.messages[i];
@@ -1188,21 +1180,25 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   ): Promise<AsyncIterable<any>> {
     try {
       logger.debug(`StarknetAgent streaming with mode: ${this.currentMode}`);
-      
+
       if (!this.agentReactExecutor) {
-        logger.debug('StarknetAgent: No executor exists, attempting to create one.');
+        logger.debug(
+          'StarknetAgent: No executor exists, attempting to create one.'
+        );
         try {
           await this.createAgentReactExecutor();
         } catch (initError) {
-          logger.error(`StarknetAgent: Failed to initialize executor for streaming: ${initError}`);
+          logger.error(
+            `StarknetAgent: Failed to initialize executor for streaming: ${initError}`
+          );
           throw initError;
         }
       }
-      
+
       if (!this.agentReactExecutor?.app) {
         throw new Error('Agent executor app is not initialized');
       }
-      
+
       let currentMessages: BaseMessage[];
       if (input instanceof BaseMessage) {
         currentMessages = [input];
@@ -1211,15 +1207,15 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
       } else {
         throw new Error(`Unsupported input type: ${typeof input}`);
       }
-      
+
       // La valeur par défaut du mode de streaming est "messages" pour voir le texte token par token
-      const streamMode = config?.streamMode || "messages";
-      
+      const streamMode = config?.streamMode || 'messages';
+
       return this.agentReactExecutor.app.stream(
         { messages: currentMessages },
         {
           configurable: { thread_id: config?.threadId || 'default' },
-          streamMode
+          streamMode,
         }
       );
     } catch (error) {
@@ -1238,34 +1234,39 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   ): Promise<AsyncIterable<any>> {
     try {
       logger.debug('StarknetAgent: Starting autonomous streaming');
-      
+
       if (!this.agentReactExecutor) {
-        logger.debug('StarknetAgent: No executor exists, attempting to create one.');
+        logger.debug(
+          'StarknetAgent: No executor exists, attempting to create one.'
+        );
         try {
           await this.createAgentReactExecutor();
         } catch (initError) {
-          logger.error(`StarknetAgent: Failed to initialize executor for autonomous streaming: ${initError}`);
+          logger.error(
+            `StarknetAgent: Failed to initialize executor for autonomous streaming: ${initError}`
+          );
           throw initError;
         }
       }
-      
+
       if (!this.agentReactExecutor?.app) {
         throw new Error('Agent executor app is not initialized');
       }
-      
+
       const initialHumanMessage = new HumanMessage({
-        content: this.agentReactExecutor.json_config?.prompt?.initial_goal || 
-                 'Start executing the primary objective defined in your system prompt.'
+        content:
+          this.agentReactExecutor.json_config?.prompt?.initial_goal ||
+          'Start executing the primary objective defined in your system prompt.',
       });
-      
-      const streamMode = config?.streamMode || "messages";
-      
+
+      const streamMode = config?.streamMode || 'messages';
+
       return this.agentReactExecutor.app.stream(
         { messages: [initialHumanMessage] },
         {
           configurable: { thread_id: config?.threadId || 'autonomous_session' },
           recursionLimit: this.agentReactExecutor.maxIteration,
-          streamMode
+          streamMode,
         }
       );
     } catch (error) {
@@ -1286,33 +1287,40 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   ): Promise<AsyncIterable<any>> {
     try {
       logger.debug('StarknetAgent: Starting hybrid streaming');
-      
+
       this.currentMode = AGENT_MODES[AgentMode.HYBRID];
-      
-      if (!this.agentReactExecutor || this.agentConfig?.mode !== AgentMode.HYBRID) {
-        logger.debug('StarknetAgent: Creating or re-creating hybrid agent executor.');
+
+      if (
+        !this.agentReactExecutor ||
+        this.agentConfig?.mode !== AgentMode.HYBRID
+      ) {
+        logger.debug(
+          'StarknetAgent: Creating or re-creating hybrid agent executor.'
+        );
         try {
           await this.createAgentReactExecutor();
         } catch (initError) {
-          logger.error(`StarknetAgent: Failed to initialize executor for hybrid streaming: ${initError}`);
+          logger.error(
+            `StarknetAgent: Failed to initialize executor for hybrid streaming: ${initError}`
+          );
           throw initError;
         }
       }
-      
+
       if (!this.agentReactExecutor?.app) {
         throw new Error('Hybrid agent app is not initialized');
       }
-      
+
       const initialHumanMessage = new HumanMessage({ content: initialInput });
       const threadId = config?.threadId || `hybrid_${Date.now()}`;
-      const streamMode = config?.streamMode || "values";
-      
+      const streamMode = config?.streamMode || 'values';
+
       return this.agentReactExecutor.app.stream(
         { messages: [initialHumanMessage] },
         {
           configurable: { thread_id: threadId },
           recursionLimit: this.agentReactExecutor.maxIteration,
-          streamMode
+          streamMode,
         }
       );
     } catch (error) {
@@ -1335,19 +1343,19 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   ): Promise<AsyncIterable<any>> {
     try {
       logger.debug(`Resuming hybrid streaming with thread ID: ${threadId}`);
-      
+
       if (!this.agentReactExecutor?.app) {
         throw new Error('Hybrid agent app is not initialized');
       }
-      
-      const streamMode = config?.streamMode || "values";
-      
+
+      const streamMode = config?.streamMode || 'values';
+
       return this.agentReactExecutor.app.stream(
         new Command({ resume: input }),
         {
           configurable: { thread_id: threadId },
           recursionLimit: this.agentReactExecutor.maxIteration,
-          streamMode
+          streamMode,
         }
       );
     } catch (error) {

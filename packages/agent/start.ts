@@ -1,7 +1,3 @@
-// Simple log configuration - set DEBUG=true to enable debug logs
-const DEBUG = process.env.DEBUG === 'true';
-console.log(`Environment variables: DEBUG=${DEBUG}`);
-
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { createSpinner } from 'nanospinner';
@@ -11,7 +7,6 @@ import { Postgres } from '@snakagent/database';
 import {
   load_json_config,
   AgentMode,
-  AgentConfig,
   AGENT_MODES,
 } from './src/config/agentConfig.js';
 import { createBox } from './src/prompt/formatting.js';
@@ -21,13 +16,15 @@ import * as fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { logger } from '@snakagent/core';
+import { logger, AgentConfig, ModelsConfig } from '@snakagent/core';
 import { DatabaseCredentials } from './src/tools/types/database.js';
 import { formatAgentResponse } from './src/agents/core/utils.js';
-
-import { AgentSystem, AgentSystemConfig } from './src/agents/index.js';
+import { AgentSystem, AgentSystemConfig, Message } from './src/agents/index.js';
 import { hybridInitialPrompt } from './src/prompt/prompts.js';
 import { TokenTracker } from './src/token/tokenTracking.js';
+
+const DEBUG = process.env.DEBUG === 'true';
+logger.debug(`Environment variables: DEBUG=${DEBUG}`);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -160,11 +157,17 @@ const localRun = async (): Promise<void> => {
     const { agentPath, modelsConfigPath } = await loadCommand();
 
     // Load initial agent config
-    let json_config: AgentConfig = await load_json_config(agentPath);
-    if (!json_config) {
+    let agent_config: AgentConfig = await load_json_config(agentPath);
+    if (!agent_config) {
       throw new Error(`Failed to load agent configuration from ${agentPath}`);
     }
-
+    const modelData = await fs.promises.readFile(modelsConfigPath, 'utf8');
+    const modelsConfig: ModelsConfig = JSON.parse(modelData) as ModelsConfig;
+    if (!modelsConfig) {
+      throw new Error(
+        `Failed to load models configuration from ${modelsConfig}`
+      );
+    }
     // Load environment variables
     loadEnvVars();
 
@@ -183,7 +186,7 @@ const localRun = async (): Promise<void> => {
     }
 
     // Use the mode from agent configuration
-    const agentMode = json_config.mode;
+    const agentMode = agent_config.mode;
 
     clearScreen();
     console.log(logo);
@@ -224,11 +227,10 @@ const localRun = async (): Promise<void> => {
       starknetProvider: provider,
       accountPrivateKey: process.env.STARKNET_PRIVATE_KEY!,
       accountPublicKey: process.env.STARKNET_PUBLIC_ADDRESS!,
-      modelsConfigPath, // Already loaded
+      modelsConfig: modelsConfig, // Already loaded
       agentMode: agentMode,
-      signature: '', // TODO: Implement signature handling
       databaseCredentials: database,
-      agentConfigPath: agentPath, // Pass the PATH to the agent config file
+      agentConfigPath: agent_config, // Pass the PATH to the agent config file
       debug: DEBUG,
     };
 
@@ -241,7 +243,7 @@ const localRun = async (): Promise<void> => {
 
     spinner.success({
       text: chalk.black(
-        `Agent System "${chalk.cyan(json_config?.name || 'Unknown')}" initialized successfully`
+        `Agent System "${chalk.cyan(agent_config?.name || 'Unknown')}" initialized successfully`
       ),
     });
 
@@ -272,8 +274,6 @@ const localRun = async (): Promise<void> => {
 
         if (user.toLowerCase() === 'exit') {
           console.log(chalk.blue('Exiting interactive mode...'));
-          // Display token usage summary before exiting interactive mode
-          displayTokenUsageSummary();
           break;
         }
 
@@ -306,7 +306,7 @@ const localRun = async (): Promise<void> => {
 
       try {
         // Verify autonomous mode is enabled in the configuration
-        if (json_config?.mode !== AgentMode.AUTONOMOUS) {
+        if (agent_config?.mode !== AgentMode.AUTONOMOUS) {
           throw new Error('Autonomous mode is disabled in agent configuration');
         }
 
@@ -320,9 +320,6 @@ const localRun = async (): Promise<void> => {
         // In future versions, this should be handled by the SupervisorAgent
         await starknetAgent.execute_autonomous();
         console.log(chalk.green('Autonomous execution completed'));
-
-        // Display token usage at the end of autonomous execution
-        displayTokenUsageSummary();
       } catch (error) {
         console.error(chalk.red('Error in autonomous mode'));
         logger.error(
@@ -446,11 +443,6 @@ const localRun = async (): Promise<void> => {
             await new Promise((resolve) => setTimeout(resolve, 2000));
           }
         }
-
-        // When hybrid mode loop ends, display token usage summary
-        if (!isRunning) {
-          displayTokenUsageSummary();
-        }
       } catch (error) {
         console.error(chalk.red('Error in hybrid mode'));
         logger.error('Hybrid mode error:', error);
@@ -471,9 +463,6 @@ const localRun = async (): Promise<void> => {
   } finally {
     // If we're not already shutting down, clean up here
     if (!isShuttingDown) {
-      // Display token usage summary in the finally block
-      displayTokenUsageSummary();
-
       // Clean up resources
       if (globalAgentSystem) {
         try {
