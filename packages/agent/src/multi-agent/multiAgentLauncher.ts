@@ -70,7 +70,6 @@ async function launchAgentAsync(
       throw new Error(`Failed to load agent configuration from ${agentPath}`);
     }
     const agentConfigCopy = deepCopyAgentConfig(agentConfig);
-    //const agentConfigCopy = JSON.parse(JSON.stringify(agentConfig)); // ISSUE HERE
     agentConfigCopy.chat_id = `${agentConfigCopy.chat_id || agentType}_${agentId}`;
     const modelSelectionAgent = new ModelSelectionAgent({
       useModelSelector: true,
