@@ -10,21 +10,22 @@ import { StarknetAgent, StarknetAgentConfig } from '../core/starknetAgent.js';
 import { ToolsOrchestrator } from '../operators/toolOrchestratorAgent.js';
 import { MemoryAgent } from '../operators/memoryAgent.js';
 import { WorkflowController } from './worflowController.js';
-import { DatabaseCredentials, logger, metrics } from '@snakagent/core';
+import {
+  DatabaseCredentials,
+  logger,
+  metrics,
+  AgentConfig,
+  ModelsConfig,
+} from '@snakagent/core';
 import { HumanMessage, BaseMessage } from '@langchain/core/messages';
 import { Tool } from '@langchain/core/tools';
-import {
-  AgentConfig,
-  AgentMode,
-  AGENT_MODES,
-} from '../../config/agentConfig.js';
+import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
 import { RpcProvider } from 'starknet';
-
 /**
  * Configuration for the SupervisorAgent.
  */
 export interface SupervisorAgentConfig {
-  modelsConfigPath: string;
+  modelsConfig: ModelsConfig;
   starknetConfig: StarknetAgentConfig;
   debug?: boolean;
 }
@@ -67,7 +68,7 @@ export class SupervisorAgent extends BaseAgent {
     SupervisorAgent.instance = this;
 
     this.config = {
-      modelsConfigPath: configObject.modelsConfigPath || '',
+      modelsConfig: configObject.modelsConfig || '',
       starknetConfig: configObject.starknetConfig || {
         provider: {} as RpcProvider, // Default empty provider
         accountPublicKey: '',
@@ -98,7 +99,7 @@ export class SupervisorAgent extends BaseAgent {
       this.modelSelectionAgent = new ModelSelectionAgent({
         debugMode: this.debug,
         useModelSelector: true,
-        modelsConfigPath: this.config.modelsConfigPath,
+        modelsConfig: this.config.modelsConfig,
       });
       await this.modelSelectionAgent.init();
       this.operators.set(this.modelSelectionAgent.id, this.modelSelectionAgent);
@@ -125,7 +126,6 @@ export class SupervisorAgent extends BaseAgent {
         provider: this.config.starknetConfig.provider,
         accountPublicKey: this.config.starknetConfig.accountPublicKey,
         accountPrivateKey: this.config.starknetConfig.accountPrivateKey,
-        signature: this.config.starknetConfig.signature,
         modelSelector: this.modelSelectionAgent,
         memory: this.config.starknetConfig.agentConfig?.memory,
         agentConfig: this.config.starknetConfig.agentConfig,
@@ -601,6 +601,7 @@ export class SupervisorAgent extends BaseAgent {
     }
 
     try {
+      // TODO: Remove chat_id from agent_config and move it to request body to support multiple conversations per agent
       const memories = await this.memoryAgent.retrieveRelevantMemories(
         message,
         this.config.starknetConfig.agentConfig?.chat_id || 'default_chat'

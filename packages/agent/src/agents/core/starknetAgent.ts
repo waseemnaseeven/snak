@@ -1,21 +1,16 @@
 import { BaseAgent, AgentType, IModelAgent } from '../core/baseAgent.js';
 import { RpcProvider } from 'starknet';
 import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
-import { logger, metrics } from '@snakagent/core';
+import { logger, metrics, AgentConfig } from '@snakagent/core';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { BaseMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
 import { DatabaseCredentials } from '../../tools/types/database.js';
-import {
-  AgentConfig,
-  AgentMode,
-  AGENT_MODES,
-} from '../../config/agentConfig.js';
+import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
 import { MemoryConfig } from '../operators/memoryAgent.js';
 import { createInteractiveAgent } from '../modes/interactive.js';
 import { createAutonomousAgent } from '../modes/autonomous.js';
 import { createHybridAgent } from '../modes/hybrid.js';
 import { Command } from '@langchain/langgraph';
-
 /**
  * Configuration for StarknetAgent
  */
@@ -23,7 +18,6 @@ export interface StarknetAgentConfig {
   provider: RpcProvider;
   accountPublicKey: string;
   accountPrivateKey: string;
-  signature: string;
   db_credentials: DatabaseCredentials;
   agentConfig: AgentConfig;
   memory?: MemoryConfig;
@@ -53,7 +47,6 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
     this.provider = config.provider;
     this.accountPrivateKey = config.accountPrivateKey;
     this.accountPublicKey = config.accountPublicKey;
-    this.signature = config.signature;
     this.agentMode =
       AGENT_MODES[config.agentConfig?.mode || AgentMode.INTERACTIVE];
     this.db_credentials = config.db_credentials;
@@ -473,7 +466,6 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
           { messages: currentMessages },
           { configurable: { thread_id: 'default' } }
         );
-
         if (result?.messages?.length > 0) {
           for (let i = result.messages.length - 1; i >= 0; i--) {
             const msg = result.messages[i];

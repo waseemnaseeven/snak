@@ -1,16 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { RpcProvider } from 'starknet';
-import {
-  StarknetAgent,
-  registerTools,
-  StarknetTool,
-  AgentConfig,
-} from '@snakagent/agents';
+import { StarknetAgent, registerTools, StarknetTool } from '@snakagent/agents';
 import path from 'path';
 import * as dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { AgentConfig } from '@snakagent/core';
 import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -60,7 +56,6 @@ export const RegisterToolInServer = async (allowed_tools: string[]) => {
     provider: new RpcProvider({ nodeUrl: process.env.STARKNET_RPC_URL }),
     accountPrivateKey: process.env.STARKNET_PRIVATE_KEY as string,
     accountPublicKey: process.env.STARKNET_PUBLIC_ADDRESS as string,
-    signature: 'key',
     db_credentials: database,
     agentConfig: defaultAgentConfig as AgentConfig,
   });

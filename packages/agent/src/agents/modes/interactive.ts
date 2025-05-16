@@ -5,7 +5,7 @@ import {
   ChatPromptTemplate,
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
-import { logger } from '@snakagent/core';
+import { logger, AgentConfig } from '@snakagent/core';
 import { StarknetAgentInterface } from '../../tools/tools.js';
 import {
   initializeToolsList,
@@ -48,7 +48,7 @@ export const createInteractiveAgent = async (
   modelSelector: ModelSelectionAgent | null
 ) => {
   try {
-    const agent_config = starknetAgent.getAgentConfig();
+    const agent_config: AgentConfig = starknetAgent.getAgentConfig();
     if (!agent_config) {
       throw new Error('Agent configuration is required');
     }
@@ -135,25 +135,12 @@ User Memory Context:
       if (!agent_config) {
         throw new Error('Agent configuration is required but not available');
       }
-      if (
-        !agent_config.name ||
-        !(agent_config as any).bio ||
-        !Array.isArray((agent_config as any).objectives) ||
-        (agent_config as any).objectives.length === 0 ||
-        !Array.isArray((agent_config as any).knowledge) ||
-        (agent_config as any).knowledge.length === 0
-      ) {
-        throw new Error(
-          'Agent configuration is incomplete (name, bio, objectives, or knowledge missing)'
-        );
-      }
 
       const interactiveSystemPrompt = `
         ${baseSystemPrompt(agent_config)}
         ${interactiveRules}
         Available tools: ${toolsList.map((tool) => tool.name).join(', ')}
       `;
-
       const prompt = ChatPromptTemplate.fromMessages([
         [
           'system',
@@ -203,6 +190,7 @@ User Memory Context:
               : modelForThisTask;
 
           const result = await boundModel.invoke(currentFormattedPrompt);
+
           TokenTracker.trackCall(result, selectedModelType);
           return formatAIMessageResult(result);
         } else {
@@ -282,6 +270,7 @@ User Memory Context:
             };
           }
         }
+        logger.error(`Model invocation failed: ${error}`);
         throw error;
       }
     }

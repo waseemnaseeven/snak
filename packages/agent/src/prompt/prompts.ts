@@ -2,27 +2,7 @@ import { MessageContent } from '@langchain/core/messages';
 import { AgentConfig } from '../config/agentConfig.js';
 
 export const baseSystemPrompt = (agent_config: AgentConfig): string => {
-  return `
-        ${agent_config?.prompt?.content || ''}
-
-        Your name: ${agent_config?.name}
-        Your bio: ${(agent_config as any)?.bio}
-
-        Your Lore:
-        ${((agent_config as any).lore as string[])
-          .map((lore: string) => `- ${lore}`)
-          .join('\n')}
-
-        Your objectives:
-        ${((agent_config as any).objectives as string[])
-          .map((obj: string) => `- ${obj}`)
-          .join('\n')}
-
-        Your knowledge:
-        ${((agent_config as any).knowledge as string[])
-          .map((k: string) => `- ${k}`)
-          .join('\n')}
-    `;
+  return agent_config.prompt.content.toString();
 };
 
 export const interactiveRules = `

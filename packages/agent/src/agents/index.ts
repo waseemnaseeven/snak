@@ -3,9 +3,48 @@ import {
   SupervisorAgentConfig,
 } from './supervisor/supervisorAgent.js';
 import { RpcProvider } from 'starknet';
-import { logger } from '@snakagent/core';
-import { AgentConfig, AgentMode } from '../config/agentConfig.js';
+import { logger, AgentConfig, ModelsConfig } from '@snakagent/core';
+import { AgentMode } from '../config/agentConfig.js';
+import { Postgres } from '@snakagent/database';
+export interface Conversation {
+  conversation_name: string;
+}
 
+export interface Message {
+  conversation_id: number;
+  sender_type: string;
+  content: string;
+  status: string;
+}
+
+export interface ConversationResponse {
+  conversation_id: number;
+  conversation_name: string;
+}
+
+export interface OutputResponse {
+  index: number;
+  type: string;
+  text: string;
+}
+export interface Response {
+  output: Message;
+  input: Message;
+}
+
+export interface ErrorResponse {
+  statusCode: number;
+  name: string;
+  errorCode: string;
+  errorMessage: string;
+}
+
+export interface ServerState {
+  index: number;
+  type: string;
+  status: string;
+  text: string;
+}
 /**
  * Configuration for the agent system initialization
  */
@@ -13,11 +52,10 @@ export interface AgentSystemConfig {
   starknetProvider: RpcProvider;
   accountPrivateKey: string;
   accountPublicKey: string;
-  modelsConfigPath: string;
+  modelsConfig: ModelsConfig;
   agentMode: AgentMode;
-  signature: string;
   databaseCredentials: any;
-  agentConfigPath?: string;
+  agentConfigPath?: AgentConfig;
   debug?: boolean;
 }
 
@@ -46,32 +84,37 @@ export class AgentSystem {
           `AgentSystem: Loading agent configuration from: ${this.config.agentConfigPath}`
         );
         try {
-          this.agentConfig = await this.loadAgentConfig(
-            this.config.agentConfigPath
-          );
+          if (typeof this.config.agentConfigPath === 'string') {
+            this.agentConfig = await this.loadAgentConfig(
+              this.config.agentConfigPath
+            );
+          } else {
+            this.agentConfig = this.config.agentConfigPath;
+          }
         } catch (loadError) {
           logger.error(
             `AgentSystem: Failed to load agent configuration: ${loadError}`
           );
           // Continue without agentConfig if loading fails
-          this.agentConfig = null;
         }
       } else {
         logger.warn(
           'AgentSystem: No agentConfigPath provided, proceeding without agent-specific configuration.'
         );
-        this.agentConfig = null;
+      }
+
+      if (!this.agentConfig) {
+        throw new Error('Agent configuration is required');
       }
 
       // Create the config object for SupervisorAgent
       const supervisorConfigObject: SupervisorAgentConfig = {
-        modelsConfigPath: this.config.modelsConfigPath,
+        modelsConfig: this.config.modelsConfig,
         debug: this.config.debug,
         starknetConfig: {
           provider: this.config.starknetProvider,
           accountPrivateKey: this.config.accountPrivateKey,
           accountPublicKey: this.config.accountPublicKey,
-          signature: this.config.signature,
           agentConfig: this.agentConfig,
           db_credentials: this.config.databaseCredentials,
         },
@@ -109,6 +152,43 @@ export class AgentSystem {
     }
   }
 
+  private async check_if_conversation_exists(
+    conversation_id: number
+  ): Promise<boolean> {
+    try {
+      const conversation_q = new Postgres.Query(
+        `SELECT EXISTS(SELECT 1 FROM conversation WHERE conversation_id = $1)`,
+        [conversation_id]
+      );
+
+      const conversation_q_res = await Postgres.query<boolean>(
+        conversation_q
+      ).catch((error) => {
+        throw new Error(`Error checking conversation existence: ${error}`);
+      });
+      logger.debug('Conversation exists:', conversation_q_res);
+      return true;
+    } catch (error) {
+      logger.error(error);
+      throw error;
+    }
+  }
+  private async insert_message_into_db(message: Message): Promise<number> {
+    try {
+      const message_q = new Postgres.Query(
+        `
+        INSERT INTO message (conversation_id, sender_type, content) VALUES ($1, $2, $3) RETURNING message_id`,
+        [message.conversation_id, message.sender_type, message.content]
+      );
+      const message_q_res = await Postgres.query<number>(message_q);
+      logger.debug(`Messagfe inserted into DB: ${message_q_res[0]}`);
+      return message_q_res[0];
+    } catch (error) {
+      logger.error(error);
+      throw error;
+    }
+  }
+
   /**
    * Executes a command using the agent system.
    * @param input The input string for the command.
@@ -117,7 +197,7 @@ export class AgentSystem {
    * @throws Will throw an error if the agent system is not initialized or if execution fails.
    */
   public async execute(
-    input: string,
+    message: Message | string,
     config?: Record<string, any>
   ): Promise<any> {
     if (!this.supervisorAgent) {
@@ -125,7 +205,36 @@ export class AgentSystem {
     }
 
     try {
-      return await this.supervisorAgent.execute(input, config);
+      // TODO : make start send a message type instead of string
+      if (typeof message === 'string') {
+        message = {
+          conversation_id: 0,
+          sender_type: 'user',
+          content: message,
+          status: 'success',
+        };
+      }
+      Postgres.connect(this.config.databaseCredentials);
+      logger.debug(
+        `AgentSystem: Executing command with input: ${JSON.stringify(message)}`
+      );
+      const response = await this.supervisorAgent.execute(
+        message.content,
+        config
+      );
+      logger.debug(JSON.stringify(response));
+      await this.check_if_conversation_exists(message.conversation_id);
+      await this.insert_message_into_db(message);
+      if (typeof response === 'string') {
+        const r_msg: Message = {
+          conversation_id: message.conversation_id,
+          sender_type: 'ai',
+          content: response,
+          status: 'success',
+        };
+        await this.insert_message_into_db(r_msg);
+      }
+      return response;
     } catch (error) {
       logger.error(`AgentSystem: Execution error: ${error}`);
       throw error;
