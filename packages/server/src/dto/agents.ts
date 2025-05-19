@@ -14,6 +14,15 @@ export class AgentRequestDTO {
   agent_id: number;
 }
 
+export class WebsocketAgentRequestDTO {
+  @IsNotEmpty()
+  request: Message;
+  @IsNotEmpty()
+  agent_id: number;
+  @IsNotEmpty()
+  socket_id: string;
+}
+
 // TODO add agentgs to the request(to be able to devide the request to the agent,
 // and also create same convesation name but for two distinc agents)
 export class CreateConversationRequestDTO {
@@ -78,6 +87,18 @@ export class AgentDeleteRequestDTO {
   agent_id: number;
 }
 
+export class WebsocketAgentDeleteRequestDTO {
+  @IsNotEmpty()
+  agent_id: number;
+  @IsNotEmpty()
+  socket_id: string;
+}
+
+export class WebsocketGetAgentsRequestDTO {
+  @IsNotEmpty()
+  socket_id: string;
+}
+
 export class AgentDeletesRequestDTO {
   @IsNotEmpty()
   agent_id: number[];
@@ -87,6 +108,15 @@ export class AgentAddRequestDTO {
   @IsNotEmpty()
   agent: AgentInitializationDTO;
 }
+
+
+export class WebsocketAgentAddRequestDTO {
+  @IsNotEmpty()
+  agent: AgentInitializationDTO;
+  @IsNotEmpty()
+  socket_id: string;
+}
+
 
 export class UpdateModelConfigDTO {
   @IsNotEmpty()
