@@ -20,7 +20,6 @@ import { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { truncateToolResults, formatAgentResponse } from '../core/utils.js';
 import {
   autonomousRules,
-  baseSystemPrompt,
   finalAnswerRules,
 } from '../../prompt/prompts.js';
 
@@ -189,7 +188,7 @@ export const createAutonomousAgent = async (
       }
 
       const autonomousSystemPrompt = `
-      ${baseSystemPrompt(agent_config)}
+      ${agent_config.prompt.content}
 
       ${autonomousRules}
 

@@ -11,7 +11,6 @@ import {
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
 import { logger } from '@snakagent/core';
-import { AgentConfig } from '../../config/agentConfig.js';
 import { StarknetAgentInterface } from '../../tools/tools.js';
 import {
   initializeToolsList,
@@ -21,7 +20,6 @@ import {
 import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
 import {
   hybridRules,
-  baseSystemPrompt,
   finalAnswerRules,
 } from '../../prompt/prompts.js';
 
@@ -216,10 +214,10 @@ export const createHybridAgent = async (
 
       // System prompt with hybrid instructions
       const hybridSystemPrompt = `
-        ${baseSystemPrompt(agent_config)}
+        ${agent_config.prompt.content}
 
         ${hybridRules}
-           
+
         Available tools: ${toolsList.map((tool) => tool.name).join(', ')}
       `;
 
