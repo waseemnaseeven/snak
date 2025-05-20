@@ -304,8 +304,8 @@ export class AgentStorage {
           enabled: agent_config.memory.enabled,
           shortTermMemorySize: agent_config.memory.short_term_memory_size,
         },
-        chat_id: 'snak_guide',
-        maxIteration: 15,
+        chatId: 'snak_guide',
+        maxIterations: 15,
         mode: AgentMode.INTERACTIVE,
       };
       const modelsConfig = await this.get_models_config();

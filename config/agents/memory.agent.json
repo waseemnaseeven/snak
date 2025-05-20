@@ -15,9 +15,9 @@
     "Les pertes de mémoire peuvent provenir de la limite imposée"
   ],
   "interval": 15000,
-  "maxIteration": 15,
+  "maxIterations": 15,
   "mode": "hybrid",
-  "chat_id": "memory",
+  "chatId": "memory",
   "memory": {
     "enabled": true,
     "shortTermMemorySize": 5

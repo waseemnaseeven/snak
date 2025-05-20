@@ -402,7 +402,7 @@ export const createAutonomousAgent = async (
     return {
       app,
       agent_config,
-      maxIteration: agent_config.maxIteration,
+      maxIterations: agent_config.maxIterations,
     };
   } catch (error) {
     logger.error(`Failed to create autonomous agent graph: ${error}`);

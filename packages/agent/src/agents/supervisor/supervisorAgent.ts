@@ -109,7 +109,7 @@ export class SupervisorAgent extends BaseAgent {
         logger.debug('SupervisorAgent: Initializing MemoryAgent...');
         this.memoryAgent = new MemoryAgent({
           shortTermMemorySize: agentConfig?.memory?.shortTermMemorySize || 15,
-          maxIteration: agentConfig?.memory?.maxIteration,
+          maxIterations: agentConfig?.memory?.maxIterations,
           embeddingModel: agentConfig?.memory?.embeddingModel,
         });
         await this.memoryAgent.init();
@@ -601,10 +601,10 @@ export class SupervisorAgent extends BaseAgent {
     }
 
     try {
-      // TODO: Remove chat_id from agent_config and move it to request body to support multiple conversations per agent
+      // TODO: Remove chatId from agent_config and move it to request body to support multiple conversations per agent
       const memories = await this.memoryAgent.retrieveRelevantMemories(
         message,
-        this.config.starknetConfig.agentConfig?.chat_id || 'default_chat'
+        this.config.starknetConfig.agentConfig?.chatId || 'default_chat'
       );
 
       if (memories.length === 0) {

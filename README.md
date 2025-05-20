@@ -117,7 +117,7 @@ NODE_ENV="development" # "development" or "production"
     "second knowledge of your AI Agent"
   ],
   "interval": "Your agent interval beetween each transaction of the Agent in ms,",
-  "chat_id": "Your Agent Chat-id for isolating memory",
+  "chatId": "Your Agent Chat-id for isolating memory",
   "autonomous": "Your agent is autonomous or not",
   "plugins": ["Your first plugin", "Your second plugin"],
   "mcpServers": {

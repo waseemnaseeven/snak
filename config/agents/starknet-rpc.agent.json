@@ -19,12 +19,12 @@
     "I stay updated with the evolving Starknet protocol and RPC standards."
   ],
   "interval": 15000,
-  "maxIteration": 15,
+  "maxIterations": 15,
   "mode": "interactive",
   "memory": {
     "enabled": true,
     "shortTermMemorySize": 15
   },
-  "chat_id": "ethereum_rpc",
+  "chatId": "ethereum_rpc",
   "plugins": ["rpc"]
 }

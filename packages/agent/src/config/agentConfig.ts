@@ -137,7 +137,7 @@ export const validateConfig = (config: AgentConfig) => {
     'plugins',
     'prompt',
     'mode',
-    'maxIteration',
+    'maxIterations',
   ] as const;
 
   for (const field of requiredFields) {
@@ -158,9 +158,9 @@ export const validateConfig = (config: AgentConfig) => {
   }
 
   // Ensure recursion limit is valid
-  if (typeof config.maxIteration !== 'number' || config.maxIteration < 0) {
+  if (typeof config.maxIterations !== 'number' || config.maxIterations < 0) {
     throw new Error(
-      'maxIteration must be a positive number in mode configuration'
+      'maxIterations must be a positive number in mode configuration'
     );
   }
 
@@ -268,20 +268,20 @@ const checkParseJson = async (
       prompt: systemMessagefromjson,
       name: json.name,
       interval: json.interval,
-      chat_id: json.chat_id,
+      chatId: json.chatId,
       mode: parseAgentMode(json.mode),
       plugins: Array.isArray(json.plugins)
         ? json.plugins.map((tool: string) => tool.toLowerCase())
         : [],
       memory: json.memory || false,
       mcpServers: json.mcpServers || {},
-      maxIteration:
-        typeof json.maxIteration === 'number'
-          ? json.maxIteration
+      maxIterations:
+        typeof json.maxIterations === 'number'
+          ? json.maxIterations
           : json.mode &&
               typeof json.mode === 'object' &&
-              typeof json.mode.maxIteration === 'number'
-            ? json.mode.maxIteration
+              typeof json.mode.maxIterations === 'number'
+            ? json.mode.maxIterations
             : 10,
     };
 
