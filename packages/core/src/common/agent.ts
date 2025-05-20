@@ -1,5 +1,7 @@
 import { RpcProvider } from 'starknet';
 import { SystemMessage } from '@langchain/core/messages';
+import { z as Zod } from 'zod';
+
 export interface StarknetTool<P = unknown> {
   name: string;
   plugins: string;
