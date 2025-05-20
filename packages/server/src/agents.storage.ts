@@ -359,7 +359,9 @@ export class AgentStorage {
       `SELECT name FROM agents WHERE "group" = $1 AND (name = $2 OR name LIKE $2 || '-%') ORDER BY LENGTH(name) DESC, name DESC LIMIT 1`,
       [group, baseName]
     );
-    const nameCheckResult = await Postgres.query<{ name: string }>(nameCheckQuery);
+    const nameCheckResult = await Postgres.query<{ name: string }>(
+      nameCheckQuery
+    );
 
     if (nameCheckResult.length > 0) {
       const existingName = nameCheckResult[0].name;
@@ -367,13 +369,17 @@ export class AgentStorage {
         finalName = `${baseName}-1`;
       } else {
         const escapedBaseName = baseName.replace(/[.*+?^${}()|[\\]]/g, '\\$&');
-        const suffixMatch = existingName.match(new RegExp(`^${escapedBaseName}-(\d+)$`));
+        const suffixMatch = existingName.match(
+          new RegExp(`^${escapedBaseName}-(\d+)$`)
+        );
         if (suffixMatch && suffixMatch[1]) {
           const lastIndex = parseInt(suffixMatch[1], 10);
           finalName = `${baseName}-${lastIndex + 1}`;
         } else {
-          logger.warn(`Unexpected name format found: ${existingName} for baseName: ${baseName} in group: ${group}. Attempting to suffix with -1.`);
-          finalName = `${baseName}-1`; 
+          logger.warn(
+            `Unexpected name format found: ${existingName} for baseName: ${baseName} in group: ${group}. Attempting to suffix with -1.`
+          );
+          finalName = `${baseName}-1`;
         }
       }
     }
@@ -396,12 +402,12 @@ export class AgentStorage {
     );
     const q_res = await Postgres.query<AgentConfigSQL>(q);
     logger.debug(`Agent added to database: ${JSON.stringify(q_res)}`);
-    
+
     if (q_res.length > 0) {
       const newAgentDbRecord = q_res[0];
       const agentToCreate: AgentConfigSQL = {
         ...newAgentDbRecord,
-        prompt: this.parseAgentPrompt(newAgentDbRecord.prompt as any), 
+        prompt: this.parseAgentPrompt(newAgentDbRecord.prompt as any),
       };
       await this.createAgent(agentToCreate);
     } else {

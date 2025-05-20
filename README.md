@@ -105,7 +105,8 @@ NODE_ENV="development" # "development" or "production"
 
 ```json
 {
-  "name": "Your Agent name",
+  "name": "Your Agent Name",
+  "group": "Your Agent Group",
   "bio": "Your AI Agent Bio",
   "lore": ["Some lore of your AI Agent 1", "Some lore of your AI Agent 1"],
   "objectives": [
