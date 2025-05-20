@@ -39,7 +39,6 @@ export class AgentStorage {
     this.initPromise = this.initialize();
   }
 
-
   // TODO : this function should don't exist when the models_config will be in the configuration form if this app
   private async init_models_config() {
     try {

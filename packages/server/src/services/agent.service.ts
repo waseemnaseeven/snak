@@ -191,10 +191,9 @@ export class AgentService implements IAgentService {
     number_of_messages?: number
   ): Promise<MessageSQL[]> {
     try {
-
-        if (!number_of_messages) {
-          number_of_messages = 10; 
-        }
+      if (!number_of_messages) {
+        number_of_messages = 10;
+      }
       const q = new Postgres.Query(
         `SELECT * FROM message WHERE agent_id = $1
         ORDER BY created_at DESC

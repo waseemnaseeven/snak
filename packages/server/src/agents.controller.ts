@@ -149,7 +149,7 @@ export class AgentsController {
 
   @Post('get_messages_from_agents_id')
   async getMessageFromAgentsId(
-    @Body() userRequest: getMessagesFromAgentsDTO 
+    @Body() userRequest: getMessagesFromAgentsDTO
   ): Promise<AgentResponse> {
     try {
       const agent = this.agentFactory.getAgent(userRequest.agent_id);

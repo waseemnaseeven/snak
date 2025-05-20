@@ -161,7 +161,6 @@ export class AgentSystem {
         [message.agent_id, message.sender_type, message.content]
       );
       const message_q_res = await Postgres.query<number>(message_q);
-      logger.debug(`Messagfe inserted into DB: ${message_q_res[0]}`);
       return message_q_res[0];
     } catch (error) {
       logger.error(error);
@@ -188,17 +187,13 @@ export class AgentSystem {
       // TODO : make start send a message type instead of string
       Postgres.connect(this.config.databaseCredentials);
       const content = typeof message === 'string' ? message : message.content;
-      const response = await this.supervisorAgent.execute(
-        content,
-        config
-      );
+      const response = await this.supervisorAgent.execute(content, config);
       logger.debug(JSON.stringify(response));
       if (typeof message === 'string') {
         logger.info('The request has not been saved in the database');
         return response;
-      }
-      else {
-        logger.info("The request has been saved in the database")
+      } else {
+        logger.info('The request has been saved in the database');
         await this.insert_message_into_db(message);
         const r_msg: Message = {
           agent_id: message.agent_id,
@@ -208,7 +203,7 @@ export class AgentSystem {
         };
         await this.insert_message_into_db(r_msg);
       }
-      
+
       return response;
     } catch (error) {
       logger.error(`AgentSystem: Execution error: ${error}`);
