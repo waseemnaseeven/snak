@@ -9,7 +9,7 @@ import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
 import { StarknetAgent, StarknetAgentConfig } from '../core/starknetAgent.js';
 import { ToolsOrchestrator } from '../operators/toolOrchestratorAgent.js';
 import { MemoryAgent } from '../operators/memoryAgent.js';
-import { WorkflowController } from './worflowController.js';
+import { WorkflowController } from './workflowController.js';
 import {
   DatabaseCredentials,
   logger,

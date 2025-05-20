@@ -1,3 +1,4 @@
+// agents/supervisor/workflowController.ts
 import { MemorySaver, StateGraph, END, START } from '@langchain/langgraph';
 import { BaseMessage, AIMessage, HumanMessage } from '@langchain/core/messages';
 import { logger } from '@snakagent/core';
@@ -5,8 +6,6 @@ import { IAgent } from '../core/baseAgent.js';
 import { RunnableConfig } from '@langchain/core/runnables';
 import crypto from 'crypto';
 import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
-import { AgentRouter, AgentRegistrationOptions } from './agentRouter.js';
-import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
 
 /**
  * Represents the state of the multi-agent workflow.
@@ -30,10 +29,6 @@ interface WorkflowState {
   mode?: string;
   /** Flag indicating if the workflow is paused, waiting for user input in hybrid mode. */
   waiting_for_input?: boolean;
-  /** ID du Snak agent spécifié par l'utilisateur, si applicable */
-  snakAgentId?: string;
-  /** Paramètres extraits de la requête */
-  extractedParameters?: Record<string, any>;
 }
 
 /**
@@ -44,10 +39,6 @@ export interface WorkflowControllerConfig {
   agents: Record<string, IAgent>;
   /** The identifier of the agent that serves as the entry point for the workflow. */
   entryPoint: string;
-  /** Agent de sélection de modèle */
-  modelSelectionAgent: ModelSelectionAgent;
-  /** Map des agents Snak disponibles avec leurs IDs */
-  snakAgents?: Record<string, string>;
   /** Optional. Enables checkpointing of the workflow state if true. Defaults to false. */
   checkpointEnabled?: boolean;
   /** Optional. Enables detailed debug logging if true. Defaults to false. */
@@ -74,9 +65,6 @@ export class WorkflowController {
   private executionId: string | null = null;
   private checkpointEnabled: boolean;
   private timeoutId: NodeJS.Timeout | null = null;
-  private agentRouter: AgentRouter;
-  private snakAgents: Record<string, string>;
-  private modelSelectionAgent: ModelSelectionAgent;
 
   /**
    * Constructs a new WorkflowController.
@@ -90,12 +78,6 @@ export class WorkflowController {
     this.maxIterations = config.maxIterations || 10;
     this.workflowTimeout = config.workflowTimeout || 60000;
     this.checkpointEnabled = config.checkpointEnabled ?? false;
-    this.snakAgents = config.snakAgents || {};
-    this.modelSelectionAgent = config.modelSelectionAgent;
-
-    // Initialiser le AgentRouter
-    this.agentRouter = new AgentRouter(this.modelSelectionAgent, this.debug);
-    this.agentRouter.registerSnakAgents(this.snakAgents);
 
     this.validateAgents();
 
@@ -108,11 +90,6 @@ export class WorkflowController {
       logger.debug(
         `WorkflowController: Workflow timeout: ${this.workflowTimeout}ms`
       );
-      if (Object.keys(this.snakAgents).length > 0) {
-        logger.debug(
-          `WorkflowController: Available Snak agents: ${Object.keys(this.snakAgents).join(', ')}`
-        );
-      }
     }
   }
 
@@ -134,9 +111,6 @@ export class WorkflowController {
   public async init(): Promise<void> {
     logger.debug('WorkflowController: Starting initialization');
     try {
-      // Register agents with the router
-      this.registerAgentsWithRouter();
-
       // Create state graph
       const workflow = new StateGraph<WorkflowState>({
         channels: {
@@ -170,19 +144,8 @@ export class WorkflowController {
             value: (x, _) => (x || 0) + 1,
             default: () => 0,
           },
-          snakAgentId: {
-            value: (_, y) => y,
-            default: () => undefined,
-          },
-          extractedParameters: {
-            value: (x, y) => ({ ...(x || {}), ...(y || {}) }),
-            default: () => ({}),
-          },
         },
       });
-
-      // Add routing node for initial request analysis
-      workflow.addNode('router', this.createRouterNode());
 
       // Add nodes for each agent
       for (const [agentId, agent] of Object.entries(this.agents)) {
@@ -195,7 +158,7 @@ export class WorkflowController {
                 .slice(-3)
                 .join(' → ');
               logger.debug(
-                `WorkflowController[Exec:${execId}]: Node[${agentId}] - START (Iteration: ${state.iterationCount}, Prev: ${lastAgents || 'none'}, Msgs: ${state.messages.length}, SnakAgent: ${state.snakAgentId || 'default'})`
+                `WorkflowController[Exec:${execId}]: Node[${agentId}] - START (Iteration: ${state.iterationCount}, Prev: ${lastAgents || 'none'}, Msgs: ${state.messages.length})`
               );
             }
 
@@ -235,25 +198,6 @@ export class WorkflowController {
                   [agentId]: newCount,
                 },
               };
-
-              // Si on a un ID d'agent Snak spécifique, l'ajouter aux métadonnées
-              if (state.snakAgentId && agentId === 'snak') {
-                updatedMetadata.snakAgentId = state.snakAgentId;
-                logger.debug(
-                  `WorkflowController[Exec:${execId}]: Node[${agentId}] - Using specific Snak agent: ${state.snakAgentId}`
-                );
-              }
-
-              // Ajouter les paramètres extraits aux métadonnées si disponibles
-              if (
-                state.extractedParameters &&
-                Object.keys(state.extractedParameters).length > 0
-              ) {
-                updatedMetadata.extractedParameters = state.extractedParameters;
-                logger.debug(
-                  `WorkflowController[Exec:${execId}]: Node[${agentId}] - Using extracted parameters: ${JSON.stringify(state.extractedParameters)}`
-                );
-              }
 
               // If non-tool agent is called too many times, force termination
               if (newCount > 3 && agentId !== 'tools') {
@@ -301,11 +245,6 @@ export class WorkflowController {
                 ...updatedMetadata,
                 toolCalls: state.toolCalls,
               };
-
-              // Si c'est un agent Snak et qu'on a un snakAgentId, s'assurer qu'il est inclus
-              if (agentId === 'snak' && state.snakAgentId) {
-                config.snakAgentId = state.snakAgentId;
-              }
 
               // Execute agent
               logger.debug(
@@ -462,16 +401,6 @@ export class WorkflowController {
                 metadata: updatedMetadata, // Ensure metadata is included
               };
 
-              // Preserve snakAgentId if it exists
-              if (state.snakAgentId) {
-                outputState.snakAgentId = state.snakAgentId;
-              }
-
-              // Preserve extracted parameters if they exist
-              if (state.extractedParameters) {
-                outputState.extractedParameters = state.extractedParameters;
-              }
-
               // If this is final response, force workflow end
               if (isFinal) {
                 if (this.debug) {
@@ -545,12 +474,11 @@ export class WorkflowController {
         );
       }
 
-      // Set the entry point to the router node
-      logger.debug(`WorkflowController: Setting entry point to 'router'`);
-      workflow.addEdge(START as any, 'router' as any);
-
-      // Router -> Initial agent (typically memory)
-      workflow.addEdge('router', this.entryPoint);
+      // Set the entry point
+      logger.debug(
+        `WorkflowController: Setting entry point to ${this.entryPoint}`
+      );
+      workflow.addEdge(START as any, this.entryPoint as any);
 
       // Route transitions based on current agent
       for (const agentId of Object.keys(this.agents)) {
@@ -567,9 +495,6 @@ export class WorkflowController {
 
         // Add hybrid_pause as a possible destination
         routingMap['hybrid_pause'] = 'hybrid_pause';
-
-        // Add router as possible destination
-        routingMap['router'] = 'router';
 
         // Add conditional transitions
         logger.debug(
@@ -604,262 +529,6 @@ export class WorkflowController {
         `WorkflowController: Failed to initialize workflow: ${error}`
       );
       throw error;
-    }
-  }
-
-  /**
-   * Creates the router node for intelligent request routing
-   */
-  private createRouterNode() {
-    return async (state: WorkflowState) => {
-      const execId = this.executionId || 'unknown';
-      logger.debug(`WorkflowController[Exec:${execId}]: Router node - START`);
-
-      try {
-        // Check if the message is already in a workflow (e.g., a continuation)
-        if (
-          state.iterationCount > 0 ||
-          state.currentAgent !== this.entryPoint
-        ) {
-          logger.debug(
-            `WorkflowController[Exec:${execId}]: Router node - Continuing existing workflow, skipping`
-          );
-          return {}; // Don't modify the state
-        }
-
-        // Get the last message (should be a human message)
-        if (!state.messages || state.messages.length === 0) {
-          logger.warn(
-            `WorkflowController[Exec:${execId}]: Router node - No messages to analyze`
-          );
-          return {}; // Pass through
-        }
-
-        const lastMessage = state.messages[state.messages.length - 1];
-        if (!(lastMessage instanceof HumanMessage)) {
-          logger.debug(
-            `WorkflowController[Exec:${execId}]: Router node - Last message is not from human, skipping analysis`
-          );
-          return {}; // Don't route non-human messages
-        }
-
-        // Use the AgentRouter to determine the target agent
-        const routingDecision =
-          await this.agentRouter.determineTargetAgent(lastMessage);
-        logger.debug(
-          `WorkflowController[Exec:${execId}]: Router node - Routing decision: ${routingDecision.targetAgentId} (confidence: ${routingDecision.confidence})`
-        );
-
-        // Check if we need to route to a specific Snak agent
-        if (
-          routingDecision.targetAgentId === 'snak' &&
-          routingDecision.snakAgentId
-        ) {
-          if (this.debug) {
-            logger.debug(
-              `WorkflowController[Exec:${execId}]: Router node - Routing to specific Snak agent: ${routingDecision.snakAgentId}`
-            );
-          }
-
-          return {
-            currentAgent: routingDecision.targetAgentId,
-            snakAgentId: routingDecision.snakAgentId,
-            extractedParameters: routingDecision.parameters || {},
-          };
-        }
-
-        // Normal routing to a specific agent
-        if (this.agents[routingDecision.targetAgentId]) {
-          if (this.debug) {
-            logger.debug(
-              `WorkflowController[Exec:${execId}]: Router node - Routing to agent: ${routingDecision.targetAgentId}`
-            );
-          }
-
-          return {
-            currentAgent: routingDecision.targetAgentId,
-            extractedParameters: routingDecision.parameters || {},
-          };
-        }
-
-        // Fallback: if target agent doesn't exist, go to default entry point
-        logger.warn(
-          `WorkflowController[Exec:${execId}]: Router node - Target agent "${routingDecision.targetAgentId}" not found, using entry point`
-        );
-        return {
-          currentAgent: this.entryPoint,
-          extractedParameters: routingDecision.parameters || {},
-        };
-      } catch (error) {
-        logger.error(
-          `WorkflowController[Exec:${execId}]: Router node - Error: ${error}`
-        );
-        // In case of error, continue with entry point
-        return {
-          currentAgent: this.entryPoint,
-        };
-      }
-    };
-  }
-
-  /**
-   * Registers all available agents with the AgentRouter
-   */
-  private registerAgentsWithRouter() {
-    // Register the supervisor agent
-    if (this.agents['supervisor']) {
-      this.agentRouter.registerAgent({
-        id: 'supervisor',
-        agent: this.agents['supervisor'],
-        description:
-          "L'agent superviseur qui coordonne tous les autres agents et gère le workflow général. Il est capable de répondre à la plupart des requêtes générales et peut prendre des décisions sur quel agent spécifique doit être invoqué.",
-        examples: [
-          'Quelle est la différence entre X et Y?',
-          "Peux-tu m'aider à comprendre comment fonctionne Z?",
-          'Résume ce concept pour moi',
-        ],
-        category: 'system',
-        priority: 0,
-      });
-    }
-
-    // Register the memory agent
-    if (this.agents['memory']) {
-      this.agentRouter.registerAgent({
-        id: 'memory',
-        agent: this.agents['memory'],
-        description:
-          "L'agent de mémoire qui est responsable de la gestion du contexte et des souvenirs à long terme. Il peut stocker, récupérer et analyser les informations des conversations précédentes.",
-        examples: [
-          "Rappelle-moi ce que j'ai dit à propos de X",
-          'Stocke cette information pour plus tard',
-          'As-tu des informations sur ce sujet?',
-        ],
-        category: 'operator',
-        priority: 10,
-      });
-    }
-
-    // Register the model selection agent
-    if (this.agents['model-selector']) {
-      this.agentRouter.registerAgent({
-        id: 'model-selector',
-        agent: this.agents['model-selector'],
-        description:
-          "L'agent de sélection de modèle qui détermine quel modèle de langage est le plus approprié pour une tâche donnée.",
-        examples: [
-          'Utilise un modèle plus performant pour cette tâche',
-          'Change de modèle pour quelque chose de plus rapide',
-          'Quel modèle utilises-tu actuellement?',
-        ],
-        category: 'operator',
-        priority: 5,
-      });
-    }
-
-    // Register the tools orchestrator agent
-    if (this.agents['tools']) {
-      this.agentRouter.registerAgent({
-        id: 'tools',
-        agent: this.agents['tools'],
-        description:
-          "L'agent d'orchestration d'outils qui gère l'exécution de divers outils et fonctionnalités. Il est automatiquement appelé lorsqu'un agent fait des appels d'outils.",
-        examples: [
-          'Exécute cet outil spécifique',
-          "Utilise l'outil X pour faire Y",
-          'Quels outils sont disponibles?',
-        ],
-        category: 'operator',
-        priority: 5,
-      });
-    }
-
-    // Register the database management agent if it exists
-    if (this.agents['database-operator']) {
-      this.agentRouter.registerAgent({
-        id: 'database-operator',
-        agent: this.agents['database-operator'],
-        description:
-          "L'agent de gestion de la base de données qui peut créer, mettre à jour, supprimer ou lister des configurations d'agents dans la base de données.",
-        examples: [
-          'Crée un nouvel agent avec le nom X',
-          "Modifie le nom de l'agent avec l'ID 5 en Y",
-          "Supprime l'agent Z",
-          'Liste tous les agents disponibles',
-        ],
-        category: 'operator',
-        priority: 8,
-      });
-    }
-
-    // Register the Snak agent
-    if (this.agents['snak']) {
-      this.agentRouter.registerAgent({
-        id: 'snak',
-        agent: this.agents['snak'],
-        description:
-          "L'agent principal d'exécution de tâches qui peut répondre à la plupart des demandes des utilisateurs. Il existe plusieurs variantes d'agents Snak qui peuvent être spécifiquement demandées par leur nom.",
-        examples: [
-          'Fais X pour moi',
-          'Explique comment faire Y',
-          "Utilise l'agent Marketing pour analyser cette campagne",
-          "Avec l'agent Finance, calcule le ROI de cet investissement",
-        ],
-        category: 'snak',
-        priority: 0,
-      });
-    }
-
-    // Register any additional agents
-    for (const [id, agent] of Object.entries(this.agents)) {
-      if (
-        ![
-          'supervisor',
-          'memory',
-          'model-selector',
-          'tools',
-          'database-operator',
-          'snak',
-        ].includes(id)
-      ) {
-        this.agentRouter.registerAgent({
-          id,
-          agent,
-          description: `Agent personnalisé: ${id}`,
-          examples: [],
-          category: 'operator',
-          priority: 0,
-        });
-      }
-    }
-
-    logger.debug(
-      `WorkflowController: Registered ${Object.keys(this.agents).length} agents with the router`
-    );
-  }
-
-  /**
-   * Registers a new agent with the framework
-   * @param options Options for the agent registration
-   */
-  public registerAgent(options: AgentRegistrationOptions): void {
-    // Add the agent to the internal agents map
-    if (options.agent) {
-      this.agents[options.id] = options.agent;
-    }
-
-    // Register with the router
-    this.agentRouter.registerAgent(options);
-
-    logger.debug(
-      `WorkflowController: Registered agent "${options.id}" (${options.category})`
-    );
-
-    // If already initialized, we should reinitialize
-    if (this.initialized) {
-      logger.debug(
-        `WorkflowController: Workflow already initialized, reinitialization required`
-      );
     }
   }
 
@@ -919,16 +588,7 @@ export class WorkflowController {
     const lastMessage = state.messages[state.messages.length - 1];
     const history = state.metadata.agentHistory || [];
 
-    // Pour les nouveaux messages humains, router via le router node
-    if (lastMessage instanceof HumanMessage && state.iterationCount > 0) {
-      logger.debug(
-        `WorkflowController[Exec:${execId}]: Router - New human message detected, routing through router node`
-      );
-      return 'router';
-    }
-
     if (lastMessage instanceof AIMessage) {
-      // Si le message est marqué comme final
       if (lastMessage.additional_kwargs?.final === true) {
         logger.debug(
           `WorkflowController[Exec:${execId}]: Router - Message marked as final, ending workflow`
@@ -936,7 +596,7 @@ export class WorkflowController {
         return END;
       }
 
-      // Les réponses de l'agent 'snak' sont considérées comme finales
+      // Responses from 'snak' agent are treated as final to prevent loops.
       if (lastMessage.additional_kwargs?.from === 'snak') {
         logger.debug(
           `WorkflowController[Exec:${execId}]: Router - Response from 'snak' agent, treating as final and ending workflow`
@@ -944,7 +604,6 @@ export class WorkflowController {
         return END;
       }
 
-      // Vérifier si le message contient un contenu vide
       if (
         !lastMessage.content ||
         (Array.isArray(lastMessage.content) &&
@@ -958,7 +617,7 @@ export class WorkflowController {
         return END;
       }
 
-      // Vérifier si le message demande une entrée humaine (mode hybride)
+      // Check for hybrid mode input request
       if (
         lastMessage.additional_kwargs?.wait_for_input === true ||
         (typeof lastMessage.content === 'string' &&
@@ -973,7 +632,6 @@ export class WorkflowController {
       }
     }
 
-    // Gestion spéciale pour l'agent superviseur
     if (state.currentAgent === 'supervisor') {
       const supervisorCount = history.filter(
         (agent: string) => agent === 'supervisor'
@@ -990,7 +648,6 @@ export class WorkflowController {
       }
     }
 
-    // Gestion spéciale pour l'agent de sélection de modèle
     if (lastMessage.additional_kwargs?.from === 'model-selector') {
       logger.debug(
         `WorkflowController[Exec:${execId}]: Router - Message from model-selector, routing directly to 'snak'`
@@ -1015,14 +672,12 @@ export class WorkflowController {
       if ('snak' in this.agents) {
         return 'snak';
       }
-
       logger.warn(
         `WorkflowController[Exec:${execId}]: Router - 'snak' agent not found after model-selector, ending.`
       );
       return END;
     }
 
-    // Gestion des appels d'outils
     if (
       lastMessage instanceof AIMessage &&
       lastMessage.tool_calls &&
@@ -1036,7 +691,17 @@ export class WorkflowController {
       }
     }
 
-    // Cas où on vient de l'agent snak
+    if (lastMessage instanceof HumanMessage) {
+      logger.debug(
+        `WorkflowController[Exec:${execId}]: Router - Direct routing to 'snak' for human message`
+      );
+      if ('snak' in this.agents) return 'snak';
+      logger.warn(
+        `WorkflowController[Exec:${execId}]: Router - 'snak' agent not found for human message, ending.`
+      );
+      return END;
+    }
+
     if (state.currentAgent === 'snak') {
       logger.debug(
         `WorkflowController[Exec:${execId}]: Router - Current agent is 'snak', ending workflow.`
@@ -1044,18 +709,6 @@ export class WorkflowController {
       return END;
     }
 
-    // Messages spécifiques de l'agent router
-    if (lastMessage.additional_kwargs?.nextAgent) {
-      const targetAgent = lastMessage.additional_kwargs.nextAgent as string;
-      if (this.agents[targetAgent]) {
-        logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - Explicit nextAgent: ${targetAgent}`
-        );
-        return targetAgent;
-      }
-    }
-
-    // Par défaut, retour au superviseur si aucune autre règle ne s'applique
     if (state.currentAgent !== 'supervisor' && 'supervisor' in this.agents) {
       logger.debug(
         `WorkflowController[Exec:${execId}]: Router - Routing to 'supervisor' for coordination.`
@@ -1063,7 +716,6 @@ export class WorkflowController {
       return 'supervisor';
     }
 
-    // Si aucune règle ne s'applique, terminer le workflow
     logger.warn(
       `WorkflowController[Exec:${execId}]: Router - Could not determine next agent, forcing END. Last message from: ${lastMessage?.additional_kwargs?.from}, Current Agent: ${state.currentAgent}`
     );
@@ -1123,29 +775,10 @@ export class WorkflowController {
         `WorkflowController[Exec:${this.executionId}]: Using thread ID: ${threadId}`
       );
 
-      // Si un Snak agent spécifique est demandé via la configuration, l'ajouter à l'état initial
-      const initialState: any = {
-        messages: [message],
-        metadata: { threadId },
-        toolCalls: [],
-        error: undefined,
-        iterationCount: 0,
-      };
-
-      if (config?.snakAgentId) {
-        initialState.snakAgentId = config.snakAgentId;
-        logger.debug(
-          `WorkflowController[Exec:${this.executionId}]: Using specified Snak agent ID: ${config.snakAgentId}`
-        );
-      }
-
-      // Si on a des paramètres extraits dans la config, les inclure dans l'état initial
-      if (config?.extractedParameters) {
-        initialState.extractedParameters = config.extractedParameters;
-        logger.debug(
-          `WorkflowController[Exec:${this.executionId}]: Using provided parameters: ${JSON.stringify(config.extractedParameters)}`
-        );
-      }
+      const initialAgent = 'snak'; // All executions now start directly with the 'snak' agent.
+      logger.debug(
+        `WorkflowController[Exec:${this.executionId}]: Determined initial agent: ${initialAgent}`
+      );
 
       const timeoutPromise = new Promise((_, reject) => {
         this.timeoutId = setTimeout(() => {
@@ -1164,7 +797,17 @@ export class WorkflowController {
       logger.debug(
         `WorkflowController[Exec:${this.executionId}]: Invoking workflow with initial state`
       );
-      const workflowPromise = this.workflow.invoke(initialState, runConfig);
+      const workflowPromise = this.workflow.invoke(
+        {
+          messages: [message],
+          currentAgent: initialAgent,
+          metadata: { threadId },
+          toolCalls: [],
+          error: undefined,
+          iterationCount: 0,
+        },
+        runConfig
+      );
 
       const result = await Promise.race([workflowPromise, timeoutPromise]);
 

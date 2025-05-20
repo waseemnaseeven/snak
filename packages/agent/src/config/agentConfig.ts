@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
+import { v4 as uuidv4 } from 'uuid';
 import { logger, AgentConfig } from '@snakagent/core';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -265,8 +266,10 @@ const checkParseJson = async (
     }
     // Create config object
     const agentConfig: AgentConfig = {
-      prompt: systemMessagefromjson,
+      id: uuidv4(),
       name: json.name,
+      group: json.group,
+      prompt: systemMessagefromjson,
       interval: json.interval,
       chatId: json.chatId,
       mode: parseAgentMode(json.mode),

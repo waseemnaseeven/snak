@@ -63,7 +63,9 @@ export interface MemoryConfig {
 }
 
 export interface AgentConfig {
+  id: string;
   name: string;
+  group: string;
   prompt: SystemMessage;
   interval: number;
   chatId: string;

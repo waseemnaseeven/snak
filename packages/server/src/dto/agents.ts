@@ -11,7 +11,7 @@ export class AgentRequestDTO {
   @IsNotEmpty()
   request: Message;
   @IsNotEmpty()
-  agent_id: number;
+  agent_id: string;
 }
 
 // TODO add agentgs to the request(to be able to devide the request to the agent,
@@ -20,14 +20,14 @@ export class CreateConversationRequestDTO {
   @IsNotEmpty()
   conversation_name: string;
   @IsNotEmpty()
-  agent_id: number;
+  agent_id: string;
 }
 
 export class DeleteConversationRequestDTO {
   @IsNotEmpty()
   conversation_id: number;
   @IsNotEmpty()
-  agent_id: number;
+  agent_id: string;
 }
 
 export class ConversationsFromConversationIdDTO {
@@ -38,14 +38,14 @@ export class ConversationsFromConversationIdDTO {
 // Only to get all the conversations
 export class ConversationsRequestDTO {
   @IsNotEmpty()
-  agent_id: number;
+  agent_id: string;
 }
 
 export class getMessagesFromConversationIdDTO {
   @IsNotEmpty()
   conversation_id: number;
   @IsNotEmpty()
-  agent_id: number;
+  agent_id: string;
 }
 
 interface AgentMemory {
@@ -62,6 +62,7 @@ interface AgentPrompt {
 
 export class AgentInitializationDTO {
   name: string;
+  group: string;
   prompt: AgentPrompt;
   interval: number;
   plugins: string[];
@@ -75,12 +76,12 @@ export class InitializesRequestDTO {
 
 export class AgentDeleteRequestDTO {
   @IsNotEmpty()
-  agent_id: number;
+  agent_id: string;
 }
 
 export class AgentDeletesRequestDTO {
   @IsNotEmpty()
-  agent_id: number[];
+  agent_id: string[];
 }
 
 export class AgentAddRequestDTO {
