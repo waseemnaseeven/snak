@@ -170,7 +170,7 @@ export class AgentService implements IAgentService {
   }
 
   async getConversationsFromAgentId(
-    agent_id: number
+    agent_id: string
   ): Promise<ConversationSQL[]> {
     try {
       const q = new Postgres.Query(

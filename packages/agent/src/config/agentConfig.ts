@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
+import { v4 as uuidv4 } from 'uuid';
 import { logger, AgentConfig } from '@snakagent/core';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -137,7 +138,7 @@ export const validateConfig = (config: AgentConfig) => {
     'plugins',
     'prompt',
     'mode',
-    'maxIteration',
+    'maxIterations',
   ] as const;
 
   for (const field of requiredFields) {
@@ -158,9 +159,9 @@ export const validateConfig = (config: AgentConfig) => {
   }
 
   // Ensure recursion limit is valid
-  if (typeof config.maxIteration !== 'number' || config.maxIteration < 0) {
+  if (typeof config.maxIterations !== 'number' || config.maxIterations < 0) {
     throw new Error(
-      'maxIteration must be a positive number in mode configuration'
+      'maxIterations must be a positive number in mode configuration'
     );
   }
 
@@ -265,23 +266,25 @@ const checkParseJson = async (
     }
     // Create config object
     const agentConfig: AgentConfig = {
-      prompt: systemMessagefromjson,
+      id: uuidv4(),
       name: json.name,
+      group: json.group,
+      prompt: systemMessagefromjson,
       interval: json.interval,
-      chat_id: json.chat_id,
+      chatId: json.chatId,
       mode: parseAgentMode(json.mode),
       plugins: Array.isArray(json.plugins)
         ? json.plugins.map((tool: string) => tool.toLowerCase())
         : [],
       memory: json.memory || false,
       mcpServers: json.mcpServers || {},
-      maxIteration:
-        typeof json.maxIteration === 'number'
-          ? json.maxIteration
+      maxIterations:
+        typeof json.maxIterations === 'number'
+          ? json.maxIterations
           : json.mode &&
               typeof json.mode === 'object' &&
-              typeof json.mode.maxIteration === 'number'
-            ? json.mode.maxIteration
+              typeof json.mode.maxIterations === 'number'
+            ? json.mode.maxIterations
             : 10,
     };
 
