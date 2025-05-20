@@ -88,7 +88,10 @@ export class MyGateway implements OnModuleInit {
         logger.debug('Sending chunk:', storyChunks[i]);
         const response: AgentResponse = {
           status: 'success',
-          data: storyChunks[i],
+          data: {
+            chunk: storyChunks[i],
+            isLastChunk: i === storyChunks.length - 1,
+          },
         };
         // TODO add to the response if its the last chunk or not
         client.emit('onAgentRequest', response);
