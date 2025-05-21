@@ -224,11 +224,11 @@ export class AgentSystem {
    * @returns The Starknet agent instance.
    * @throws Will throw an error if the agent system is not initialized.
    */
-  public getStarknetAgent(): any {
+  public getSnakAgent(): any {
     if (!this.supervisorAgent) {
       throw new Error('Agent system not initialized. Call init() first.');
     }
-    return this.supervisorAgent.getStarknetAgent();
+    return this.supervisorAgent.getSnakAgent();
   }
 
   /**

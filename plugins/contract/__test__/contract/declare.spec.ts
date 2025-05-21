@@ -1,11 +1,11 @@
 import { declareContract } from '../../src/actions/declareContract';
 import {
-  createMockStarknetAgent,
-  createMockInvalidStarknetAgent,
+  createMockSnakAgent,
+  createMockInvalidSnakAgent,
 } from '../jest/setEnvVars';
 
-const agent = createMockStarknetAgent();
-const wrong_agent = createMockInvalidStarknetAgent();
+const agent = createMockSnakAgent();
+const wrong_agent = createMockInvalidSnakAgent();
 
 beforeAll(async () => {
   try {

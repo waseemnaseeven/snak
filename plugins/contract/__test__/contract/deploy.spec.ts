@@ -1,12 +1,12 @@
 import { getConstructorParams } from '../../src/actions/getConstructorParams';
 import { deployContract } from '../../src/actions/deployContract';
 import {
-  createMockStarknetAgent,
-  createMockInvalidStarknetAgent,
+  createMockSnakAgent,
+  createMockInvalidSnakAgent,
 } from '../jest/setEnvVars';
 
-const agent = createMockStarknetAgent();
-const wrong_agent = createMockInvalidStarknetAgent();
+const agent = createMockSnakAgent();
+const wrong_agent = createMockInvalidSnakAgent();
 
 describe('Deploy Contract', () => {
   describe('With valid agent and parameters using Sierra and CASM', () => {

@@ -1,4 +1,4 @@
-import { StarknetAgentInterface } from '../../tools/tools.js';
+import { SnakAgentInterface } from '../../tools/tools.js';
 import { createAllowedTools } from '../../tools/tools.js';
 import { createSignatureTools } from '../../tools/signatureTools.js';
 import { MCP_CONTROLLER } from '../../services/mcp/src/mcp.js';
@@ -16,17 +16,17 @@ import {
  * Initializes the list of tools for the agent
  */
 export async function initializeToolsList(
-  starknetAgent: StarknetAgentInterface,
+  snakAgent: SnakAgentInterface,
   agentConfig: AgentConfig
 ): Promise<(Tool | DynamicStructuredTool<any> | StructuredTool)[]> {
   let toolsList: (Tool | DynamicStructuredTool<any> | StructuredTool)[] = [];
-  const isSignature = starknetAgent.getSignature().signature === 'wallet';
+  const isSignature = snakAgent.getSignature().signature === 'wallet';
 
   if (isSignature) {
     toolsList = await createSignatureTools(agentConfig.plugins);
   } else {
     const allowedTools = await createAllowedTools(
-      starknetAgent,
+      snakAgent,
       agentConfig.plugins
     );
     toolsList = [...allowedTools];

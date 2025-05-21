@@ -6,7 +6,7 @@ import {
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
 import { logger, AgentConfig } from '@snakagent/core';
-import { StarknetAgentInterface } from '../../tools/tools.js';
+import { SnakAgentInterface } from '../../tools/tools.js';
 import {
   initializeToolsList,
   initializeDatabase,
@@ -38,24 +38,24 @@ const getMemoryAgent = async () => {
 
 /**
  * Creates and configures an interactive agent.
- * @param starknetAgent - The StarknetAgentInterface instance.
+ * @param snakAgent - The SnakAgentInterface instance.
  * @param modelSelector - An optional ModelSelectionAgent instance for dynamic model selection.
  * @returns A promise that resolves to the compiled agent application.
  * @throws Will throw an error if agent configuration is missing or invalid.
  */
 export const createInteractiveAgent = async (
-  starknetAgent: StarknetAgentInterface,
+  snakAgent: SnakAgentInterface,
   modelSelector: ModelSelectionAgent | null
 ) => {
   try {
-    const agent_config: AgentConfig = starknetAgent.getAgentConfig();
+    const agent_config: AgentConfig = snakAgent.getAgentConfig();
     if (!agent_config) {
       throw new Error('Agent configuration is required');
     }
 
-    await initializeDatabase(starknetAgent.getDatabaseCredentials());
+    await initializeDatabase(snakAgent.getDatabaseCredentials());
 
-    const toolsList = await initializeToolsList(starknetAgent, agent_config);
+    const toolsList = await initializeToolsList(snakAgent, agent_config);
 
     let memoryAgent = null;
     if (agent_config.memory) {

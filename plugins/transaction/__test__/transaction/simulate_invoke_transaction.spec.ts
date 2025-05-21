@@ -1,12 +1,12 @@
 import { simulateInvokeTransaction } from '../../src/actions/simulateTransaction';
 import * as C from '../utils/constant';
 import {
-  createMockInvalidStarknetAgent,
-  createMockStarknetAgent,
+  createMockInvalidSnakAgent,
+  createMockSnakAgent,
 } from '../jest/setEnvVars';
 
-const agent = createMockStarknetAgent();
-const wrong_agent = createMockInvalidStarknetAgent();
+const agent = createMockSnakAgent();
+const wrong_agent = createMockInvalidSnakAgent();
 
 describe('Simulate Invoke Transaction', () => {
   describe('With perfect match inputs', () => {

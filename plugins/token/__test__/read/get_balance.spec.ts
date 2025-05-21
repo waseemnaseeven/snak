@@ -1,9 +1,9 @@
 import { getBalance } from '../../src/actions/getBalances';
 import { Contract } from 'starknet';
-import { createMockStarknetAgent } from '../jest/setEnvVars';
+import { createMockSnakAgent } from '../jest/setEnvVars';
 import { ERC20_ABI } from '../../src/abis/erc20Abi';
 
-const agent = createMockStarknetAgent();
+const agent = createMockSnakAgent();
 
 jest.mock('starknet', () => ({
   Contract: jest.fn((abi, address, provider) => ({

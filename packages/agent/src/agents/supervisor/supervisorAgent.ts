@@ -6,7 +6,7 @@ import {
   IAgent,
 } from '../core/baseAgent.js';
 import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
-import { StarknetAgent, StarknetAgentConfig } from '../core/starknetAgent.js';
+import { SnakAgent, SnakAgentConfig } from '../core/snakAgent.js';
 import { ToolsOrchestrator } from '../operators/toolOrchestratorAgent.js';
 import { MemoryAgent } from '../operators/memoryAgent.js';
 import { WorkflowController } from './workflowController.js';
@@ -28,20 +28,20 @@ import { OperatorRegistry } from '../operators/operatorRegistry.js';
  */
 export interface SupervisorAgentConfig {
   modelsConfig: ModelsConfig;
-  starknetConfig: StarknetAgentConfig;
+  starknetConfig: SnakAgentConfig;
   debug?: boolean;
 }
 
 /**
  * SupervisorAgent manages the orchestration of all system agents.
  * It acts as a central coordinator, initializing and managing the lifecycle
- * of various operator agents like ModelSelectionAgent, StarknetAgent,
+ * of various operator agents like ModelSelectionAgent, SnakAgent,
  * ToolsOrchestrator, and MemoryAgent. It also handles the execution flow
  * through a WorkflowController.
  */
 export class SupervisorAgent extends BaseAgent {
   private modelSelectionAgent: ModelSelectionAgent | null = null;
-  private starknetAgent: StarknetAgent | null = null;
+  private snakAgent: SnakAgent | null = null;
   private toolsOrchestrator: ToolsOrchestrator | null = null;
   private memoryAgent: MemoryAgent | null = null;
   private workflowController: WorkflowController | null = null;
@@ -51,8 +51,7 @@ export class SupervisorAgent extends BaseAgent {
   private executionDepth: number = 0;
   private checkpointEnabled: boolean = false; // TODO: This seems unused, consider removing or implementing its functionality.
   private agentSelectionAgent: AgentSelectionAgent | null = null;
-  private snakAgents: Record<string, StarknetAgent> = {};
-  private defaultSnakAgent: StarknetAgent | null = null;
+  private snakAgents: Record<string, SnakAgent> = {};
 
   private static instance: SupervisorAgent | null = null;
 
@@ -126,8 +125,8 @@ export class SupervisorAgent extends BaseAgent {
         );
       }
 
-      logger.debug('SupervisorAgent: Initializing StarknetAgent...');
-      this.starknetAgent = new StarknetAgent({
+      logger.debug('SupervisorAgent: Initializing SnakAgent...');
+      this.snakAgent = new SnakAgent({
         provider: this.config.starknetConfig.provider,
         accountPublicKey: this.config.starknetConfig.accountPublicKey,
         accountPrivateKey: this.config.starknetConfig.accountPrivateKey,
@@ -136,12 +135,12 @@ export class SupervisorAgent extends BaseAgent {
         agentConfig: this.config.starknetConfig.agentConfig,
         db_credentials: this.config.starknetConfig.db_credentials,
       });
-      await this.starknetAgent.init();
-      logger.debug('SupervisorAgent: StarknetAgent initialized');
+      await this.snakAgent.init();
+      logger.debug('SupervisorAgent: SnakAgent initialized');
 
       logger.debug('SupervisorAgent: Initializing ToolsOrchestrator...');
       this.toolsOrchestrator = new ToolsOrchestrator({
-        starknetAgent: this.starknetAgent,
+        snakAgent: this.snakAgent,
         agentConfig: agentConfig,
         modelSelectionAgent: this.modelSelectionAgent,
       });
@@ -159,10 +158,10 @@ export class SupervisorAgent extends BaseAgent {
       this.operators.set(this.agentSelectionAgent.id, this.agentSelectionAgent);
       logger.debug('SupervisorAgent: AgentSelectionAgent initialized');
 
-      // Définir l'agent Starknet par défaut
-      if (this.starknetAgent) {
+      // Enregistrer l'agent Starknet principal
+      if (this.snakAgent) {
         // Extraire les métadonnées de configuration de l'agent
-        const agentConfig = this.starknetAgent.getAgentConfig();
+        const agentConfig = this.snakAgent.getAgentConfig();
         const agentName = agentConfig?.name || 'Starknet RPC Agent';
         const agentGroup = agentConfig?.group || 'starknet';
 
@@ -171,7 +170,7 @@ export class SupervisorAgent extends BaseAgent {
         const agentId = `${agentGroup}-${normalizedName}`;
 
         // Enregistrer l'agent avec son ID métier
-        this.registerSnakAgent(agentId, this.starknetAgent, {
+        this.registerSnakAgent(agentId, this.snakAgent, {
           name: agentName,
           description:
             agentConfig?.description ||
@@ -179,11 +178,8 @@ export class SupervisorAgent extends BaseAgent {
           group: agentGroup,
         });
 
-        // Également l'enregistrer comme agent par défaut
-        this.defaultSnakAgent = this.starknetAgent;
-
         logger.debug(
-          `SupervisorAgent: Registered Starknet agent as "${agentId}" and set as default agent`
+          `SupervisorAgent: Registered Starknet agent as "${agentId}"`
         );
       }
 
@@ -216,21 +212,21 @@ export class SupervisorAgent extends BaseAgent {
         supervisor: this,
       };
 
-      // Ajouter l'agent Starknet par défaut
-      if (this.defaultSnakAgent) {
-        allAgents['snak'] = this.defaultSnakAgent;
-      } else if (this.starknetAgent) {
-        allAgents['snak'] = this.starknetAgent;
-      } else {
-        logger.warn(
-          'SupervisorAgent: No StarknetAgent available for the WorkflowController.'
-        );
-      }
-
-      // Ajouter tous les agents Snak
+      // Ajouter tous les agents Snak disponibles
       Object.entries(this.snakAgents).forEach(([id, agent]) => {
         allAgents[id] = agent;
       });
+
+      // Si snakAgent existe et n'est pas déjà dans snakAgents, l'ajouter avec un ID spécifique
+      if (
+        this.snakAgent &&
+        !Object.values(this.snakAgents).includes(this.snakAgent)
+      ) {
+        allAgents['snak-main'] = this.snakAgent;
+        logger.debug(
+          'SupervisorAgent: Added main snakAgent to workflow as "snak-main"'
+        );
+      }
 
       // Ajouter tous les agents opérateurs enregistrés
       const registry = OperatorRegistry.getInstance();
@@ -239,7 +235,14 @@ export class SupervisorAgent extends BaseAgent {
         allAgents[id] = agent;
       });
 
-      if (!allAgents['snak']) {
+      // Vérifier si au moins un agent d'exécution est disponible
+      if (
+        Object.keys(allAgents).filter(
+          (id) =>
+            id.startsWith('snak-') ||
+            (allAgents[id] && allAgents[id].type === AgentType.SNAK)
+        ).length === 0
+      ) {
         throw new Error(
           'WorkflowController requires at least one Starknet execution agent.'
         );
@@ -289,9 +292,9 @@ export class SupervisorAgent extends BaseAgent {
    * @param agentConfig The configuration of the agent, used to determine agent name and mode for metrics.
    */
   private initializeMetrics(agentConfig: AgentConfig): void {
-    if (!this.starknetAgent) {
+    if (!this.snakAgent) {
       logger.warn(
-        'SupervisorAgent: StarknetAgent not available, skipping metrics initialization.'
+        'SupervisorAgent: SnakAgent not available, skipping metrics initialization.'
       );
       return;
     }
@@ -493,7 +496,7 @@ export class SupervisorAgent extends BaseAgent {
         logger.warn(
           `${depthIndent}SupervisorAgent (${callPath}): AgentSelectionAgent not available. Defaulting to 'snak' or ending.`
         );
-        if (this.defaultSnakAgent && queryForSelection) {
+        if (this.snakAgent && queryForSelection) {
           responseContent = `Supervisor: No AgentSelector. Routing to default Snak agent for query: \"${queryForSelection.substring(0, 100)}...\"`;
           nextAgent = 'snak';
         } else {
@@ -568,15 +571,18 @@ export class SupervisorAgent extends BaseAgent {
         }
       }
 
-      // If a Snak agent is targeted (either directly or as default), and memory is on, route through memory first.
-      const finalTargetNodeForSnak =
-        workflowConfig.startNode || (this.defaultSnakAgent ? 'snak' : null);
+      // Si un agent Snak est ciblé et que la mémoire est activée, router via l'agent mémoire d'abord
+      const finalTargetNodeForSnak = workflowConfig.startNode;
+      const isSnakAgent =
+        finalTargetNodeForSnak &&
+        (this.snakAgents[finalTargetNodeForSnak] ||
+          finalTargetNodeForSnak.startsWith('snak-'));
+
       if (
         this.memoryAgent &&
         finalTargetNodeForSnak &&
-        (this.snakAgents[finalTargetNodeForSnak] ||
-          (finalTargetNodeForSnak === 'snak' && this.defaultSnakAgent)) &&
-        workflowConfig.startNode !== this.memoryAgent.id // Avoid re-routing if memory is already startNode
+        isSnakAgent &&
+        workflowConfig.startNode !== this.memoryAgent.id // Éviter de rediriger si la mémoire est déjà le startNode
       ) {
         logger.debug(
           `${depthIndent}SupervisorAgent (${callPath}): Snak agent \"${finalTargetNodeForSnak}\" targeted. Routing via MemoryAgent (${this.memoryAgent.id}) first.`
@@ -740,21 +746,19 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Executes a task in autonomous mode using the StarknetAgent.
+   * Executes a task in autonomous mode using the SnakAgent.
    * @returns The result of the autonomous execution.
-   * @throws Will throw an error if the StarknetAgent is not available.
+   * @throws Will throw an error if the SnakAgent is not available.
    */
   public async executeAutonomous(): Promise<any> {
     logger.debug('SupervisorAgent: Entering autonomous execution mode.');
-    if (!this.starknetAgent) {
+    if (!this.snakAgent) {
       logger.error(
-        'SupervisorAgent: StarknetAgent is not available for autonomous execution.'
+        'SupervisorAgent: SnakAgent is not available for autonomous execution.'
       );
-      throw new Error(
-        'StarknetAgent is not available for autonomous execution.'
-      );
+      throw new Error('SnakAgent is not available for autonomous execution.');
     }
-    const result = await this.starknetAgent.execute_autonomous();
+    const result = await this.snakAgent.execute_autonomous();
     logger.debug('SupervisorAgent: Autonomous execution finished.');
     return result;
   }
@@ -863,10 +867,10 @@ export class SupervisorAgent extends BaseAgent {
   public async dispose(): Promise<void> {
     logger.debug('SupervisorAgent: Disposing agents...');
 
-    // Dispose StarknetAgent if it exists
-    if (this.starknetAgent) {
-      await this.starknetAgent.dispose();
-      logger.debug('SupervisorAgent: StarknetAgent disposed');
+    // Dispose SnakAgent if it exists
+    if (this.snakAgent) {
+      await this.snakAgent.dispose();
+      logger.debug('SupervisorAgent: SnakAgent disposed');
     }
 
     // Dispose individual agents
@@ -884,14 +888,13 @@ export class SupervisorAgent extends BaseAgent {
     }
 
     this.modelSelectionAgent = null;
-    this.starknetAgent = null;
+    this.snakAgent = null;
     this.toolsOrchestrator = null;
     this.memoryAgent = null;
     this.agentSelectionAgent = null;
     this.workflowController = null;
     this.operators.clear();
     this.snakAgents = {};
-    this.defaultSnakAgent = null;
 
     SupervisorAgent.instance = null; // Clear the singleton instance
 
@@ -958,30 +961,30 @@ export class SupervisorAgent extends BaseAgent {
 
   /**
    * Starts a hybrid execution flow with an initial input.
-   * This delegates to the StarknetAgent's hybrid execution capabilities.
+   * This delegates to the SnakAgent's hybrid execution capabilities.
    * @param initialInput The initial input string to start the hybrid process.
    * @returns An object containing the initial state and the thread ID for the execution.
-   * @throws Will throw an error if the StarknetAgent is not available or if the execution fails to start.
+   * @throws Will throw an error if the SnakAgent is not available or if the execution fails to start.
    */
   public async startHybridExecution(
     initialInput: string
   ): Promise<{ state: any; threadId: string }> {
     logger.debug('SupervisorAgent: Starting hybrid execution.');
-    if (!this.starknetAgent) {
+    if (!this.snakAgent) {
       logger.error(
-        'SupervisorAgent: StarknetAgent is not available for hybrid execution.'
+        'SupervisorAgent: SnakAgent is not available for hybrid execution.'
       );
-      throw new Error('StarknetAgent is not available for hybrid execution.');
+      throw new Error('SnakAgent is not available for hybrid execution.');
     }
 
-    const result = await this.starknetAgent.execute_hybrid(initialInput);
+    const result = await this.snakAgent.execute_hybrid(initialInput);
 
     if (!result || typeof result !== 'object') {
       logger.error(
-        'SupervisorAgent: Failed to start hybrid execution - invalid result from StarknetAgent.'
+        'SupervisorAgent: Failed to start hybrid execution - invalid result from SnakAgent.'
       );
       throw new Error(
-        'Failed to start hybrid execution: received invalid result from StarknetAgent.'
+        'Failed to start hybrid execution: received invalid result from SnakAgent.'
       );
     }
 
@@ -1001,11 +1004,11 @@ export class SupervisorAgent extends BaseAgent {
 
   /**
    * Provides subsequent input to a paused hybrid execution.
-   * This delegates to the StarknetAgent to resume the hybrid flow.
+   * This delegates to the SnakAgent to resume the hybrid flow.
    * @param input The human input string to provide to the paused execution.
    * @param threadId The thread ID of the paused hybrid execution.
    * @returns The updated state after processing the input.
-   * @throws Will throw an error if the StarknetAgent is not available.
+   * @throws Will throw an error if the SnakAgent is not available.
    */
   public async provideHybridInput(
     input: string,
@@ -1014,15 +1017,13 @@ export class SupervisorAgent extends BaseAgent {
     logger.debug(
       `SupervisorAgent: Providing input to hybrid execution (thread: ${threadId})`
     );
-    if (!this.starknetAgent) {
+    if (!this.snakAgent) {
       logger.error(
-        'SupervisorAgent: StarknetAgent is not available to provide hybrid input.'
+        'SupervisorAgent: SnakAgent is not available to provide hybrid input.'
       );
-      throw new Error(
-        'StarknetAgent is not available to provide hybrid input.'
-      );
+      throw new Error('SnakAgent is not available to provide hybrid input.');
     }
-    return this.starknetAgent.resume_hybrid(input, threadId);
+    return this.snakAgent.resume_hybrid(input, threadId);
   }
 
   /**
@@ -1111,17 +1112,13 @@ export class SupervisorAgent extends BaseAgent {
   /**
    * Enregistre un nouvel agent Snak dans le système
    */
-  public registerSnakAgent(
-    id: string,
-    agent: StarknetAgent,
-    metadata?: any
-  ): void {
+  public registerSnakAgent(id: string, agent: SnakAgent, metadata?: any): void {
     // S'assurer que l'ID est valide et pas vide
     if (!id || id.trim() === '') {
       logger.warn(
-        'SupervisorAgent: Invalid empty agent ID, using "snak-default" instead'
+        'SupervisorAgent: Invalid empty agent ID, using "snak-custom" instead'
       );
-      id = 'snak-default';
+      id = 'snak-custom';
     }
 
     // S'assurer que les métadonnées existent
@@ -1134,10 +1131,6 @@ export class SupervisorAgent extends BaseAgent {
       name: metadata.name || id,
       description: metadata.description || 'A Starknet interaction agent',
       group: metadata.group || 'starknet',
-      capabilities: metadata.capabilities || [
-        'starknet_interaction',
-        'blockchain_query',
-      ],
     };
 
     // Enregistrer l'agent avec son ID spécifique
@@ -1145,13 +1138,6 @@ export class SupervisorAgent extends BaseAgent {
     logger.debug(
       `SupervisorAgent: Registered Snak agent "${id}" with metadata: ${JSON.stringify((agent as any).metadata)}`
     );
-
-    // Si c'est le premier agent Snak ou si on l'enregistre explicitement comme "snak",
-    // le définir comme agent par défaut
-    if (Object.keys(this.snakAgents).length === 1 || id === 'snak') {
-      this.defaultSnakAgent = agent;
-      logger.debug(`SupervisorAgent: Set agent "${id}" as default agent`);
-    }
 
     // Mettre à jour l'agent de sélection
     this.updateAgentSelectionAgentRegistry();
@@ -1174,10 +1160,17 @@ export class SupervisorAgent extends BaseAgent {
       availableAgents[id] = agent;
     });
 
-    // S'assurer que l'agent par défaut est aussi disponible sous 'snak'
-    if (this.defaultSnakAgent && !availableAgents['snak']) {
-      availableAgents['snak'] = this.defaultSnakAgent;
-      logger.debug(`SupervisorAgent: Added default agent alias as "snak"`);
+    // Si snakAgent existe mais n'est pas dans snakAgents, l'ajouter également
+    if (
+      this.snakAgent &&
+      !Object.values(this.snakAgents).includes(this.snakAgent)
+    ) {
+      // Utiliser un ID distinctif pour éviter les conflits
+      const mainAgentId = 'snak-main';
+      availableAgents[mainAgentId] = this.snakAgent;
+      logger.debug(
+        `SupervisorAgent: Added main snakAgent with ID "${mainAgentId}"`
+      );
     }
 
     // Mettre à jour l'agent de sélection
@@ -1193,7 +1186,7 @@ export class SupervisorAgent extends BaseAgent {
 
       if (metadata) {
         logger.debug(
-          `  - Agent: ${id}, Type: ${type}, Metadata: {"name":"${metadata.name || 'unnamed'}","group":"${metadata.group || 'unknown'}","capabilities":[${(metadata.capabilities || []).join(',')}]}`
+          `  - Agent: ${id}, Type: ${type}, Metadata: {"name":"${metadata.name || 'unnamed'}","group":"${metadata.group || 'unknown'}"}`
         );
       } else {
         logger.debug(`  - Agent: ${id}, Type: ${type}, Metadata: no metadata`);
@@ -1204,11 +1197,19 @@ export class SupervisorAgent extends BaseAgent {
   /**
    * Récupère un agent Snak par son ID
    */
-  public getStarknetAgent(id?: string): StarknetAgent | null {
+  public getSnakAgent(id?: string): SnakAgent | null {
+    // Si un ID est fourni, on retourne l'agent correspondant
     if (id && this.snakAgents[id]) {
       return this.snakAgents[id];
     }
-    return this.defaultSnakAgent || this.starknetAgent;
+
+    // Si aucun ID n'est fourni mais que nous avons un snakAgent principal, on le retourne
+    if (!id && this.snakAgent) {
+      return this.snakAgent;
+    }
+
+    // Sinon, on retourne null (pas de fallback par défaut)
+    return null;
   }
 
   /**

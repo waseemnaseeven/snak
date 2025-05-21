@@ -1,9 +1,9 @@
 import { IsNotEmpty } from 'class-validator';
-import { StarknetAgentInterface } from '@snakagent/core';
+import { SnakAgentInterface } from '@snakagent/core';
 
 export class CreateAgentDTO {
   @IsNotEmpty()
-  accountagent: StarknetAgentInterface;
+  accountagent: SnakAgentInterface;
   @IsNotEmpty()
   anthropicApiKey: string;
   @IsNotEmpty()

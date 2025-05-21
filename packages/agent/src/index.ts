@@ -1,6 +1,6 @@
 // Main exports
-export type { StarknetAgentConfig } from './agents/core/starknetAgent.js';
-export { StarknetAgent } from './agents/core/starknetAgent.js';
+export type { SnakAgentConfig } from './agents/core/snakAgent.js';
+export { SnakAgent } from './agents/core/snakAgent.js';
 
 // Agent-related exports
 // Interactive agent exports
@@ -13,7 +13,7 @@ export { createAutonomousAgent } from './agents/modes/autonomous.js';
 
 // Tool-related exports
 export type {
-  StarknetAgentInterface,
+  SnakAgentInterface,
   StarknetTool,
   StarknetToolRegistry,
 } from './tools/tools.js';

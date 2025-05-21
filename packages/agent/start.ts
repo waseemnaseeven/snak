@@ -348,16 +348,14 @@ const localRun = async (): Promise<void> => {
           }
 
           // Get the Starknet Agent and execute in autonomous mode
-          const starknetAgent = agentSystem.getStarknetAgent();
-          if (!starknetAgent) {
-            throw new Error(
-              'Failed to get StarknetAgent from the agent system'
-            );
+          const snakAgent = agentSystem.getSnakAgent();
+          if (!snakAgent) {
+            throw new Error('Failed to get SnakAgent from the agent system');
           }
 
           // For backwards compatibility, still accessing execute_autonomous directly
           // In future versions, this should be handled by the SupervisorAgent
-          await starknetAgent.execute_autonomous();
+          await snakAgent.execute_autonomous();
           console.log(chalk.green('Autonomous execution completed'));
         } catch (error) {
           console.error(chalk.red('Error in autonomous mode'));

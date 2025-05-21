@@ -5,7 +5,7 @@ import { createBox } from '../prompt/formatting.js';
 import { load_json_config } from '../index.js';
 import { DatabaseCredentials, logger, ModelsConfig } from '@snakagent/core';
 import { EventEmitter } from 'events';
-import { StarknetAgent } from '../index.js';
+import { SnakAgent } from '../index.js';
 import { RpcProvider } from 'starknet';
 import { ModelSelectionAgent } from '../agents/operators/modelSelectionAgent.js';
 import { deepCopyAgentConfig } from 'config/agentConfig.js';
@@ -85,7 +85,7 @@ async function launchAgentAsync(
       port: parseInt(process.env.POSTGRES_PORT as string),
     };
 
-    const agent = new StarknetAgent({
+    const agent = new SnakAgent({
       provider: new RpcProvider({ nodeUrl: process.env.STARKNET_RPC_URL }),
       accountPrivateKey: process.env.STARKNET_PRIVATE_KEY as string,
       accountPublicKey: process.env.STARKNET_PUBLIC_ADDRESS as string,

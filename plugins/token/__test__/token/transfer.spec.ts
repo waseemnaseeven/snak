@@ -1,9 +1,9 @@
 import { transfer } from '../..//src/actions/transfer';
 import * as C from '../utils/constant';
-import { createMockStarknetAgent } from '../jest/setEnvVars';
+import { createMockSnakAgent } from '../jest/setEnvVars';
 import { setupTestEnvironment } from '../utils/helper';
 
-const agent = createMockStarknetAgent();
+const agent = createMockSnakAgent();
 
 setupTestEnvironment();
 

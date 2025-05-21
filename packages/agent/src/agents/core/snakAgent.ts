@@ -1,4 +1,4 @@
-import { BaseAgent, AgentType, IModelAgent } from '../core/baseAgent.js';
+import { BaseAgent, AgentType, IModelAgent } from './baseAgent.js';
 import { RpcProvider } from 'starknet';
 import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
 import { logger, metrics, AgentConfig } from '@snakagent/core';
@@ -12,9 +12,9 @@ import { createAutonomousAgent } from '../modes/autonomous.js';
 import { createHybridAgent } from '../modes/hybrid.js';
 import { Command } from '@langchain/langgraph';
 /**
- * Configuration for StarknetAgent
+ * Configuration for SnakAgent
  */
-export interface StarknetAgentConfig {
+export interface SnakAgentConfig {
   provider: RpcProvider;
   accountPublicKey: string;
   accountPrivateKey: string;
@@ -27,7 +27,7 @@ export interface StarknetAgentConfig {
 /**
  * Main agent for interacting with the Starknet blockchain
  */
-export class StarknetAgent extends BaseAgent implements IModelAgent {
+export class SnakAgent extends BaseAgent implements IModelAgent {
   private readonly provider: RpcProvider;
   private readonly accountPrivateKey: string;
   private readonly accountPublicKey: string;
@@ -40,7 +40,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   private agentReactExecutor: any;
   private modelSelector: ModelSelectionAgent | null = null;
 
-  constructor(config: StarknetAgentConfig) {
+  constructor(config: SnakAgentConfig) {
     super('snak', AgentType.SNAK);
 
     // Initialize properties
@@ -74,11 +74,11 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
    */
   public async init(): Promise<void> {
     try {
-      logger.debug('Initializing StarknetAgent...');
+      logger.debug('Initializing SnakAgent...');
 
       if (!this.modelSelector) {
         logger.warn(
-          'StarknetAgent: No ModelSelectionAgent provided, functionality will be limited.'
+          'SnakAgent: No ModelSelectionAgent provided, functionality will be limited.'
         );
       }
 
@@ -86,7 +86,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
       if (this.agentConfig) {
         this.agentConfig.plugins = this.agentConfig.plugins || [];
       } else {
-        logger.warn('StarknetAgent: No agent configuration available.');
+        logger.warn('SnakAgent: No agent configuration available.');
       }
 
       // Set default mode to hybrid if configuration allows
@@ -102,21 +102,21 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         await this.createAgentReactExecutor();
         if (!this.agentReactExecutor) {
           logger.warn(
-            'StarknetAgent: Agent executor creation succeeded but result is null or undefined.'
+            'SnakAgent: Agent executor creation succeeded but result is null or undefined.'
           );
         }
       } catch (executorError) {
         logger.error(
-          `StarknetAgent: Failed to create agent executor during init: ${executorError}`
+          `SnakAgent: Failed to create agent executor during init: ${executorError}`
         );
         logger.warn(
-          'StarknetAgent: Will attempt to recover during execute() calls.'
+          'SnakAgent: Will attempt to recover during execute() calls.'
         );
       }
 
-      logger.debug('StarknetAgent initialized successfully.');
+      logger.debug('SnakAgent initialized successfully.');
     } catch (error) {
-      logger.error(`StarknetAgent initialization failed: ${error}`);
+      logger.error(`SnakAgent initialization failed: ${error}`);
       throw error;
     }
   }
@@ -127,7 +127,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   private async createAgentReactExecutor(): Promise<void> {
     try {
       logger.debug(
-        `StarknetAgent: Creating agent executor for mode: ${this.currentMode}`
+        `SnakAgent: Creating agent executor for mode: ${this.currentMode}`
       );
 
       if (this.currentMode === AGENT_MODES[AgentMode.AUTONOMOUS]) {
@@ -156,7 +156,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
       }
     } catch (error) {
       logger.error(
-        `StarknetAgent: Failed to create Agent React Executor: ${error}`
+        `SnakAgent: Failed to create Agent React Executor: ${error}`
       );
       if (error instanceof Error && error.stack) {
         logger.error(`Stack trace: ${error.stack}`);
@@ -281,17 +281,17 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
     input: BaseMessage[] | any,
     config?: Record<string, any>
   ): Promise<unknown> {
-    logger.debug(`StarknetAgent executing with mode: ${this.currentMode}`);
+    logger.debug(`SnakAgent executing with mode: ${this.currentMode}`);
 
     if (!this.agentReactExecutor) {
       logger.warn(
-        'StarknetAgent: Agent executor not available. Attempting to recreate.'
+        'SnakAgent: Agent executor not available. Attempting to recreate.'
       );
       try {
         await this.createAgentReactExecutor();
         if (!this.agentReactExecutor) {
           logger.error(
-            'StarknetAgent: Failed to recreate agent executor. Cannot proceed.'
+            'SnakAgent: Failed to recreate agent executor. Cannot proceed.'
           );
           // Try to form a single message for fallback
           const fallbackInput =
@@ -304,7 +304,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         }
       } catch (recreateError) {
         logger.error(
-          `StarknetAgent: Critical error recreating agent executor: ${recreateError}`
+          `SnakAgent: Critical error recreating agent executor: ${recreateError}`
         );
         const fallbackInput =
           Array.isArray(input) && input.length > 0
@@ -325,13 +325,13 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
       messagesForGraph = input;
       if (messagesForGraph.length === 0) {
         logger.warn(
-          'StarknetAgent: Received empty message array for execution. Initializing with a placeholder.'
+          'SnakAgent: Received empty message array for execution. Initializing with a placeholder.'
         );
         messagesForGraph = [new HumanMessage('Starting interaction...')]; // Ensure graph has at least one message
       }
     } else {
       logger.warn(
-        `StarknetAgent: Unexpected input type for 'messages'. Expected BaseMessage[], received ${typeof input}. Attempting to convert.`
+        `SnakAgent: Unexpected input type for 'messages'. Expected BaseMessage[], received ${typeof input}. Attempting to convert.`
       );
       if (input instanceof BaseMessage) {
         messagesForGraph = [input];
@@ -346,7 +346,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         messagesForGraph = [new HumanMessage(input.content)];
       } else {
         logger.error(
-          'StarknetAgent: Could not convert input to BaseMessage[]. Using simple fallback.'
+          'SnakAgent: Could not convert input to BaseMessage[]. Using simple fallback.'
         );
         let fallbackContent = 'Unprocessable input for agent execution';
         // Attempt to extract some string content for the fallback message
@@ -393,7 +393,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
     }
 
     logger.debug(
-      `StarknetAgent: Invoking agent executor with ${messagesForGraph.length} messages. Thread ID: ${threadId || 'N/A'}`
+      `SnakAgent: Invoking agent executor with ${messagesForGraph.length} messages. Thread ID: ${threadId || 'N/A'}`
     );
 
     try {
@@ -436,12 +436,12 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         },
       });
     } catch (agentExecError: any) {
-      logger.error(`StarknetAgent: Agent execution failed: ${agentExecError}`);
+      logger.error(`SnakAgent: Agent execution failed: ${agentExecError}`);
       if (this.isTokenRelatedError(agentExecError)) {
         logger.warn('Token related error detected during execution.');
       }
       logger.error(
-        `StarknetAgent: Catastrophic error in execute, using fallback: ${agentExecError}`
+        `SnakAgent: Catastrophic error in execute, using fallback: ${agentExecError}`
       );
       return this.executeSimpleFallback(input as string | BaseMessage); // Using fallback for execution errors too
     }
@@ -455,7 +455,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
   private async executeSimpleFallback(
     input: string | BaseMessage
   ): Promise<AIMessage> {
-    logger.warn('StarknetAgent: Executing in simple fallback mode.');
+    logger.warn('SnakAgent: Executing in simple fallback mode.');
 
     let queryContent = 'Unavailable';
     try {
@@ -615,7 +615,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
 
     try {
       logger.debug(
-        `StarknetAgent starting autonomous execution. Current mode: ${this.currentMode}`
+        `SnakAgent starting autonomous execution. Current mode: ${this.currentMode}`
       );
 
       if (this.currentMode !== AGENT_MODES[AgentMode.AUTONOMOUS]) {
@@ -633,19 +633,19 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
 
       if (!this.agentReactExecutor) {
         logger.debug(
-          'StarknetAgent (autonomous): No executor exists, attempting to create one.'
+          'SnakAgent (autonomous): No executor exists, attempting to create one.'
         );
         try {
           await this.createAgentReactExecutor();
         } catch (initError) {
           logger.error(
-            `StarknetAgent (autonomous): Initial attempt to initialize executor failed: ${initError}`
+            `SnakAgent (autonomous): Initial attempt to initialize executor failed: ${initError}`
           );
           errorCount++;
 
           if (errorCount >= maxErrors) {
             logger.warn(
-              'StarknetAgent (autonomous): Maximum initialization attempts reached, using fallback mode.'
+              'SnakAgent (autonomous): Maximum initialization attempts reached, using fallback mode.'
             );
             fallbackAttempted = true;
             return this.executeSimpleFallback(
@@ -667,18 +667,18 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
       while (!this.agentReactExecutor && errorCount < maxErrors) {
         errorCount++;
         logger.warn(
-          `StarknetAgent (autonomous): Attempt ${errorCount} to initialize executor, trying again...`
+          `SnakAgent (autonomous): Attempt ${errorCount} to initialize executor, trying again...`
         );
         try {
           await this.createAgentReactExecutor();
         } catch (retryError) {
           logger.error(
-            `StarknetAgent (autonomous): Retry attempt ${errorCount} failed: ${retryError}`
+            `SnakAgent (autonomous): Retry attempt ${errorCount} failed: ${retryError}`
           );
         }
         if (this.agentReactExecutor) {
           logger.debug(
-            `StarknetAgent (autonomous): Executor successfully created on attempt ${errorCount}.`
+            `SnakAgent (autonomous): Executor successfully created on attempt ${errorCount}.`
           );
           break;
         }
@@ -690,7 +690,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         !fallbackAttempted
       ) {
         logger.warn(
-          'StarknetAgent (autonomous): Maximum initialization attempts after retries, using fallback mode.'
+          'SnakAgent (autonomous): Maximum initialization attempts after retries, using fallback mode.'
         );
         fallbackAttempted = true;
         return this.executeSimpleFallback(
@@ -700,7 +700,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
 
       if (!this.agentReactExecutor) {
         logger.error(
-          'StarknetAgent (autonomous): Failed to create a valid executor after multiple attempts.'
+          'SnakAgent (autonomous): Failed to create a valid executor after multiple attempts.'
         );
         return new AIMessage({
           content:
@@ -715,7 +715,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
 
       if (!this.agentReactExecutor?.app) {
         logger.error(
-          'StarknetAgent (autonomous): Executor created, but the app is missing.'
+          'SnakAgent (autonomous): Executor created, but the app is missing.'
         );
         return new AIMessage({
           content:
@@ -817,7 +817,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
           responseContent = `Error during autonomous execution: ${graphExecError.message}`;
         }
         logger.error(
-          `StarknetAgent (autonomous): Catastrophic error, using fallback: ${graphExecError}`
+          `SnakAgent (autonomous): Catastrophic error, using fallback: ${graphExecError}`
         );
         return this.executeSimpleFallback(
           'Autonomous execution failed during graph processing'
@@ -834,11 +834,11 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         },
       });
     } catch (error: any) {
-      logger.error(`StarknetAgent autonomous execution failed: ${error}`);
+      logger.error(`SnakAgent autonomous execution failed: ${error}`);
 
       if (!fallbackAttempted) {
         logger.error(
-          `StarknetAgent (autonomous): Catastrophic error, using fallback: ${error}`
+          `SnakAgent (autonomous): Catastrophic error, using fallback: ${error}`
         );
         return this.executeSimpleFallback('Autonomous execution failed');
       }
@@ -873,7 +873,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
     const threadId = `hybrid_${Date.now()}`;
 
     try {
-      logger.debug('StarknetAgent: Starting hybrid mode execution.');
+      logger.debug('SnakAgent: Starting hybrid mode execution.');
 
       this.currentMode = AGENT_MODES[AgentMode.HYBRID];
 
@@ -882,13 +882,13 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         this.agentConfig?.mode !== AgentMode.HYBRID // Assuming re-creation if config implies hybrid but executor isn't set for it
       ) {
         logger.debug(
-          'StarknetAgent: Creating or re-creating hybrid agent executor.'
+          'SnakAgent: Creating or re-creating hybrid agent executor.'
         );
         try {
           const agentConfig = this.getAgentConfig();
           if (!agentConfig) {
             logger.warn(
-              'StarknetAgent (hybrid): Agent configuration is missing, which is required for hybrid mode.'
+              'SnakAgent (hybrid): Agent configuration is missing, which is required for hybrid mode.'
             );
             throw new Error('Agent configuration is required for hybrid mode.');
           }
@@ -896,13 +896,13 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
           // Validate essential agent configuration properties for hybrid mode
           if (!agentConfig.name) {
             logger.warn(
-              'StarknetAgent (hybrid): Agent name is missing in configuration.'
+              'SnakAgent (hybrid): Agent name is missing in configuration.'
             );
           }
           if (!(agentConfig as any).bio) {
             // Consider defining a more specific type for agentConfig
             logger.warn(
-              'StarknetAgent (hybrid): Agent bio is missing in configuration.'
+              'SnakAgent (hybrid): Agent bio is missing in configuration.'
             );
           }
           if (
@@ -910,7 +910,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
             (agentConfig as any).objectives.length === 0
           ) {
             logger.warn(
-              'StarknetAgent (hybrid): Agent objectives are missing or empty.'
+              'SnakAgent (hybrid): Agent objectives are missing or empty.'
             );
           }
 
@@ -932,7 +932,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
 
           if (errorCount >= maxErrors) {
             logger.warn(
-              'StarknetAgent (hybrid): Maximum initialization attempts reached, using fallback mode.'
+              'SnakAgent (hybrid): Maximum initialization attempts reached, using fallback mode.'
             );
             fallbackAttempted = true;
             return this.executeSimpleFallback(
@@ -948,7 +948,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
 
       if (!this.agentReactExecutor?.app) {
         logger.error(
-          'StarknetAgent (hybrid): Executor created, but app is missing.'
+          'SnakAgent (hybrid): Executor created, but app is missing.'
         );
         return new AIMessage({
           content:
@@ -986,7 +986,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         threadId,
       };
     } catch (error: any) {
-      logger.error(`StarknetAgent hybrid execution failed: ${error}`);
+      logger.error(`SnakAgent hybrid execution failed: ${error}`);
 
       const errorMsg = error.message || String(error);
       if (
@@ -994,7 +994,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         errorMsg.includes('invalid_request_error')
       ) {
         logger.warn(
-          'StarknetAgent (hybrid): Detected API format error (e.g., trailing whitespace).'
+          'SnakAgent (hybrid): Detected API format error (e.g., trailing whitespace).'
         );
         return new AIMessage({
           content:
@@ -1009,7 +1009,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
 
       if (!fallbackAttempted) {
         logger.error(
-          `StarknetAgent (hybrid): Catastrophic error, using fallback: ${error}`
+          `SnakAgent (hybrid): Catastrophic error, using fallback: ${error}`
         );
         return this.executeSimpleFallback('Hybrid execution failed');
       }
