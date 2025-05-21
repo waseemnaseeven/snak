@@ -251,7 +251,7 @@ export class WorkflowController {
               logger.debug(
                 `WorkflowController[Exec:${execId}]: Node[${agentId}] - Calling agent.execute()...`
               );
-              const result = await agent.execute(state.messages, config);
+              const result = await agent.execute(state.messages, { ...config, isWorkflowNodeCall: true });
 
               logger.debug(
                 `WorkflowController[Exec:${execId}]: Node[${agentId}] - Agent execution finished. Processing result...`
@@ -650,19 +650,20 @@ export class WorkflowController {
       return previousAgent;
     } else if (typeof messageSource === 'string' && messageSource in this.agents) {
       const agentFromSource = this.agents[messageSource as keyof typeof this.agents]; // Type assertion after confirming key
-      if (agentFromSource && (messageSource === 'snak' || agentFromSource.type === AgentType.SNAK)) {
-        // After a core agent like snak, the flow might end or go to supervisor for next steps.
-        // If the message is final, end. Otherwise, perhaps supervisor for re-evaluation or end.
+      if (agentFromSource && (messageSource === 'snak' || agentFromSource.type === AgentType.SNAK || agentFromSource.type === AgentType.OPERATOR )) {
+        // After a core agent like snak or an operator, the flow might end or go to supervisor for next steps.
+        // If the message is final, end. Otherwise, default to END unless next_agent is specified.
         if (lastMessage.additional_kwargs?.final === true) {
           logger.debug(
             `WorkflowController[Exec:${execId}]: Router - From "${messageSource}", message is final. Ending workflow.`
           );
           return END;
         }
+        // If not final, and no other specific routing is given by next_agent or tool_calls, assume the agent's task is done.
         logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - From "${messageSource}", no explicit next step. Routing to "supervisor" for review or end.`
+          `WorkflowController[Exec:${execId}]: Router - From "${messageSource}" (Snak/Operator), no explicit next_agent or tool_calls, and not marked final. Ending workflow.`
         );
-        return 'supervisor'; // Or END if this should be the final step in most cases
+        return END; // Default to END if no other instruction
       }
     }
 

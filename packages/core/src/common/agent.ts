@@ -68,6 +68,7 @@ export interface AgentConfig {
   id: string;
   name: string;
   group: string;
+  description?: string;
   prompt: SystemMessage;
   interval: number;
   chatId: string;

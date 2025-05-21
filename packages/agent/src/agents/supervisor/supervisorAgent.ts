@@ -17,7 +17,7 @@ import {
   AgentConfig,
   ModelsConfig,
 } from '@snakagent/core';
-import { HumanMessage, BaseMessage } from '@langchain/core/messages';
+import { HumanMessage, BaseMessage, AIMessage } from '@langchain/core/messages';
 import { Tool } from '@langchain/core/tools';
 import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
 import { RpcProvider } from 'starknet';
@@ -159,28 +159,28 @@ export class SupervisorAgent extends BaseAgent {
       this.operators.set(this.agentSelectionAgent.id, this.agentSelectionAgent);
       logger.debug('SupervisorAgent: AgentSelectionAgent initialized');
 
-      // Initialiser le registre d'opérateurs
-      const registry = OperatorRegistry.getInstance();
-      if (this.modelSelectionAgent)
-        registry.register(
-          this.modelSelectionAgent.id,
-          this.modelSelectionAgent
-        );
-      if (this.memoryAgent)
-        registry.register(this.memoryAgent.id, this.memoryAgent);
-      if (this.toolsOrchestrator)
-        registry.register(this.toolsOrchestrator.id, this.toolsOrchestrator);
-      if (this.agentSelectionAgent)
-        registry.register(
-          this.agentSelectionAgent.id,
-          this.agentSelectionAgent
-        );
-
       // Définir l'agent Starknet par défaut
       if (this.starknetAgent) {
-        this.registerSnakAgent('snak-default', this.starknetAgent, {
-          name: 'Default Agent',
+        // Extraire les métadonnées de configuration de l'agent
+        const agentConfig = this.starknetAgent.getAgentConfig();
+        const agentName = agentConfig?.name || 'Starknet RPC Agent';
+        const agentGroup = agentConfig?.group || 'starknet';
+
+        // Créer un ID d'agent basé sur le nom et le groupe
+        const normalizedName = agentName.toLowerCase().replace(/\s+/g, '-');
+        const agentId = `${agentGroup}-${normalizedName}`;
+
+        // Enregistrer l'agent avec son ID métier
+        this.registerSnakAgent(agentId, this.starknetAgent, {
+          name: agentName,
+          description: agentConfig?.description || 'The primary Starknet interaction agent',
+          group: agentGroup,
         });
+
+        // Également l'enregistrer comme agent par défaut
+        this.defaultSnakAgent = this.starknetAgent;
+
+        logger.debug(`SupervisorAgent: Registered Starknet agent as "${agentId}" and set as default agent`);
       }
 
       // Mettre à jour les agents disponibles pour l'agent de sélection
@@ -310,149 +310,248 @@ export class SupervisorAgent extends BaseAgent {
    * Executes a task based on the provided input.
    * This method manages the execution flow, including depth checking to prevent
    * infinite loops, input processing, memory context enrichment, and invoking
-   * the WorkflowController. If execution depth is exceeded, it attempts a direct
-   * execution via StarknetAgent.
-   * @param input The user input, which can be a string, AgentMessage, or BaseMessage.
-   * @param config Optional execution configuration.
-   * @returns The final agent response.
-   * @throws Will throw an error if the WorkflowController is not initialized.
+   * the WorkflowController or returning a directive if called as a workflow node.
+   * @param input The user input, which can be a string, AgentMessage, or BaseMessage or array of BaseMessages.
+   * @param config Optional execution configuration, may include `isWorkflowNodeCall: true` if called by WorkflowController.
+   * @returns The final agent response or a directive message for the workflow.
+   * @throws Will throw an error if the WorkflowController is not initialized when needed.
    */
   public async execute(
-    input: string | AgentMessage | BaseMessage,
+    input: string | AgentMessage | BaseMessage | BaseMessage[],
     config?: Record<string, any>
   ): Promise<any> {
     this.executionDepth++;
     const depthIndent = '  '.repeat(this.executionDepth);
+    const isNodeCall = !!config?.isWorkflowNodeCall || this.executionDepth > 1;
+    const callPath = isNodeCall ? "Node Call Path" : "External Call Path";
+
     logger.debug(
-      `${depthIndent}SupervisorAgent[Depth:${this.executionDepth}]: Executing task`
+      `${depthIndent}SupervisorAgent[Depth:${this.executionDepth}, Path:${callPath}]: Executing task`
     );
 
-    // Récupérer explicitement l'agent si spécifié
-    let targetAgent = config?.agentId || null;
-    if (
-      targetAgent &&
-      !(targetAgent in this.snakAgents) &&
-      targetAgent !== 'snak'
-    ) {
+    // Safeguard against extreme recursion within the supervisor itself, though primary loop control is via call paths.
+    if (this.executionDepth > 5) { 
       logger.warn(
-        `${depthIndent}SupervisorAgent: Specified agent "${targetAgent}" not found, will use agent selection logic.`
-      );
-      targetAgent = null;
-    }
-
-    // Logique pour gérer le dépassement de profondeur
-    if (this.executionDepth > 3) {
-      logger.warn(
-        `${depthIndent}SupervisorAgent: Maximum execution depth (3) reached. ` +
-          'Returning error to prevent infinite loops.'
+        `${depthIndent}SupervisorAgent: Critical execution depth (${this.executionDepth}) reached. Aborting.`
       );
       this.executionDepth--;
-      return (
-        'Error: Maximum execution depth reached. ' +
-        'This may indicate a circular dependency or an issue with agent logic.'
-      );
+      return new AIMessage({ content: "Error: Supervisor critical depth reached.", additional_kwargs: { from: "supervisor", final: true } });
     }
 
-    let message: BaseMessage;
-    if (typeof input === 'string') {
-      message = new HumanMessage(input);
-    } else if (input instanceof BaseMessage) {
-      message = input;
-    } else if (
-      typeof input === 'object' &&
-      input !== null &&
-      'content' in input // AgentMessage like
-    ) {
-      if (typeof input.content === 'string') {
-        message = new HumanMessage(input.content);
+    let currentMessage: BaseMessage;
+    const originalUserQueryFromConfig = config?.originalUserQuery as string | undefined;
+
+    // Determine the primary message to process for the current step
+    if (originalUserQueryFromConfig && isNodeCall) { // Prioritize original query if supervisor is re-evaluating as a node
+      currentMessage = new HumanMessage(originalUserQueryFromConfig);
+      logger.debug(
+        `${depthIndent}SupervisorAgent: Using originalUserQuery from config for ${callPath} processing: \"${originalUserQueryFromConfig}\"`
+      );
+    } else if (Array.isArray(input) && input.length > 0) { // Typically from state.messages
+      const lastMsg = input[input.length - 1];
+      if (lastMsg instanceof BaseMessage) {
+        currentMessage = lastMsg;
+      } else if (lastMsg && typeof (lastMsg as any).content === 'string') {
+        currentMessage = new HumanMessage((lastMsg as any).content);
+      } else if (lastMsg) {
+        currentMessage = new HumanMessage(JSON.stringify(lastMsg));
       } else {
-        try {
-          message = new HumanMessage(JSON.stringify(input.content));
-        } catch (e) {
-          message = new HumanMessage('Unparseable structured content');
-          logger.warn(
-            `${depthIndent}SupervisorAgent: Error parsing AgentMessage content: ${e}`
-          );
-        }
+        currentMessage = new HumanMessage("Empty or invalid last message in array");
       }
+      logger.debug(
+        `${depthIndent}SupervisorAgent: Processing last message from array for ${callPath}. Content (truncated): \"${String(currentMessage.content).substring(0, 100)}...\"`
+      );
+    } else if (typeof input === 'string') {
+      currentMessage = new HumanMessage(input);
+    } else if (input instanceof BaseMessage) {
+      currentMessage = input;
+    } else if (typeof input === 'object' && input !== null && 'content' in input) { // AgentMessage like
+      currentMessage = new HumanMessage(typeof input.content === 'string' ? input.content : JSON.stringify(input.content));
     } else {
       logger.warn(
-        `${depthIndent}SupervisorAgent: Unrecognized input type: ${typeof input}. Wrapping as HumanMessage.`
+        `${depthIndent}SupervisorAgent: Unrecognized input type for ${callPath}: ${typeof input}. Wrapping as HumanMessage 'Unrecognized input format'.`
       );
-      message = new HumanMessage('Unrecognized input format');
+      currentMessage = new HumanMessage('Unrecognized input format');
     }
 
-    if (config?.modelType) {
+    // Enrich with memory context if enabled
+    if (this.config.starknetConfig.agentConfig?.memory?.enabled !== false && this.memoryAgent) {
       logger.debug(
-        `SupervisorAgent: Using provided model type: ${config.modelType}`
+        `${depthIndent}SupervisorAgent: Enriching message with memory context for ${callPath}.`
       );
+      currentMessage = await this.enrichWithMemoryContext(currentMessage);
     }
 
-    // Si un agent est spécifié dans la config, ajoutez cette info au message
-    if (targetAgent) {
-      if (!message.additional_kwargs) {
-        message.additional_kwargs = {};
-      }
-      message.additional_kwargs.targetAgent = targetAgent;
-      logger.debug(
-        `${depthIndent}SupervisorAgent: Targeting specific agent "${targetAgent}"`
-      );
-    }
+    // ***** CORE LOGIC SPLIT BASED ON CALL PATH *****
+    if (isNodeCall) {
+      // ----------- NODE CALL PATH -----------
+      // Supervisor is acting as a node within the workflow.
+      // It should decide the next step and return a directive AIMessage.
+      logger.debug(`${depthIndent}SupervisorAgent (${callPath}): Determining next action based on query: \"${String(currentMessage.content).substring(0,150)}...\"`);
+      
+      let responseContent = "";
+      let nextAgent: string | undefined = undefined;
+      let isFinal = false;
+      let toolCallsFromSelection: any[] | undefined = undefined;
 
-    // Enrichir avec le contexte mémoire si nécessaire
-    if (
-      this.config.starknetConfig.agentConfig?.memory?.enabled !== false &&
-      this.memoryAgent
-    ) {
-      logger.debug(
-        `${depthIndent}SupervisorAgent: Enriching message with memory context.`
-      );
-      message = await this.enrichWithMemoryContext(message);
-    }
+      // Use original query if available and appropriate for agent selection, otherwise current message content.
+      const queryForSelection = (originalUserQueryFromConfig || (typeof currentMessage.content === 'string' ? currentMessage.content : JSON.stringify(currentMessage.content))) as string;
 
-    if (!this.workflowController) {
-      logger.error(
-        `${depthIndent}SupervisorAgent: WorkflowController not initialized.`
-      );
-      this.executionDepth--;
-      throw new Error('WorkflowController not initialized for execution.');
-    }
+      if (this.agentSelectionAgent) {
+        logger.debug(`${depthIndent}SupervisorAgent (${callPath}): Invoking AgentSelectionAgent.`);
+        try {
+          const selectionOutcome = await this.agentSelectionAgent.execute(
+            new HumanMessage(queryForSelection), // Provide a clean query to ASA
+            { ...(config || {}), originalUserQuery: queryForSelection, isWorkflowNodeCall: true } // Pass relevant config
+          );
 
-    logger.debug(`${depthIndent}SupervisorAgent: Invoking WorkflowController.`);
-    try {
-      // Si un agent cible est spécifié, configurer workflowController pour démarrer avec cet agent
-      if (targetAgent) {
-        if (!config) config = {};
-        config.startNode =
-          targetAgent.startsWith('snak') && this.memoryAgent
-            ? 'memory'
-            : targetAgent;
-        if (targetAgent.startsWith('snak') && this.memoryAgent) {
-          config.selectedSnakAgent = targetAgent;
+          responseContent = String(selectionOutcome.content || "");
+          if (selectionOutcome.additional_kwargs?.next_agent) {
+            nextAgent = selectionOutcome.additional_kwargs.next_agent as string;
+          }
+          if (selectionOutcome.additional_kwargs?.final !== undefined) {
+            isFinal = selectionOutcome.additional_kwargs.final as boolean;
+          }
+          // Check for tool calls on AIMessage
+          if (selectionOutcome instanceof AIMessage && selectionOutcome.tool_calls && selectionOutcome.tool_calls.length > 0) {
+            toolCallsFromSelection = selectionOutcome.tool_calls;
+            if (!nextAgent && this.toolsOrchestrator) nextAgent = 'tools'; // Route to tools if orchestrator exists
+          } else if (selectionOutcome.additional_kwargs?.tool_calls && selectionOutcome.additional_kwargs?.tool_calls.length > 0){
+             // Check additional_kwargs as a fallback, though AIMessage.tool_calls is standard
+            toolCallsFromSelection = selectionOutcome.additional_kwargs.tool_calls;
+             if (!nextAgent && this.toolsOrchestrator) nextAgent = 'tools'; // Route to tools if orchestrator exists
+          }
+
+          logger.debug(`${depthIndent}SupervisorAgent (${callPath}): AgentSelectionAgent outcome - Next: ${nextAgent}, Final: ${isFinal}, Tools: ${toolCallsFromSelection?.length || 0}`);
+        } catch (e: any) {
+          logger.error(`${depthIndent}SupervisorAgent (${callPath}): Error calling AgentSelectionAgent: ${e.message}`);
+          responseContent = "Error during agent selection by Supervisor.";
+          isFinal = true; // End flow on selection error
+        }
+      } else {
+        logger.warn(`${depthIndent}SupervisorAgent (${callPath}): AgentSelectionAgent not available. Defaulting to 'snak' or ending.`);
+        if (this.defaultSnakAgent && queryForSelection) {
+          responseContent = `Supervisor: No AgentSelector. Routing to default Snak agent for query: \"${queryForSelection.substring(0,100)}...\"`;
+          nextAgent = 'snak'; 
+        } else {
+          responseContent = "Supervisor: AgentSelectionAgent not found, and no default action. Ending task.";
+          isFinal = true;
         }
       }
-
-      const result = await this.workflowController.execute(message, config);
-      logger.debug(
-        `${depthIndent}SupervisorAgent: WorkflowController execution finished.`
-      );
-
-      let formattedResponse =
-        result instanceof BaseMessage
-          ? result.content
-          : this.formatResponse(result);
-
-      logger.debug(
-        `${depthIndent}SupervisorAgent: Execution complete. Returning formatted response.`
-      );
+      
       this.executionDepth--;
-      return formattedResponse;
-    } catch (error) {
-      logger.error(
-        `${depthIndent}SupervisorAgent: Error during WorkflowController execution: ${error}`
-      );
-      this.executionDepth--;
-      return `An error occurred during processing: ${error instanceof Error ? error.message : String(error)}. Please try again.`;
+      const directiveMessage = new AIMessage({
+        content: responseContent,
+        additional_kwargs: {
+          from: "supervisor", // Critical for router logic
+          ...(nextAgent && { next_agent: nextAgent }),
+          ...(isFinal && !nextAgent && { final: true }), 
+        },
+      });
+      // Attach tool calls directly to the message if they exist
+      if (toolCallsFromSelection && toolCallsFromSelection.length > 0) {
+        directiveMessage.tool_calls = toolCallsFromSelection;
+        directiveMessage.additional_kwargs.tool_calls = toolCallsFromSelection; // Also ensure in additional_kwargs for some router patterns
+      }
+      logger.debug(`${depthIndent}SupervisorAgent (${callPath}): Returning directive: ${JSON.stringify(directiveMessage.toJSON())}`);
+      return directiveMessage;
+
+    } else {
+      // ----------- EXTERNAL CALL PATH (this.executionDepth is 1) -----------
+      // This is the initial call to start the workflow.
+      logger.debug(`${depthIndent}SupervisorAgent (${callPath}): Initiating workflow with WorkflowController.`);
+      
+      if (!this.workflowController) {
+        logger.error(`${depthIndent}SupervisorAgent (${callPath}): WorkflowController not initialized.`);
+        this.executionDepth--;
+        throw new Error('WorkflowController not initialized for execution.');
+      }
+
+      const workflowConfig: Record<string, any> = { ...(config || {}) };
+      if (!workflowConfig.originalUserQuery && typeof currentMessage.content === 'string') {
+        workflowConfig.originalUserQuery = currentMessage.content;
+      }
+      
+      // Handle agentId from the initial external call config to set a specific startNode
+      let targetAgentFromExternalCall = config?.agentId || null;
+      if (targetAgentFromExternalCall) {
+         const isValidAgent = targetAgentFromExternalCall in this.snakAgents ||
+                             targetAgentFromExternalCall === 'snak' ||
+                             targetAgentFromExternalCall === 'supervisor' ||
+                             this.operators.has(targetAgentFromExternalCall) ||
+                             targetAgentFromExternalCall === this.agentSelectionAgent?.id ||
+                             targetAgentFromExternalCall === this.memoryAgent?.id;
+         if (!isValidAgent) {
+            logger.warn(`${depthIndent}SupervisorAgent (${callPath}): Specified agentId \"${targetAgentFromExternalCall}\" in config is not a recognized agent. Workflow will use default entry point.`);
+            targetAgentFromExternalCall = null; // Fallback to workflow's default entryPoint
+         } else {
+            logger.debug(`${depthIndent}SupervisorAgent (${callPath}): External config requests startNode: \"${targetAgentFromExternalCall}\"`);
+            workflowConfig.startNode = targetAgentFromExternalCall;
+         }
+      }
+      
+      // If a Snak agent is targeted (either directly or as default), and memory is on, route through memory first.
+      const finalTargetNodeForSnak = workflowConfig.startNode || (this.defaultSnakAgent ? 'snak' : null);
+      if (this.memoryAgent && 
+          finalTargetNodeForSnak && 
+          (this.snakAgents[finalTargetNodeForSnak] || (finalTargetNodeForSnak === 'snak' && this.defaultSnakAgent)) && 
+          workflowConfig.startNode !== this.memoryAgent.id // Avoid re-routing if memory is already startNode
+         ) {
+          logger.debug(`${depthIndent}SupervisorAgent (${callPath}): Snak agent \"${finalTargetNodeForSnak}\" targeted. Routing via MemoryAgent (${this.memoryAgent.id}) first.`);
+          workflowConfig.selectedSnakAgent = finalTargetNodeForSnak; 
+          workflowConfig.startNode = this.memoryAgent.id;
+      }
+
+
+      try {
+        // Ensure originalUserQuery is in the metadata for the very first message passed to workflow
+        const initialMessagesForWorkflow = [currentMessage];
+        if (workflowConfig.originalUserQuery && (!currentMessage.additional_kwargs || !currentMessage.additional_kwargs.originalUserQuery)) {
+            if (!initialMessagesForWorkflow[0].additional_kwargs) initialMessagesForWorkflow[0].additional_kwargs = {};
+            initialMessagesForWorkflow[0].additional_kwargs.originalUserQuery = workflowConfig.originalUserQuery;
+        }
+        
+        const result = await this.workflowController.execute(initialMessagesForWorkflow[0], workflowConfig);
+        
+        let finalUserResponse: string = "Workflow completed."; // Default response
+        // Extract final response from workflow result (which is typically the full state)
+        if (result && result.messages && Array.isArray(result.messages) && result.messages.length > 0) {
+            const lastWorkflowMessage = result.messages[result.messages.length - 1];
+            if (lastWorkflowMessage) {
+              if (typeof lastWorkflowMessage.content === 'string' && lastWorkflowMessage.content.trim() !== "") {
+                finalUserResponse = lastWorkflowMessage.content;
+              } else if (lastWorkflowMessage.additional_kwargs?.final_answer && typeof lastWorkflowMessage.additional_kwargs.final_answer === 'string') {
+                finalUserResponse = lastWorkflowMessage.additional_kwargs.final_answer;
+              } else if (typeof lastWorkflowMessage.content !== 'string') {
+                 finalUserResponse = JSON.stringify(lastWorkflowMessage.content);
+              }
+              // If content is empty, but it's a final AI message, keep default or use "Task completed"
+               else if (lastWorkflowMessage instanceof AIMessage && lastWorkflowMessage.content.trim() === "" && lastWorkflowMessage.additional_kwargs?.final) {
+                finalUserResponse = "Task completed.";
+              }
+            }
+        } else if (typeof result === 'string') { // Should not happen if workflow returns full state
+          finalUserResponse = result;
+        } else if (result && result.content && typeof result.content === 'string') { // If result is a single BaseMessage
+          finalUserResponse = result.content;
+        } else if (result) { // Fallback for other unexpected result structures
+          finalUserResponse = this.formatResponse(result); 
+        }
+
+        logger.debug(
+          `${depthIndent}SupervisorAgent (${callPath}): Workflow finished. Final response (truncated): \"${finalUserResponse.substring(0, 200)}...\"`
+        );
+        this.executionDepth--;
+        return finalUserResponse;
+
+      } catch (error: any) {
+        logger.error(
+          `${depthIndent}SupervisorAgent (${callPath}): Error during WorkflowController execution: ${error.message || error}`
+        );
+        this.executionDepth--;
+        // Return a user-friendly error message
+        return `An error occurred while processing your request: ${error.message || String(error)}. Please try again.`;
+      }
     }
   }
 
@@ -871,27 +970,38 @@ export class SupervisorAgent extends BaseAgent {
     agent: StarknetAgent,
     metadata?: any
   ): void {
-    if (id === 'snak') {
-      logger.warn(
-        'SupervisorAgent: Cannot register a Snak agent with ID "snak" as it is reserved. Using "snak-default" instead.'
-      );
+    // S'assurer que l'ID est valide et pas vide
+    if (!id || id.trim() === '') {
+      logger.warn('SupervisorAgent: Invalid empty agent ID, using "snak-default" instead');
       id = 'snak-default';
     }
 
-    this.snakAgents[id] = agent;
-    if (metadata) {
-      (agent as any).metadata = metadata;
+    // S'assurer que les métadonnées existent
+    if (!metadata) {
+      metadata = {};
     }
 
-    // Si c'est le premier agent Snak, le définir comme par défaut
-    if (Object.keys(this.snakAgents).length === 1) {
+    // Attacher les métadonnées à l'agent
+    (agent as any).metadata = {
+      name: metadata.name || id,
+      description: metadata.description || 'A Starknet interaction agent',
+      group: metadata.group || 'starknet',
+      capabilities: metadata.capabilities || ["starknet_interaction", "blockchain_query"]
+    };
+
+    // Enregistrer l'agent avec son ID spécifique
+    this.snakAgents[id] = agent;
+    logger.debug(`SupervisorAgent: Registered Snak agent "${id}" with metadata: ${JSON.stringify((agent as any).metadata)}`);
+
+    // Si c'est le premier agent Snak ou si on l'enregistre explicitement comme "snak", 
+    // le définir comme agent par défaut
+    if (Object.keys(this.snakAgents).length === 1 || id === 'snak') {
       this.defaultSnakAgent = agent;
+      logger.debug(`SupervisorAgent: Set agent "${id}" as default agent`);
     }
 
     // Mettre à jour l'agent de sélection
     this.updateAgentSelectionAgentRegistry();
-
-    logger.debug(`SupervisorAgent: Registered Snak agent "${id}" with metadata: ${JSON.stringify(metadata || {})}`);
   }
 
   /**
@@ -906,20 +1016,32 @@ export class SupervisorAgent extends BaseAgent {
       ...registry.getAllAgents(),
     };
 
-    // Ajouter tous les agents Snak
+    // Ajouter tous les agents Snak avec leur ID spécifique
     Object.entries(this.snakAgents).forEach(([id, agent]) => {
       availableAgents[id] = agent;
     });
 
-    // Assurer que l'agent par défaut est disponible sous 'snak'
-    if (this.defaultSnakAgent) {
+    // S'assurer que l'agent par défaut est aussi disponible sous 'snak'
+    if (this.defaultSnakAgent && !availableAgents['snak']) {
       availableAgents['snak'] = this.defaultSnakAgent;
+      logger.debug(`SupervisorAgent: Added default agent alias as "snak"`);
     }
 
     // Mettre à jour l'agent de sélection
     this.agentSelectionAgent.setAvailableAgents(availableAgents);
     
-    logger.debug(`SupervisorAgent: Updated AgentSelectionAgent registry with ${Object.keys(availableAgents).length} agents`);
+    // Produire un log détaillé des agents disponibles
+    logger.debug(`SupervisorAgent: Updated AgentSelectionAgent registry with ${Object.keys(availableAgents).length} agents:`);
+    Object.entries(availableAgents).forEach(([id, agent]) => {
+      const metadata = (agent as any).metadata;
+      const type = agent.type;
+      
+      if (metadata) {
+        logger.debug(`  - Agent: ${id}, Type: ${type}, Metadata: {"name":"${metadata.name || 'unnamed'}","group":"${metadata.group || 'unknown'}","capabilities":[${(metadata.capabilities || []).join(',')}]}`);
+      } else {
+        logger.debug(`  - Agent: ${id}, Type: ${type}, Metadata: no metadata`);
+      }
+    });
   }
 
   /**
