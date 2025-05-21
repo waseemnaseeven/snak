@@ -9,6 +9,8 @@ export interface AgentInfo {
   description: string;
   capabilities?: string[];
   name?: string;
+  group?: string;         // Pour la catégorisation des agents
+  metadata?: Record<string, any>;
 }
 
 export interface AgentSelectionConfig {
@@ -67,28 +69,33 @@ export class AgentSelectionAgent extends BaseAgent {
     this.agentInfo = {};
 
     Object.entries(this.availableAgents).forEach(([id, agent]) => {
-      // Information de base
       const info: AgentInfo = {
         id,
         type: agent.type,
         description: this.getAgentDescription(id, agent.type),
       };
 
-      // Si l'agent a des métadonnées supplémentaires, les utiliser
+      // Extraire les métadonnées (name, group, description, etc.)
       if ((agent as any).metadata) {
         const metadata = (agent as any).metadata;
         if (metadata.name) info.name = metadata.name;
+        if (metadata.group) info.group = metadata.group;
         if (metadata.description) info.description = metadata.description;
         if (metadata.capabilities) info.capabilities = metadata.capabilities;
+        
+        // Stocker toutes les métadonnées pour une utilisation ultérieure
+        info.metadata = { ...metadata };
       }
 
       this.agentInfo[id] = info;
     });
 
     if (this.debug) {
-      logger.debug(
-        `AgentSelectionAgent: Updated info for ${Object.keys(this.agentInfo).length} agents`
-      );
+      logger.debug(`AgentSelectionAgent: Updated info for ${Object.keys(this.agentInfo).length} agents`);
+      // Log détaillé des agents disponibles en mode debug
+      Object.values(this.agentInfo).forEach(agent => {
+        logger.debug(`Agent ${agent.id}: ${agent.name || 'unnamed'} (${agent.group || 'no group'}) - ${agent.description?.substring(0, 50)}...`);
+      });
     }
   }
 
@@ -136,46 +143,91 @@ export class AgentSelectionAgent extends BaseAgent {
     }
 
     // Vérifie d'abord s'il y a une mention explicite d'un agent
-    const explicitAgentId = this.checkForExplicitAgentMention(queryString);
-    if (explicitAgentId && this.availableAgents[explicitAgentId]) {
+    const explicitAgent = this.checkForExplicitAgentMention(queryString);
+    if (explicitAgent) {
       if (this.debug) {
         logger.debug(
-          `AgentSelectionAgent: Detected explicit mention of agent "${explicitAgentId}"`
+          `AgentSelectionAgent: Detected explicit mention of agent "${explicitAgent.id}"`
         );
       }
-      return this.createSelectionResponse(explicitAgentId, queryString);
+      return this.createSelectionResponse(explicitAgent.id, queryString);
     }
 
     // Sinon, utiliser le modèle pour analyser la requête et déterminer l'agent approprié
     return await this.analyzeQueryWithModel(queryString);
   }
 
-  private checkForExplicitAgentMention(query: string): string | null {
-    // Recherche de patterns simples pour les mentions d'agents
-    const idPattern = /agent(?:\\s+id)?\\s+(\\d+|[a-zA-Z_-]+)/i;
+  private checkForExplicitAgentMention(query: string): AgentInfo | null {
+    // Patterns de détection
+    const idPattern = /agent(?:\s+id)?\s+(\d+|[a-zA-Z_-]+)/i;
     const namePattern = /agent (?:named|called) ["']?([a-zA-Z_-]+)["']?/i;
+    const groupPattern = /(?:use|with|in) (?:the|a)? ["']?([a-zA-Z_-]+)["']? (?:group|category)/i;
+    const groupNamePattern = /(?:use|with|from) (?:the|a)? ["']?([a-zA-Z_-]+)["']? ["']?([a-zA-Z_-]+)["']?/i;
 
-    // Vérifier le pattern d'ID
-    const idMatch = query.match(idPattern);
-    if (idMatch && idMatch[1]) {
-      const agentId = idMatch[1];
-      // Vérifier que cet agent existe
-      for (const [id, _agent] of Object.entries(this.availableAgents)) {
-        if (id === agentId || id === `snak-${agentId}`) {
-          return id;
+    // Chercher les combinaisons groupe+nom
+    const groupNameMatch = query.match(groupNamePattern);
+    if (groupNameMatch && groupNameMatch[1] && groupNameMatch[2]) {
+      const potentialGroup = groupNameMatch[1].toLowerCase();
+      const potentialName = groupNameMatch[2].toLowerCase();
+      
+      // Cherche un agent avec ce groupe et ce nom exacts
+      for (const agent of Object.values(this.agentInfo)) {
+        if (
+          agent.group?.toLowerCase() === potentialGroup && 
+          agent.name?.toLowerCase() === potentialName
+        ) {
+          return agent;
+        }
+      }
+      
+      // Si pas trouvé, cherche avec groupe exact et nom partiel
+      for (const agent of Object.values(this.agentInfo)) {
+        if (
+          agent.group?.toLowerCase() === potentialGroup && 
+          agent.name?.toLowerCase().includes(potentialName)
+        ) {
+          return agent;
         }
       }
     }
 
-    // Vérifier le pattern de nom
+    // Vérifier la mention par ID
+    const idMatch = query.match(idPattern);
+    if (idMatch && idMatch[1]) {
+      const agentId = idMatch[1];
+      for (const [id] of Object.entries(this.availableAgents)) {
+        if (id === agentId || id === `snak-${agentId}`) {
+          return this.agentInfo[id];
+        }
+      }
+    }
+
+    // Vérifier la mention par nom
     const nameMatch = query.match(namePattern);
     if (nameMatch && nameMatch[1]) {
       const agentName = nameMatch[1].toLowerCase();
-      // Chercher un agent avec ce nom
-      for (const [id, _agent] of Object.entries(this.availableAgents)) {
-        if (id.toLowerCase().includes(agentName)) {
-          return id;
+      for (const agent of Object.values(this.agentInfo)) {
+        if (agent.name?.toLowerCase() === agentName) {
+          return agent;
         }
+      }
+      for (const agent of Object.values(this.agentInfo)) {
+        if (agent.name?.toLowerCase().includes(agentName)) {
+          return agent;
+        }
+      }
+    }
+
+    // Vérifier la mention par groupe
+    const groupMatch = query.match(groupPattern);
+    if (groupMatch && groupMatch[1]) {
+      const groupName = groupMatch[1].toLowerCase();
+      const matchingAgents = Object.values(this.agentInfo).filter(
+        agent => agent.group?.toLowerCase() === groupName
+      );
+      
+      if (matchingAgents.length === 1) {
+        return matchingAgents[0];
       }
     }
 
@@ -184,73 +236,110 @@ export class AgentSelectionAgent extends BaseAgent {
 
   private async analyzeQueryWithModel(query: string): Promise<AIMessage> {
     if (!this.modelSelector) {
-      logger.warn(
-        'AgentSelectionAgent: No ModelSelectionAgent available, defaulting to "snak"'
-      );
+      logger.warn('AgentSelectionAgent: No ModelSelectionAgent available, defaulting to "snak"');
       return this.createSelectionResponse('snak', query);
     }
 
     try {
-      // Préparer les descriptions des agents pour le prompt
+      // Préparation de la description des agents pour le prompt
       const agentDescriptions = Object.entries(this.agentInfo)
         .map(([id, info]) => {
           const name = info.name || id;
+          const group = info.group ? `Group: ${info.group}` : '';
           const capabilities = info.capabilities
-            ? `\\n   Capabilities: ${info.capabilities.join(', ')}`
+            ? `\n   Capabilities: ${info.capabilities.join(', ')}`
             : '';
-          return `- ${id} (${name}): ${info.description}${capabilities}`;
+          return `- ${id} (${name}) ${group ? `[${group}]` : ''}: ${info.description}${capabilities}`;
         })
-        .join('\\n');
+        .join('\n');
 
       const prompt = new HumanMessage({
         content: `Analyze the following user query and determine which agent should handle it:
-        
+      
 USER QUERY: "${query}"
 
 Available agents:
 ${agentDescriptions}
 
-Respond with ONLY the ID of the most appropriate agent to handle this query. 
-If the query is about managing agent configurations or database operations related to agents, choose the appropriate operator agent.
-If the query is a general request or conversational, respond with "snak".`,
+First, understand what the user is trying to accomplish and identify key requirements.
+Then determine which agent or type of agent would be most appropriate.
+
+If multiple agents could handle this query but you need more specific information (like an exact group or name), 
+respond with "NEED_CLARIFICATION" followed by a JSON object with these fields:
+{
+  "possibleAgents": [list of agent IDs that could handle this],
+  "missingInfo": "what specific information is needed",
+  "clarificationQuestion": "a precise question to ask the user"
+}
+
+If the query doesn't seem to match any available agent's capabilities, respond with "NO_MATCHING_AGENT" followed by
+a clarification question asking what the user is trying to do.
+
+Otherwise, respond with ONLY the ID of the most appropriate agent to handle this query.`,
       });
 
-      // Utiliser le modèle 'fast' pour une analyse rapide
-      const fastModel = await this.modelSelector.getModelForTask([], 'fast');
-      const result = await fastModel.invoke([prompt]);
+      // Utiliser le modèle 'smart' pour une analyse précise
+      const model = await this.modelSelector.getModelForTask([], 'smart');
+      const result = await model.invoke([prompt]);
+      const content = typeof result.content === 'string' ? result.content.trim() : JSON.stringify(result.content);
+      
+      // Traiter les cas de clarification
+      if (content.startsWith('NEED_CLARIFICATION')) {
+        try {
+          const jsonStartIndex = content.indexOf('{');
+          const jsonEndIndex = content.lastIndexOf('}') + 1;
+          const jsonContent = content.substring(jsonStartIndex, jsonEndIndex);
+          const clarificationData = JSON.parse(jsonContent);
+          
+          return this.createClarificationResponse(
+            clarificationData.possibleAgents || [],
+            clarificationData.missingInfo || "more specific information",
+            clarificationData.clarificationQuestion || "Could you please provide more details about what you need?"
+          );
+        } catch (jsonError) {
+          logger.error(`AgentSelectionAgent: Error parsing clarification JSON: ${jsonError}`);
+          return this.createClarificationResponse(
+            [],
+            "agent selection criteria",
+            "I'm not sure which agent would be best for your query. Could you provide more specific details?"
+          );
+        }
+      }
+      
+      if (content.startsWith('NO_MATCHING_AGENT')) {
+        const questionMatch = content.match(/NO_MATCHING_AGENT\s*(.*)/);
+        const clarificationQuestion = questionMatch?.[1]?.trim() || 
+          "I'm not sure what you're trying to accomplish. Could you clarify what you need help with?";
+        
+        return this.createClarificationResponse(
+          [],
+          "matching agent capabilities",
+          clarificationQuestion
+        );
+      }
 
-      // Extraire l'ID de l'agent
-      const content =
-        typeof result.content === 'string'
-          ? result.content.trim()
-          : JSON.stringify(result.content);
-
-      // Extraire uniquement l'ID de l'agent, en supprimant tout texte supplémentaire
+      // Extraction de l'ID d'agent
       const agentId = content.replace(/^[^a-zA-Z0-9_-]+|[^a-zA-Z0-9_-]+$/g, '');
 
-      // Vérifier si l'agent sélectionné existe
       if (this.availableAgents[agentId]) {
         logger.debug(`AgentSelectionAgent: Model selected agent "${agentId}"`);
         return this.createSelectionResponse(agentId, query);
       } else {
-        // Si le modèle a retourné un ID d'agent invalide, par défaut "snak"
-        logger.warn(
-          `AgentSelectionAgent: Model returned invalid agent ID "${agentId}", defaulting to "snak"`
+        logger.warn(`AgentSelectionAgent: Model returned invalid agent ID "${agentId}", requesting clarification`);
+        return this.createClarificationResponse(
+          [],
+          "valid agent identifier",
+          "I couldn't identify a specific agent for your request. Could you describe more precisely what you need help with?"
         );
-        return this.createSelectionResponse('snak', query);
       }
     } catch (error) {
-      logger.error(
-        `AgentSelectionAgent: Error during model analysis: ${error}`
+      logger.error(`AgentSelectionAgent: Error during model analysis: ${error}`);
+      return this.createClarificationResponse(
+        [],
+        "clear request intent",
+        "I encountered an issue understanding your request. Could you rephrase it or provide more details about what you need help with?"
       );
-      // En cas d'erreur, utiliser l'agent principal par défaut
-      return this.createSelectionResponse('snak', query);
     }
-    // Fallback return, though theoretically unreachable if try/catch is exhaustive
-    logger.error(
-      'AgentSelectionAgent: Reached theoretically unreachable code in analyzeQueryWithModel. Defaulting to snak.'
-    );
-    return this.createSelectionResponse('snak', query);
   }
 
   private getAgentDescription(id: string, type: AgentType): string {
@@ -280,6 +369,34 @@ If the query is a general request or conversational, respond with "snak".`,
         from: 'agent-selector',
         nextAgent: agentId,
         originalUserQuery: originalQuery,
+      },
+    });
+  }
+
+  private createClarificationResponse(
+    possibleAgents: string[],
+    missingInfo: string,
+    clarificationQuestion: string
+  ): AIMessage {
+    let agentOptions = '';
+    if (possibleAgents.length > 0) {
+      const agentsList = possibleAgents.map(id => {
+        const agent = this.agentInfo[id];
+        if (!agent) return id;
+        
+        return `- ${id}${agent.name ? ` (${agent.name})` : ''}${agent.group ? ` [${agent.group}]` : ''}: ${agent.description}`;
+      }).join('\n');
+      
+      agentOptions = `\n\nThese agents might be able to help:\n${agentsList}`;
+    }
+
+    return new AIMessage({
+      content: `I need more information to select the most appropriate agent for your request. Specifically, I need to know ${missingInfo}.${agentOptions}\n\n${clarificationQuestion}`,
+      additional_kwargs: {
+        from: 'agent-selector',
+        needsClarification: true,
+        possibleAgents: possibleAgents,
+        originalClarificationQuestion: clarificationQuestion,
       },
     });
   }

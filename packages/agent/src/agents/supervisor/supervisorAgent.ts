@@ -889,11 +889,9 @@ export class SupervisorAgent extends BaseAgent {
     }
 
     // Mettre à jour l'agent de sélection
-    if (this.agentSelectionAgent) {
-      this.updateAgentSelectionAgentRegistry();
-    }
+    this.updateAgentSelectionAgentRegistry();
 
-    logger.debug(`SupervisorAgent: Registered Snak agent "${id}"`);
+    logger.debug(`SupervisorAgent: Registered Snak agent "${id}" with metadata: ${JSON.stringify(metadata || {})}`);
   }
 
   /**
@@ -918,7 +916,10 @@ export class SupervisorAgent extends BaseAgent {
       availableAgents['snak'] = this.defaultSnakAgent;
     }
 
+    // Mettre à jour l'agent de sélection
     this.agentSelectionAgent.setAvailableAgents(availableAgents);
+    
+    logger.debug(`SupervisorAgent: Updated AgentSelectionAgent registry with ${Object.keys(availableAgents).length} agents`);
   }
 
   /**

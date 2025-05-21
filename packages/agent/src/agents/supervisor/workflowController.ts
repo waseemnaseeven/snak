@@ -6,6 +6,7 @@ import { IAgent } from '../core/baseAgent.js';
 import { RunnableConfig } from '@langchain/core/runnables';
 import crypto from 'crypto';
 import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
+import { AgentType } from '../core/baseAgent.js';
 
 /**
  * Represents the state of the multi-agent workflow.
@@ -541,271 +542,133 @@ export class WorkflowController {
   private router(state: WorkflowState): string | typeof END {
     const execId = this.executionId || 'unknown';
     logger.debug(
-      `WorkflowController[Exec:${execId}]: Router - Iteration: ${state.iterationCount}, Current Agent: ${state.currentAgent}`
+      `WorkflowController[Exec:${execId}]: Router - Evaluating state (Iteration: ${state.iterationCount}, Msgs: ${state.messages.length})`
     );
 
-    if (state.metadata.modelType) {
-      logger.debug(
-        `WorkflowController[Exec:${execId}]: Router - Preserved model type: "${state.metadata.modelType}"`
+    if (state.error) {
+      logger.error(
+        `WorkflowController[Exec:${execId}]: Router - Error in state: ${state.error}, ending workflow.`
       );
+      return END;
     }
 
-    if (!state.metadata.agentHistory) {
-      state.metadata.agentHistory = [];
-    }
-
-    if (state.currentAgent && state.currentAgent !== END) {
-      state.metadata.agentHistory.push(state.currentAgent);
-      logger.debug(
-        `  - Agent history: ${(state.metadata.agentHistory || []).join(' → ')}`
-      );
-    }
-
-    const history = state.metadata.agentHistory || [];
-
-    if (
-      state.metadata.mode === AGENT_MODES[AgentMode.HYBRID] &&
-      state.metadata.waiting_for_input === true
-    ) {
-      logger.debug(
-        `WorkflowController[Exec:${execId}]: Router - Hybrid mode waiting for input, pausing workflow`
-      );
-      return 'hybrid_pause';
-    }
-
+    // Check for max iterations
     if (state.iterationCount >= this.maxIterations) {
       logger.warn(
-        `WorkflowController[Exec:${execId}]: Router - Max iterations (${this.maxIterations}) reached, forcing END`
+        `WorkflowController[Exec:${execId}]: Router - Max iterations reached, ending workflow.`
       );
       return END;
     }
 
+    // Get the last message to determine the next step
     if (!state.messages || state.messages.length === 0) {
       logger.warn(
-        `WorkflowController[Exec:${execId}]: Router - No messages in state, forcing END`
+        `WorkflowController[Exec:${execId}]: Router - No messages in state, ending workflow.`
       );
       return END;
     }
-
     const lastMessage = state.messages[state.messages.length - 1];
 
+    // Gérer les messages de l'agent de sélection qui demandent une clarification
     if (
       lastMessage instanceof AIMessage &&
-      lastMessage.additional_kwargs?.from === 'agent-selector'
-    ) {
-      const selectedAgentRaw = lastMessage.additional_kwargs?.nextAgent;
-
-      if (typeof selectedAgentRaw === 'string') {
-        const selectedAgent = selectedAgentRaw;
-        logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - Agent selector chose "${selectedAgent}"`
-        );
-
-        if (lastMessage.additional_kwargs?.originalUserQuery) {
-          state.metadata.originalUserQuery = lastMessage.additional_kwargs
-            .originalUserQuery as string;
-        }
-
-        // Check if the selected agent exists
-        if (!this.agents[selectedAgent]) {
-          logger.warn(
-            `WorkflowController[Exec:${execId}]: Router - Agent selector chose non-existent agent "${selectedAgent}", routing to supervisor`
-          );
-          return 'supervisor';
-        }
-
-        if (selectedAgent.startsWith('snak') && 'memory' in this.agents) {
-          logger.debug(
-            `WorkflowController[Exec:${execId}]: Router - Adding memory step before selected snak agent`
-          );
-          state.metadata.selectedSnakAgent = selectedAgent;
-          return 'memory';
-        }
-
-        return selectedAgent;
-      } else if (selectedAgentRaw !== undefined) {
-        logger.warn(
-          `WorkflowController[Exec:${execId}]: Router - Agent selector chose agent, but nextAgent is not a string: ${typeof selectedAgentRaw}. Routing to supervisor.`
-        );
-        return 'supervisor';
-      }
-
-      logger.warn(
-        `WorkflowController[Exec:${execId}]: Router - Agent selector did not specify a valid nextAgent, routing to supervisor`
-      );
-      return 'supervisor';
-    }
-
-    if (state.currentAgent === 'memory' && state.metadata.selectedSnakAgent) {
-      const targetAgent = state.metadata.selectedSnakAgent;
-      logger.debug(
-        `WorkflowController[Exec:${execId}]: Router - Memory processing complete, routing to selected agent "${targetAgent}"`
-      );
-      return targetAgent;
-    }
-
-    if (lastMessage instanceof AIMessage) {
-      if (lastMessage.additional_kwargs?.final === true) {
-        logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - Message marked as final, ending workflow`
-        );
-        return END;
-      }
-
-      if (lastMessage.additional_kwargs?.from === 'snak') {
-        logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - Response from 'snak' agent, treating as final`
-        );
-        return END;
-      }
-
-      if (
-        !lastMessage.content ||
-        (Array.isArray(lastMessage.content) &&
-          lastMessage.content.length === 0) ||
-        (typeof lastMessage.content === 'string' &&
-          lastMessage.content.trim() === '')
-      ) {
-        logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - Empty response detected, ending workflow`
-        );
-        return END;
-      }
-
-      if (
-        lastMessage.additional_kwargs?.wait_for_input === true ||
-        (typeof lastMessage.content === 'string' &&
-          lastMessage.content.includes('WAITING_FOR_HUMAN_INPUT:'))
-      ) {
-        logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - Detected request for human input in hybrid mode`
-        );
-        state.metadata.waiting_for_input = true;
-        state.metadata.mode = AGENT_MODES[AgentMode.HYBRID];
-        return 'hybrid_pause';
-      }
-    }
-
-    if (lastMessage instanceof HumanMessage) {
-      if (history.length === 0 || history[history.length - 1] === START) {
-        if ('agent-selector' in this.agents) {
-          logger.debug(
-            `WorkflowController[Exec:${execId}]: Router - Initial human message, routing to agent-selector`
-          );
-          return 'agent-selector';
-        }
-
-        logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - No agent-selector available, routing to supervisor`
-        );
-        return 'supervisor';
-      }
-
-      for (let i = history.length - 1; i >= 0; i--) {
-        const agent = history[i];
-        if (
-          !['agent-selector', 'supervisor', 'tools', 'memory'].includes(
-            agent
-          ) &&
-          this.agents[agent]
-        ) {
-          logger.debug(
-            `WorkflowController[Exec:${execId}]: Router - Routing to previously used agent: ${agent}`
-          );
-
-          if (agent.startsWith('snak') && 'memory' in this.agents) {
-            state.metadata.selectedSnakAgent = agent;
-            return 'memory';
-          }
-
-          return agent;
-        }
-      }
-
-      if ('agent-selector' in this.agents) {
-        logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - No previous agent found, routing to agent-selector`
-        );
-        return 'agent-selector';
-      }
-
-      logger.debug(
-        `WorkflowController[Exec:${execId}]: Router - No agent-selector, routing to default 'snak'`
-      );
-      return 'snak';
-    }
-
-    if (state.currentAgent === 'supervisor') {
-      const supervisorCount = history.filter(
-        (agent: string) => agent === 'supervisor'
-      ).length;
-      if (supervisorCount > 1) {
-        logger.warn(
-          `WorkflowController[Exec:${execId}]: Router - Supervisor called multiple times (${supervisorCount}), routing directly to 'snak' to prevent loop.`
-        );
-        if ('snak' in this.agents) return 'snak';
-        logger.warn(
-          `WorkflowController[Exec:${execId}]: Router - 'snak' agent not found after supervisor loop detection, ending.`
-        );
-        return END;
-      }
-    }
-
-    if (
-      lastMessage instanceof AIMessage &&
-      lastMessage.additional_kwargs?.from === 'model-selector'
+      lastMessage.additional_kwargs?.from === 'agent-selector' &&
+      lastMessage.additional_kwargs?.needsClarification === true
     ) {
       logger.debug(
-        `WorkflowController[Exec:${execId}]: Router - Message from model-selector, routing directly to 'snak'`
+        `WorkflowController[Exec:${execId}]: Router - Agent selector requesting clarification from user, ending workflow to get user input`
       );
-
-      if (lastMessage.additional_kwargs?.originalUserQuery) {
-        state.metadata.originalUserQuery =
-          lastMessage.additional_kwargs.originalUserQuery;
-        logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - Preserved original user query: "${state.metadata.originalUserQuery}"`
-        );
-      }
-
-      if (lastMessage.additional_kwargs?.modelType) {
-        state.metadata.modelType = lastMessage.additional_kwargs
-          .modelType as string;
-        logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - Preserved model type: "${state.metadata.modelType}"`
-        );
-      }
-
-      if ('snak' in this.agents) {
-        return 'snak';
-      }
-      logger.warn(
-        `WorkflowController[Exec:${execId}]: Router - 'snak' agent not found after model-selector, ending.`
-      );
+      // Fin du workflow pour permettre à l'utilisateur de répondre
       return END;
     }
 
-    if (
-      lastMessage instanceof AIMessage &&
-      lastMessage.tool_calls &&
-      lastMessage.tool_calls.length > 0
-    ) {
-      if ('tools' in this.agents) {
+    // If there are tool calls, route to the tool orchestrator
+    if (lastMessage.additional_kwargs?.tool_calls && lastMessage.additional_kwargs.tool_calls.length > 0) {
+      if (this.agents['tools']) {
         logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - Routing to 'tools' agent due to tool calls.`
+          `WorkflowController[Exec:${execId}]: Router - Tool calls detected, routing to "tools"`
         );
         return 'tools';
+      } else {
+        logger.warn(
+          `WorkflowController[Exec:${execId}]: Router - Tool calls detected, but no "tools" agent (ToolsOrchestrator) available. Ending workflow.`
+        );
+        return END; // Or handle error appropriately
       }
     }
 
-    if (state.currentAgent !== 'supervisor' && 'supervisor' in this.agents) {
-      logger.debug(
-        `WorkflowController[Exec:${execId}]: Router - Routing to 'supervisor' for coordination.`
-      );
-      return 'supervisor';
+    // Check for a specific agent request in the message's additional_kwargs
+    if (lastMessage.additional_kwargs?.next_agent) {
+      const nextAgent = lastMessage.additional_kwargs.next_agent as string;
+      if (this.agents[nextAgent]) {
+        logger.debug(
+          `WorkflowController[Exec:${execId}]: Router - Explicit next agent "${nextAgent}" requested, routing there.`
+        );
+        return nextAgent;
+      } else {
+        logger.warn(
+          `WorkflowController[Exec:${execId}]: Router - Requested next agent "${nextAgent}" does not exist. Ending workflow.`
+        );
+        return END;
+      }
     }
 
+    // Determine the default next agent based on the current agent or message source
+    const currentAgentId = state.currentAgent;
+    const messageSource = lastMessage.additional_kwargs?.from || currentAgentId;
+
+    if (this.debug) {
+      logger.debug(
+        `WorkflowController[Exec:${execId}]: Router - Current agent: "${currentAgentId}", Message source: "${messageSource}"`
+      );
+    }
+
+    // Default routing logic: if a supervisor, use agent-selector, else back to supervisor or snak
+    // This logic might need further refinement based on specific agent interactions.
+    if (messageSource === 'supervisor') {
+      // After supervisor, usually a more specific agent is selected by agent-selector or directly.
+      // If agent-selector is available, let it decide. Otherwise, default to snak.
+      const next = this.agents['agent-selector'] ? 'agent-selector' : 'snak';
+      logger.debug(
+        `WorkflowController[Exec:${execId}]: Router - From supervisor, routing to "${next}"`
+      );
+      return next;
+    } else if (messageSource === 'agent-selector') {
+      // agent-selector should have provided next_agent, but if not, assume snak or end.
+      // This case should ideally be handled by next_agent kwarg.
+      logger.debug(
+        `WorkflowController[Exec:${execId}]: Router - From agent-selector, should have provided next_agent. Defaulting to "snak".`
+      );
+      return 'snak'; // Or END if no further action expected
+    } else if (messageSource === 'tools') {
+      // After tools, usually back to the agent that called the tools (often 'snak' or a specialized agent).
+      // This needs context. Assuming 'snak' as a general fallback.
+      const previousAgent = state.metadata?.lastActiveAgent || 'snak';
+      logger.debug(
+        `WorkflowController[Exec:${execId}]: Router - From tools, routing to previous agent "${previousAgent}"`
+      );
+      return previousAgent;
+    } else if (typeof messageSource === 'string' && messageSource in this.agents) {
+      const agentFromSource = this.agents[messageSource as keyof typeof this.agents]; // Type assertion after confirming key
+      if (agentFromSource && (messageSource === 'snak' || agentFromSource.type === AgentType.SNAK)) {
+        // After a core agent like snak, the flow might end or go to supervisor for next steps.
+        // If the message is final, end. Otherwise, perhaps supervisor for re-evaluation or end.
+        if (lastMessage.additional_kwargs?.final === true) {
+          logger.debug(
+            `WorkflowController[Exec:${execId}]: Router - From "${messageSource}", message is final. Ending workflow.`
+          );
+          return END;
+        }
+        logger.debug(
+          `WorkflowController[Exec:${execId}]: Router - From "${messageSource}", no explicit next step. Routing to "supervisor" for review or end.`
+        );
+        return 'supervisor'; // Or END if this should be the final step in most cases
+      }
+    }
+
+    // Default fallback: if no other routing rule applies, end the workflow.
     logger.warn(
-      `WorkflowController[Exec:${execId}]: Router - Could not determine next agent, forcing END. Last message from: ${lastMessage?.additional_kwargs?.from}, Current Agent: ${state.currentAgent}`
+      `WorkflowController[Exec:${execId}]: Router - No specific routing rule matched for message from "${messageSource}". Ending workflow.`
     );
     return END;
   }
@@ -928,65 +791,13 @@ export class WorkflowController {
       }
 
       logger.debug(
-        `WorkflowController[Exec:${this.executionId}]: Workflow execution completed.`
+        `WorkflowController[Exec:${this.executionId}]: Workflow execution completed`
       );
-
-      // Extract the original user query if it wasn't initially set and exists in the final state
-      if (!originalUserQuery && result?.metadata?.originalUserQuery) {
-        originalUserQuery = result.metadata.originalUserQuery;
-        logger.debug(
-          `WorkflowController[Exec:${this.executionId}]: Extracted original user query from final state: "${originalUserQuery}"`
-        );
-      }
-
-      // Preserve the original user query in the result if available
-      if (originalUserQuery && result instanceof AIMessage) {
-        if (!result.additional_kwargs) {
-          result.additional_kwargs = {};
-        }
-        result.additional_kwargs.originalUserQuery = originalUserQuery;
-      }
-
       return result;
-    } catch (error: any) {
-      if (this.timeoutId) {
-        clearTimeout(this.timeoutId);
-        this.timeoutId = null;
-      }
-      logger.error(
-        `WorkflowController[Exec:${this.executionId}]: Error during execution: ${error.message || error}`
-      );
-      return new AIMessage({
-        content: `An error occurred: ${error.message || error}`,
-        additional_kwargs: {
-          from: 'workflow-controller',
-          final: true,
-          error: error.message || String(error),
-          originalUserQuery: originalUserQuery,
-        },
-      });
-    }
-  }
-
-  /**
-   * Resets the workflow's state, primarily by clearing any persisted checkpoint data.
-   * This allows for a fresh execution of the workflow.
-   * @throws Error if resetting fails.
-   */
-  public async reset(): Promise<void> {
-    logger.debug('WorkflowController: Starting reset');
-    try {
-      if (this.checkpointer) {
-        logger.debug(
-          'WorkflowController: Resetting in-memory checkpointer by creating a new instance.'
-        );
-        // Re-instantiating MemorySaver effectively clears its state.
-        this.checkpointer = new MemorySaver();
-      }
-
-      logger.debug('WorkflowController: Reset finished');
     } catch (error) {
-      logger.error(`WorkflowController: Error resetting workflow: ${error}`);
+      logger.error(
+        `WorkflowController[Exec:${this.executionId}]: Workflow execution failed: ${error}`
+      );
       throw error;
     }
   }
@@ -1027,15 +838,42 @@ export class WorkflowController {
     return null;
   }
 
+  /**
+   * Resets the workflow's state, primarily by clearing any persisted checkpoint data.
+   * This allows for a fresh execution of the workflow.
+   * @throws Error if resetting fails.
+   */
+  public async reset(): Promise<void> {
+    logger.debug(`WorkflowController[Exec:${this.executionId || 'unknown'}]: Starting reset`);
+    try {
+      if (this.checkpointer && this.checkpointEnabled) {
+        // Re-instantiating MemorySaver effectively clears its state for in-memory.
+        // For persistent checkpointers, a more specific reset might be needed.
+        this.checkpointer = new MemorySaver(); 
+        logger.debug(`WorkflowController[Exec:${this.executionId || 'unknown'}]: Checkpointer reset.`);
+      }
+      // Reset any other stateful properties of the controller if necessary
+      this.executionId = null; 
+      logger.debug(`WorkflowController[Exec:${this.executionId || 'unknown'}]: Reset finished`);
+    } catch (error) {
+      logger.error(`WorkflowController[Exec:${this.executionId || 'unknown'}]: Error resetting workflow: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Disposes of resources used by the WorkflowController.
+   * Clears any active timeouts and resets the initialized flag.
+   */
   public async dispose(): Promise<void> {
-    logger.debug('WorkflowController: Disposing...');
+    logger.debug(`WorkflowController[Exec:${this.executionId || 'unknown'}]: Disposing...`);
     if (this.timeoutId) {
       clearTimeout(this.timeoutId);
       this.timeoutId = null;
     }
-    // Any other cleanup logic for WorkflowController can be added here.
     this.initialized = false;
-    logger.debug('WorkflowController: Dispose complete.');
+    // Any other cleanup logic for WorkflowController can be added here.
+    logger.debug(`WorkflowController[Exec:${this.executionId || 'unknown'}]: Dispose complete.`);
     return Promise.resolve();
   }
 }
