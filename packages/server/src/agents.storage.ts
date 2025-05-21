@@ -39,99 +39,12 @@ export class AgentStorage {
     this.initPromise = this.initialize();
   }
 
-  private async initialize_database() {
-    try {
-      const q = [
-        new Postgres.Query(`
-          CREATE TYPE agent_prompt AS (
-            bio TEXT,
-            lore TEXT[] ,
-            objectives TEXT[],
-            knowledge TEXT[]
-          );`),
-        new Postgres.Query(`
-          CREATE TYPE memory AS (
-              memory BOOLEAN,
-              shortTermMemorySize INTEGER
-          );`),
-        new Postgres.Query(`
-          CREATE TYPE model AS (
-              provider TEXT,
-              model_name TEXT,
-              description TEXT
-          );`),
-        // TODO : Use id as the unique
-        new Postgres.Query(`
-            CREATE TABLE IF NOT EXISTS agents (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            "group" VARCHAR(255) NOT NULL DEFAULT 'default_group',
-            prompt agent_prompt NOT NULL,
-            interval INTEGER NOT NULL DEFAULT 5,
-            plugins TEXT[] NOT NULL DEFAULT '{}',
-            memory memory NOT NULL DEFAULT (false, 5)
-            );`),
-        new Postgres.Query(`
-            CREATE TABLE IF NOT EXISTS agent_iterations (
-            id SERIAL PRIMARY KEY,
-            data JSONB NOT NULL
-            );`),
-        new Postgres.Query(`
-            CREATE TABLE IF NOT EXISTS conversation (
-            conversation_id SERIAL PRIMARY KEY,
-            agent_id INTEGER NOT NULL,
-            conversation_name TEXT NOT NULL UNIQUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            status TEXT NOT NULL DEFAULT 'success',
-            FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
-        );`),
-        new Postgres.Query(`
-        CREATE TABLE IF NOT EXISTS message (
-            message_id SERIAL PRIMARY KEY,
-            conversation_id TEXT NOT NULL,
-            content TEXT NOT NULL,
-            agent_iteration_id INTEGER NOT NULL,
-            sender_type TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (conversation_id) REFERENCES conversation(conversation_id) ON DELETE CASCADE
-            FOREIGN KEY (agent_iteration_id) REFERENCES agent_iterations(id) ON DELETE CASCADE 
-        );`),
-        new Postgres.Query(`
-            CREATE TABLE IF NOT EXISTS chat (
-            id SERIAL PRIMARY KEY,
-            agent_id INTEGER NOT NULL,
-            conversation_name TEXT,
-            messages message NOT NULL
-        );`),
-        new Postgres.Query(`
-            CREATE TABLE IF NOT EXISTS models_config (
-            id SERIAL PRIMARY KEY,
-            fast model NOT NULL,
-            smart model NOT NULL,
-            cheap model NOT NULL
-        );`),
-      ];
-      for (const query of q) {
-        await Postgres.query(query).catch((error) => {
-          if (error.code === '42710') {
-            logger.debug('Table already exists, skipping creation.');
-            return;
-          }
-          logger.error('Error creating table:', error);
-        });
-      }
-      logger.debug('Database tables created successfully');
-    } catch (error) {
-      logger.error('Error during agents_controller initialisation:', error);
-      throw error;
-    }
-  }
-
+  // TODO : this function should don't exist when the models_config will be in the configuration form if this app
   private async init_models_config() {
     try {
       logger.debug('Initializing models configuration');
       const q = new Postgres.Query(
-        `SELECT EXISTS(SELECT 1 FROM models_config WHERE id = 1)`
+        `SELECT EXISTS(SELECT * FROM models_config)`
       );
       const result = await Postgres.query<{ exists: boolean }>(q);
       if (!result[0].exists) {
@@ -154,7 +67,7 @@ export class AgentStorage {
         };
         logger.debug('Models configuration not found, creating default config');
         const q = new Postgres.Query(
-          `INSERT INTO models_config (id, fast, smart, cheap) VALUES (1, ROW($1, $2, $3), ROW($4, $5, $6), ROW($7, $8, $9))`,
+          `INSERT INTO models_config (fast, smart, cheap) VALUES (ROW($1, $2, $3), ROW($4, $5, $6), ROW($7, $8, $9))`,
           [
             fast.provider,
             fast.model_name,
@@ -191,7 +104,6 @@ export class AgentStorage {
         port: parseInt(process.env.POSTGRES_PORT as string),
       });
 
-      await this.initialize_database();
       await this.init_models_config();
       await this.init_agents_config();
       this.initialized = true;
@@ -257,7 +169,7 @@ export class AgentStorage {
 
   private async get_models_config(): Promise<ModelsConfig> {
     try {
-      const q = new Postgres.Query(`SELECT * FROM models_config WHERE id = 1`);
+      const q = new Postgres.Query(`SELECT * FROM models_config`);
       logger.debug(`Query to get models config: ${q}`);
       const q_res = await Postgres.query<ModelsConfig>(q);
       if (q_res.length === 0) {
@@ -359,6 +271,7 @@ export class AgentStorage {
       `SELECT name FROM agents WHERE "group" = $1 AND (name = $2 OR name LIKE $2 || '-%') ORDER BY LENGTH(name) DESC, name DESC LIMIT 1`,
       [group, baseName]
     );
+    logger.debug(`Name check query: ${nameCheckQuery}`);
     const nameCheckResult = await Postgres.query<{ name: string }>(
       nameCheckQuery
     );

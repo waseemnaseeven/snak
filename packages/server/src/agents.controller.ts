@@ -3,9 +3,7 @@ import {
   AgentAddRequestDTO,
   AgentDeleteRequestDTO,
   AgentRequestDTO,
-  ConversationsRequestDTO,
-  getMessagesFromConversationIdDTO,
-  DeleteConversationRequestDTO,
+  getMessagesFromAgentsDTO,
   AgentDeletesRequestDTO,
 } from './dto/agents.js';
 import { AgentService } from './services/agent.service.js';
@@ -13,8 +11,7 @@ import { AgentStorage } from './agents.storage.js';
 import { metrics } from '@snakagent/core';
 import { Reflector } from '@nestjs/core';
 import { ServerError } from './utils/error.js';
-import { logger } from 'starknet';
-
+import { logger } from '@snakagent/core';
 export interface AgentResponse {
   status: 'success' | 'failure';
   data?: unknown;
@@ -150,61 +147,18 @@ export class AgentsController {
   //   }
   // }
 
-  @Post('delete_conversation')
-  async deleteConversation(
-    @Body() userRequest: DeleteConversationRequestDTO
+  @Post('get_messages_from_agents_id')
+  async getMessageFromAgentsId(
+    @Body() userRequest: getMessagesFromAgentsDTO
   ): Promise<AgentResponse> {
     try {
       const agent = this.agentFactory.getAgent(userRequest.agent_id);
       if (!agent) {
         throw new ServerError('E01TA400');
       }
-
-      await this.agentService.deleteConversation(userRequest.conversation_id);
-      const response: AgentResponse = {
-        status: 'success',
-        data: `Conversation ${userRequest.conversation_id} deleted`,
-      };
-      return response;
-    } catch (error) {
-      throw new ServerError('E02TA200');
-    }
-  }
-
-  @Get('get_conversations_from_agent_id')
-  async getConversationsFromAgentId(
-    @Body() userRequest: ConversationsRequestDTO
-  ): Promise<AgentResponse> {
-    try {
-      const agent = this.agentFactory.getAgent(userRequest.agent_id);
-      if (!agent) {
-        throw new ServerError('E01TA400');
-      }
-      const conversations = await this.agentService.getConversationsFromAgentId(
-        userRequest.agent_id
-      );
-      const response: AgentResponse = {
-        status: 'success',
-        data: conversations,
-      };
-      return response;
-    } catch (error) {
-      logger.error('Error in getAllConversations:', error);
-      throw new ServerError('E05TA100');
-    }
-  }
-
-  @Get('get_messages_from_conversation_id')
-  async getMessagesFromConversationId(
-    @Body() userRequest: getMessagesFromConversationIdDTO
-  ): Promise<AgentResponse> {
-    try {
-      const agent = this.agentFactory.getAgent(userRequest.agent_id);
-      if (!agent) {
-        throw new ServerError('E01TA400');
-      }
-      const messages = await this.agentService.getMessageFromConversation(
-        userRequest.conversation_id
+      const messages = await this.agentService.getMessageFromAgentId(
+        userRequest.agent_id,
+        undefined
       );
       const response: AgentResponse = {
         status: 'success',
