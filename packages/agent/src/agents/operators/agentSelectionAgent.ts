@@ -101,7 +101,7 @@ export class AgentSelectionAgent extends BaseAgent {
         if (metadata.name) info.name = metadata.name;
         if (metadata.group) info.group = metadata.group;
         if (metadata.description) info.description = metadata.description;
-        
+
         // Stocker toutes les métadonnées pour une utilisation ultérieure
         info.metadata = { ...metadata };
       }
@@ -110,10 +110,14 @@ export class AgentSelectionAgent extends BaseAgent {
     });
 
     if (this.debug) {
-      logger.debug(`AgentSelectionAgent: Updated info for ${Object.keys(this.agentInfo).length} agents`);
+      logger.debug(
+        `AgentSelectionAgent: Updated info for ${Object.keys(this.agentInfo).length} agents`
+      );
       // Log détaillé des agents disponibles en mode debug
-      Object.values(this.agentInfo).forEach(agent => {
-        logger.debug(`Agent ${agent.id}: ${agent.name || 'unnamed'} (${agent.group || 'no group'}) - ${agent.description?.substring(0, 50)}...`);
+      Object.values(this.agentInfo).forEach((agent) => {
+        logger.debug(
+          `Agent ${agent.id}: ${agent.name || 'unnamed'} (${agent.group || 'no group'}) - ${agent.description?.substring(0, 50)}...`
+        );
       });
     }
   }
@@ -180,29 +184,31 @@ export class AgentSelectionAgent extends BaseAgent {
     // Patterns de détection
     const idPattern = /agent(?:\s+id)?\s+(\d+|[a-zA-Z_-]+)/i;
     const namePattern = /agent (?:named|called) ["']?([a-zA-Z_-]+)["']?/i;
-    const groupPattern = /(?:use|with|in) (?:the|a)? ["']?([a-zA-Z_-]+)["']? (?:group|category)/i;
-    const groupNamePattern = /(?:use|with|from) (?:the|a)? ["']?([a-zA-Z_-]+)["']? ["']?([a-zA-Z_-]+)["']?/i;
+    const groupPattern =
+      /(?:use|with|in) (?:the|a)? ["']?([a-zA-Z_-]+)["']? (?:group|category)/i;
+    const groupNamePattern =
+      /(?:use|with|from) (?:the|a)? ["']?([a-zA-Z_-]+)["']? ["']?([a-zA-Z_-]+)["']?/i;
 
     // Chercher les combinaisons groupe+nom
     const groupNameMatch = query.match(groupNamePattern);
     if (groupNameMatch && groupNameMatch[1] && groupNameMatch[2]) {
       const potentialGroup = groupNameMatch[1].toLowerCase();
       const potentialName = groupNameMatch[2].toLowerCase();
-      
+
       // Cherche un agent avec ce groupe et ce nom exacts
       for (const agent of Object.values(this.agentInfo)) {
         if (
-          agent.group?.toLowerCase() === potentialGroup && 
+          agent.group?.toLowerCase() === potentialGroup &&
           agent.name?.toLowerCase() === potentialName
         ) {
           return agent;
         }
       }
-      
+
       // Si pas trouvé, cherche avec groupe exact et nom partiel
       for (const agent of Object.values(this.agentInfo)) {
         if (
-          agent.group?.toLowerCase() === potentialGroup && 
+          agent.group?.toLowerCase() === potentialGroup &&
           agent.name?.toLowerCase().includes(potentialName)
         ) {
           return agent;
@@ -242,9 +248,9 @@ export class AgentSelectionAgent extends BaseAgent {
     if (groupMatch && groupMatch[1]) {
       const groupName = groupMatch[1].toLowerCase();
       const matchingAgents = Object.values(this.agentInfo).filter(
-        agent => agent.group?.toLowerCase() === groupName
+        (agent) => agent.group?.toLowerCase() === groupName
       );
-      
+
       if (matchingAgents.length === 1) {
         return matchingAgents[0];
       }
@@ -255,7 +261,9 @@ export class AgentSelectionAgent extends BaseAgent {
 
   private async analyzeQueryWithModel(query: string): Promise<AIMessage> {
     if (!this.modelSelector) {
-      logger.warn('AgentSelectionAgent: No ModelSelectionAgent available, defaulting to "snak"');
+      logger.warn(
+        'AgentSelectionAgent: No ModelSelectionAgent available, defaulting to "snak"'
+      );
       return this.createSelectionResponse('snak', query);
     }
 
@@ -270,7 +278,9 @@ export class AgentSelectionAgent extends BaseAgent {
         .join('\n');
 
       if (this.debug) {
-        logger.debug(`AgentSelectionAgent: Available agents for selection:\n${agentDescriptions}`);
+        logger.debug(
+          `AgentSelectionAgent: Available agents for selection:\n${agentDescriptions}`
+        );
       }
 
       const prompt = new HumanMessage({
@@ -300,12 +310,15 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
       // Utiliser le modèle 'smart' pour une analyse précise
       const model = await this.modelSelector.getModelForTask([], 'smart');
       const result = await model.invoke([prompt]);
-      const content = typeof result.content === 'string' ? result.content.trim() : JSON.stringify(result.content);
-      
+      const content =
+        typeof result.content === 'string'
+          ? result.content.trim()
+          : JSON.stringify(result.content);
+
       if (this.debug) {
         logger.debug(`AgentSelectionAgent: Model raw response: "${content}"`);
       }
-      
+
       // Traiter les cas de clarification
       if (content.startsWith('NEED_CLARIFICATION')) {
         try {
@@ -314,29 +327,32 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
           if (jsonStartIndex > 0 && jsonEndIndex > jsonStartIndex) {
             const jsonContent = content.substring(jsonStartIndex, jsonEndIndex);
             const clarificationData = JSON.parse(jsonContent);
-            
+
             return this.createClarificationResponse(
               clarificationData.possibleAgents || [],
-              clarificationData.missingInfo || "more specific information",
-              clarificationData.clarificationQuestion || "Could you please provide more details about what you need?"
+              clarificationData.missingInfo || 'more specific information',
+              clarificationData.clarificationQuestion ||
+                'Could you please provide more details about what you need?'
             );
           }
         } catch (jsonError) {
-          logger.error(`AgentSelectionAgent: Error parsing clarification JSON: ${jsonError}`);
+          logger.error(
+            `AgentSelectionAgent: Error parsing clarification JSON: ${jsonError}`
+          );
         }
-        
+
         // Fallback si le parsing JSON échoue
         return this.createClarificationResponse(
           [],
-          "agent selection criteria",
-          "I need more information to select the appropriate agent. Could you provide more details?"
+          'agent selection criteria',
+          'I need more information to select the appropriate agent. Could you provide more details?'
         );
       }
-      
+
       if (content.startsWith('NO_MATCHING_AGENT')) {
         return this.createClarificationResponse(
           [],
-          "matching agent capabilities",
+          'matching agent capabilities',
           "I don\'t have an agent that can handle this specific request. Could you clarify what you\'re trying to do?"
         );
       }
@@ -344,7 +360,7 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
       // Extraire l\'ID de l\'agent - prendre le premier mot/ligne qui correspond à un agent existant
       const lines = content.split(/[\n\r]+/);
       let agentId = '';
-      
+
       // Essayer d\'abord la première ligne complète comme ID
       const firstLine = lines[0].trim();
       if (this.availableAgents[firstLine]) {
@@ -362,50 +378,64 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
       }
 
       if (agentId && this.availableAgents[agentId]) {
-        logger.debug(`AgentSelectionAgent: Selected agent "${agentId}" for query "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`);
+        logger.debug(
+          `AgentSelectionAgent: Selected agent "${agentId}" for query "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`
+        );
         return this.createSelectionResponse(agentId, query);
       } else {
         // Vérifier si un agent pourrait correspondre partiellement
-        const possibleAgents = Object.keys(this.availableAgents).filter(id => 
-          content.toLowerCase().includes(id.toLowerCase()) || 
-          (this.agentInfo[id]?.name && content.toLowerCase().includes(this.agentInfo[id].name!.toLowerCase()))
+        const possibleAgents = Object.keys(this.availableAgents).filter(
+          (id) =>
+            content.toLowerCase().includes(id.toLowerCase()) ||
+            (this.agentInfo[id]?.name &&
+              content
+                .toLowerCase()
+                .includes(this.agentInfo[id].name!.toLowerCase()))
         );
 
         if (possibleAgents.length === 1) {
           // Si un seul agent correspond partiellement, l\'utiliser
-          logger.debug(`AgentSelectionAgent: Found partial match with agent "${possibleAgents[0]}"`);
+          logger.debug(
+            `AgentSelectionAgent: Found partial match with agent "${possibleAgents[0]}"`
+          );
           return this.createSelectionResponse(possibleAgents[0], query);
         }
-        
+
         if (possibleAgents.length > 1) {
           // Si plusieurs agents correspondent partiellement, demander une clarification
           return this.createClarificationResponse(
             possibleAgents,
-            "specific agent selection",
+            'specific agent selection',
             "I found multiple agents that could handle this request. Could you specify which one you\'d like to use?"
           );
         }
 
         // Si aucun agent ne correspond, essayer de rediriger vers l\'agent par défaut
         if (this.availableAgents['snak']) {
-          logger.warn(`AgentSelectionAgent: No matching agent found for "${content}", defaulting to "snak"`);
+          logger.warn(
+            `AgentSelectionAgent: No matching agent found for "${content}", defaulting to "snak"`
+          );
           return this.createSelectionResponse('snak', query);
         }
 
         // En dernier recours, demander une clarification
-        logger.warn(`AgentSelectionAgent: Unable to identify any agent from model response: "${content}"`);
+        logger.warn(
+          `AgentSelectionAgent: Unable to identify any agent from model response: "${content}"`
+        );
         return this.createClarificationResponse(
           [],
-          "valid agent identifier",
+          'valid agent identifier',
           "I couldn\'t identify which agent should handle your request. Could you describe more precisely what you need help with?"
         );
       }
     } catch (error) {
-      logger.error(`AgentSelectionAgent: Error during model analysis: ${error}`);
+      logger.error(
+        `AgentSelectionAgent: Error during model analysis: ${error}`
+      );
       return this.createClarificationResponse(
         [],
-        "clear request intent",
-        "I encountered an issue understanding your request. Could you rephrase it or provide more details about what you need help with?"
+        'clear request intent',
+        'I encountered an issue understanding your request. Could you rephrase it or provide more details about what you need help with?'
       );
     }
   }
@@ -448,13 +478,15 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
   ): AIMessage {
     let agentOptions = '';
     if (possibleAgents.length > 0) {
-      const agentsList = possibleAgents.map(id => {
-        const agent = this.agentInfo[id];
-        if (!agent) return id;
-        
-        return `- ${id}${agent.name ? ` (${agent.name})` : ''}${agent.group ? ` [${agent.group}]` : ''}: ${agent.description}`;
-      }).join('\n');
-      
+      const agentsList = possibleAgents
+        .map((id) => {
+          const agent = this.agentInfo[id];
+          if (!agent) return id;
+
+          return `- ${id}${agent.name ? ` (${agent.name})` : ''}${agent.group ? ` [${agent.group}]` : ''}: ${agent.description}`;
+        })
+        .join('\n');
+
       agentOptions = `\n\nThese agents might be able to help:\n${agentsList}`;
     }
 

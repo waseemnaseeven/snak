@@ -251,7 +251,10 @@ export class WorkflowController {
               logger.debug(
                 `WorkflowController[Exec:${execId}]: Node[${agentId}] - Calling agent.execute()...`
               );
-              const result = await agent.execute(state.messages, { ...config, isWorkflowNodeCall: true });
+              const result = await agent.execute(state.messages, {
+                ...config,
+                isWorkflowNodeCall: true,
+              });
 
               logger.debug(
                 `WorkflowController[Exec:${execId}]: Node[${agentId}] - Agent execution finished. Processing result...`
@@ -572,18 +575,25 @@ export class WorkflowController {
     // Gérer les messages de l'agent de sélection qui demandent une clarification
     if (
       lastMessage instanceof AIMessage &&
-      lastMessage.additional_kwargs?.from === 'agent-selector' &&
       lastMessage.additional_kwargs?.needsClarification === true
     ) {
       logger.debug(
-        `WorkflowController[Exec:${execId}]: Router - Agent selector requesting clarification from user, ending workflow to get user input`
+        `WorkflowController[Exec:${execId}]: Router - Agent ${lastMessage.additional_kwargs?.from || state.currentAgent} requesting clarification from user, ending workflow to get user input`
       );
-      // Fin du workflow pour permettre à l'utilisateur de répondre
+
+      // Mark state as requiring clarification
+      state.metadata.requiresClarification = true;
+      state.metadata.clarificationMessage = lastMessage;
+
+      // End the workflow to allow for user input
       return END;
     }
 
     // If there are tool calls, route to the tool orchestrator
-    if (lastMessage.additional_kwargs?.tool_calls && lastMessage.additional_kwargs.tool_calls.length > 0) {
+    if (
+      lastMessage.additional_kwargs?.tool_calls &&
+      lastMessage.additional_kwargs.tool_calls.length > 0
+    ) {
       if (this.agents['tools']) {
         logger.debug(
           `WorkflowController[Exec:${execId}]: Router - Tool calls detected, routing to "tools"`
@@ -648,9 +658,18 @@ export class WorkflowController {
         `WorkflowController[Exec:${execId}]: Router - From tools, routing to previous agent "${previousAgent}"`
       );
       return previousAgent;
-    } else if (typeof messageSource === 'string' && messageSource in this.agents) {
-      const agentFromSource = this.agents[messageSource as keyof typeof this.agents]; // Type assertion after confirming key
-      if (agentFromSource && (messageSource === 'snak' || agentFromSource.type === AgentType.SNAK || agentFromSource.type === AgentType.OPERATOR )) {
+    } else if (
+      typeof messageSource === 'string' &&
+      messageSource in this.agents
+    ) {
+      const agentFromSource =
+        this.agents[messageSource as keyof typeof this.agents]; // Type assertion after confirming key
+      if (
+        agentFromSource &&
+        (messageSource === 'snak' ||
+          agentFromSource.type === AgentType.SNAK ||
+          agentFromSource.type === AgentType.OPERATOR)
+      ) {
         // After a core agent like snak or an operator, the flow might end or go to supervisor for next steps.
         // If the message is final, end. Otherwise, default to END unless next_agent is specified.
         if (lastMessage.additional_kwargs?.final === true) {
@@ -845,19 +864,27 @@ export class WorkflowController {
    * @throws Error if resetting fails.
    */
   public async reset(): Promise<void> {
-    logger.debug(`WorkflowController[Exec:${this.executionId || 'unknown'}]: Starting reset`);
+    logger.debug(
+      `WorkflowController[Exec:${this.executionId || 'unknown'}]: Starting reset`
+    );
     try {
       if (this.checkpointer && this.checkpointEnabled) {
         // Re-instantiating MemorySaver effectively clears its state for in-memory.
         // For persistent checkpointers, a more specific reset might be needed.
-        this.checkpointer = new MemorySaver(); 
-        logger.debug(`WorkflowController[Exec:${this.executionId || 'unknown'}]: Checkpointer reset.`);
+        this.checkpointer = new MemorySaver();
+        logger.debug(
+          `WorkflowController[Exec:${this.executionId || 'unknown'}]: Checkpointer reset.`
+        );
       }
       // Reset any other stateful properties of the controller if necessary
-      this.executionId = null; 
-      logger.debug(`WorkflowController[Exec:${this.executionId || 'unknown'}]: Reset finished`);
+      this.executionId = null;
+      logger.debug(
+        `WorkflowController[Exec:${this.executionId || 'unknown'}]: Reset finished`
+      );
     } catch (error) {
-      logger.error(`WorkflowController[Exec:${this.executionId || 'unknown'}]: Error resetting workflow: ${error}`);
+      logger.error(
+        `WorkflowController[Exec:${this.executionId || 'unknown'}]: Error resetting workflow: ${error}`
+      );
       throw error;
     }
   }
@@ -867,14 +894,18 @@ export class WorkflowController {
    * Clears any active timeouts and resets the initialized flag.
    */
   public async dispose(): Promise<void> {
-    logger.debug(`WorkflowController[Exec:${this.executionId || 'unknown'}]: Disposing...`);
+    logger.debug(
+      `WorkflowController[Exec:${this.executionId || 'unknown'}]: Disposing...`
+    );
     if (this.timeoutId) {
       clearTimeout(this.timeoutId);
       this.timeoutId = null;
     }
     this.initialized = false;
     // Any other cleanup logic for WorkflowController can be added here.
-    logger.debug(`WorkflowController[Exec:${this.executionId || 'unknown'}]: Dispose complete.`);
+    logger.debug(
+      `WorkflowController[Exec:${this.executionId || 'unknown'}]: Dispose complete.`
+    );
     return Promise.resolve();
   }
 }
