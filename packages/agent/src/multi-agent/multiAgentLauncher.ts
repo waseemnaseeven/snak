@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 import { createBox } from '../prompt/formatting.js';
 import { load_json_config } from '../index.js';
-import { logger } from '@snakagent/core';
+import { logger, ModelsConfig } from '@snakagent/core';
 import { EventEmitter } from 'events';
 import { StarknetAgent } from '../index.js';
 import { RpcProvider } from 'starknet';
@@ -58,7 +58,7 @@ async function launchAgentAsync(
   agentId: number,
   agentType: string,
   abortController: AbortController,
-  modelsConfigPath: string
+  modelsConfig: ModelsConfig
 ): Promise<{ stop: () => Promise<void> }> {
   try {
     const agentConfig = await load_json_config(agentPath);
@@ -73,7 +73,7 @@ async function launchAgentAsync(
     agentConfigCopy.chat_id = `${agentConfigCopy.chat_id || agentType}_${agentId}`;
     const modelSelectionAgent = new ModelSelectionAgent({
       useModelSelector: true,
-      modelsConfigPath: modelsConfigPath,
+      modelsConfig: modelsConfig,
     });
 	await modelSelectionAgent.init()
 
@@ -81,7 +81,6 @@ async function launchAgentAsync(
       provider: new RpcProvider({ nodeUrl: process.env.STARKNET_RPC_URL }),
       accountPrivateKey: process.env.STARKNET_PRIVATE_KEY as string,
       accountPublicKey: process.env.STARKNET_PUBLIC_ADDRESS as string,
-      signature: 'key',
       db_credentials: {
         host: process.env.POSTGRES_HOST as string,
         port: parseInt(process.env.POSTGRES_PORT as string),
@@ -181,7 +180,7 @@ async function loadMultiAgentConfig(
 
 export async function launchMultiAgent(
   agentPath: string,
-  modelsConfigPath: string
+  modelsConfig: ModelsConfig
 ): Promise<() => Promise<void>> {
   try {
     const multiAgentConfig = await loadMultiAgentConfig(agentPath);
@@ -229,7 +228,7 @@ export async function launchMultiAgent(
             agentId,
             type,
             agentAbortController,
-            modelsConfigPath
+            modelsConfig
           )
             .then(({ stop }) => {
               agentStopFunctions.push(stop);
