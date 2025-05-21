@@ -1,7 +1,7 @@
 import { IsNotEmpty } from 'class-validator';
 
 export interface Message {
-  conversation_id: number;
+  agent_id: string;
   sender_type: string;
   content: string;
   status: string;
@@ -14,36 +14,7 @@ export class AgentRequestDTO {
   agent_id: string;
 }
 
-// TODO add agentgs to the request(to be able to devide the request to the agent,
-// and also create same convesation name but for two distinc agents)
-export class CreateConversationRequestDTO {
-  @IsNotEmpty()
-  conversation_name: string;
-  @IsNotEmpty()
-  agent_id: string;
-}
-
-export class DeleteConversationRequestDTO {
-  @IsNotEmpty()
-  conversation_id: number;
-  @IsNotEmpty()
-  agent_id: string;
-}
-
-export class ConversationsFromConversationIdDTO {
-  @IsNotEmpty()
-  conversation_id: number;
-}
-
-// Only to get all the conversations
-export class ConversationsRequestDTO {
-  @IsNotEmpty()
-  agent_id: string;
-}
-
-export class getMessagesFromConversationIdDTO {
-  @IsNotEmpty()
-  conversation_id: number;
+export class getMessagesFromAgentsDTO {
   @IsNotEmpty()
   agent_id: string;
 }

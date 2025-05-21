@@ -186,21 +186,19 @@ export class AgentService implements IAgentService {
     }
   }
 
-  async getMessageFromConversation(
-    conversation_id: number
+  async getMessageFromAgentId(
+    agent_id: string,
+    number_of_messages?: number
   ): Promise<MessageSQL[]> {
     try {
-      const is_conversation_exist =
-        await check_if_conversation_exists(conversation_id);
-
-      // TODO how to we want to handle  this case in the future of this app
-      if (!is_conversation_exist) {
-        this.logger.debug(`Conversation does not exist: ${conversation_id}`);
-        throw new Error(`Conversation does not exist: ${conversation_id}`);
+      if (!number_of_messages) {
+        number_of_messages = 10;
       }
       const q = new Postgres.Query(
-        `SELECT * FROM message WHERE conversation_id = $1`,
-        [conversation_id]
+        `SELECT * FROM message WHERE agent_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2`,
+        [agent_id, number_of_messages]
       );
       const res = await Postgres.query<MessageSQL>(q);
       this.logger.debug(`All messages:', ${JSON.stringify(res)} `);
