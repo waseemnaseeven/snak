@@ -21,6 +21,8 @@ import { HumanMessage, BaseMessage } from '@langchain/core/messages';
 import { Tool } from '@langchain/core/tools';
 import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
 import { RpcProvider } from 'starknet';
+import { AgentSelectionAgent } from '../operators/agentSelectionAgent.js';
+import { OperatorRegistry } from '../operators/operatorRegistry.js';
 /**
  * Configuration for the SupervisorAgent.
  */
@@ -48,6 +50,9 @@ export class SupervisorAgent extends BaseAgent {
   private debug: boolean = false;
   private executionDepth: number = 0;
   private checkpointEnabled: boolean = false; // TODO: This seems unused, consider removing or implementing its functionality.
+  private agentSelectionAgent: AgentSelectionAgent | null = null;
+  private snakAgents: Record<string, StarknetAgent> = {};
+  private defaultSnakAgent: StarknetAgent | null = null;
 
   private static instance: SupervisorAgent | null = null;
 
@@ -144,6 +149,43 @@ export class SupervisorAgent extends BaseAgent {
       this.operators.set(this.toolsOrchestrator.id, this.toolsOrchestrator);
       logger.debug('SupervisorAgent: ToolsOrchestrator initialized');
 
+      logger.debug('SupervisorAgent: Initializing AgentSelectionAgent...');
+      this.agentSelectionAgent = new AgentSelectionAgent({
+        availableAgents: {}, // Sera mis à jour après l'initialisation de tous les agents
+        modelSelector: this.modelSelectionAgent,
+        debug: this.debug,
+      });
+      await this.agentSelectionAgent.init();
+      this.operators.set(this.agentSelectionAgent.id, this.agentSelectionAgent);
+      logger.debug('SupervisorAgent: AgentSelectionAgent initialized');
+
+      // Initialiser le registre d'opérateurs
+      const registry = OperatorRegistry.getInstance();
+      if (this.modelSelectionAgent)
+        registry.register(
+          this.modelSelectionAgent.id,
+          this.modelSelectionAgent
+        );
+      if (this.memoryAgent)
+        registry.register(this.memoryAgent.id, this.memoryAgent);
+      if (this.toolsOrchestrator)
+        registry.register(this.toolsOrchestrator.id, this.toolsOrchestrator);
+      if (this.agentSelectionAgent)
+        registry.register(
+          this.agentSelectionAgent.id,
+          this.agentSelectionAgent
+        );
+
+      // Définir l'agent Starknet par défaut
+      if (this.starknetAgent) {
+        this.registerSnakAgent('snak-default', this.starknetAgent, {
+          name: 'Default Agent',
+        });
+      }
+
+      // Mettre à jour les agents disponibles pour l'agent de sélection
+      this.updateAgentSelectionAgentRegistry();
+
       logger.debug('SupervisorAgent: Initializing WorkflowController...');
       await this.initializeWorkflowController();
       logger.debug('SupervisorAgent: WorkflowController initialized');
@@ -170,39 +212,42 @@ export class SupervisorAgent extends BaseAgent {
         supervisor: this,
       };
 
-      if (this.starknetAgent) {
+      // Ajouter l'agent Starknet par défaut
+      if (this.defaultSnakAgent) {
+        allAgents['snak'] = this.defaultSnakAgent;
+      } else if (this.starknetAgent) {
         allAgents['snak'] = this.starknetAgent;
       } else {
         logger.warn(
-          'SupervisorAgent: StarknetAgent is not initialized and will not be available to the WorkflowController.'
+          'SupervisorAgent: No StarknetAgent available for the WorkflowController.'
         );
       }
 
-      if (this.modelSelectionAgent) {
-        allAgents['model-selector'] = this.modelSelectionAgent;
-      } else {
-        logger.warn(
-          'SupervisorAgent: ModelSelectionAgent is not initialized and will not be available to the WorkflowController.'
-        );
-      }
+      // Ajouter tous les agents Snak
+      Object.entries(this.snakAgents).forEach(([id, agent]) => {
+        allAgents[id] = agent;
+      });
 
-      if (this.memoryAgent) {
-        allAgents['memory'] = this.memoryAgent;
-      }
-
-      if (this.toolsOrchestrator) {
-        allAgents['tools'] = this.toolsOrchestrator;
-      }
+      // Ajouter tous les agents opérateurs enregistrés
+      const registry = OperatorRegistry.getInstance();
+      const operatorAgents = registry.getAllAgents();
+      Object.entries(operatorAgents).forEach(([id, agent]) => {
+        allAgents[id] = agent;
+      });
 
       if (!allAgents['snak']) {
         throw new Error(
-          'WorkflowController requires at least the Starknet execution agent (snak).'
+          'WorkflowController requires at least one Starknet execution agent.'
         );
       }
 
       const maxIterations = 15;
       const workflowTimeout = 60000; // 60 seconds
-      const entryPoint = 'snak'; // Default entry point
+
+      // Utiliser agent-selector comme point d'entrée s'il est disponible
+      const entryPoint = allAgents['agent-selector']
+        ? 'agent-selector'
+        : 'supervisor';
 
       logger.debug(
         `SupervisorAgent: WorkflowController configured with maxIterations=${maxIterations}, timeout=${workflowTimeout}ms, entryPoint='${entryPoint}'`
@@ -216,6 +261,11 @@ export class SupervisorAgent extends BaseAgent {
         maxIterations,
         workflowTimeout,
       });
+
+      // Mettre à jour l'agent de sélection avec la liste complète des agents
+      if (this.agentSelectionAgent) {
+        this.agentSelectionAgent.setAvailableAgents(allAgents);
+      }
 
       await this.workflowController.init();
       logger.debug(
@@ -277,38 +327,30 @@ export class SupervisorAgent extends BaseAgent {
       `${depthIndent}SupervisorAgent[Depth:${this.executionDepth}]: Executing task`
     );
 
+    // Récupérer explicitement l'agent si spécifié
+    let targetAgent = config?.agentId || null;
+    if (
+      targetAgent &&
+      !(targetAgent in this.snakAgents) &&
+      targetAgent !== 'snak'
+    ) {
+      logger.warn(
+        `${depthIndent}SupervisorAgent: Specified agent "${targetAgent}" not found, will use agent selection logic.`
+      );
+      targetAgent = null;
+    }
+
+    // Logique pour gérer le dépassement de profondeur
     if (this.executionDepth > 3) {
       logger.warn(
-        `${depthIndent}SupervisorAgent: Maximum execution depth (${this.executionDepth}) reached. Attempting direct execution via StarknetAgent.`
+        `${depthIndent}SupervisorAgent: Maximum execution depth (3) reached. ` +
+          'Returning error to prevent infinite loops.'
       );
-      try {
-        if (this.starknetAgent) {
-          const result = await this.starknetAgent.execute(
-            typeof input === 'string'
-              ? input
-              : input instanceof BaseMessage
-                ? input
-                : (input as AgentMessage).content,
-            config
-          );
-          const finalResult =
-            result instanceof BaseMessage
-              ? result.content
-              : typeof result === 'string'
-                ? result
-                : JSON.stringify(result);
-          this.executionDepth--;
-          return finalResult;
-        }
-        this.executionDepth--;
-        return 'Maximum recursion depth reached. StarknetAgent not available for direct execution. Please try a simpler query.';
-      } catch (error) {
-        logger.error(
-          `${depthIndent}SupervisorAgent: Error in direct execution attempt: ${error}`
-        );
-        this.executionDepth--;
-        return `Error during forced direct execution: ${error instanceof Error ? error.message : String(error)}`;
-      }
+      this.executionDepth--;
+      return (
+        'Error: Maximum execution depth reached. ' +
+        'This may indicate a circular dependency or an issue with agent logic.'
+      );
     }
 
     let message: BaseMessage;
@@ -346,6 +388,18 @@ export class SupervisorAgent extends BaseAgent {
       );
     }
 
+    // Si un agent est spécifié dans la config, ajoutez cette info au message
+    if (targetAgent) {
+      if (!message.additional_kwargs) {
+        message.additional_kwargs = {};
+      }
+      message.additional_kwargs.targetAgent = targetAgent;
+      logger.debug(
+        `${depthIndent}SupervisorAgent: Targeting specific agent "${targetAgent}"`
+      );
+    }
+
+    // Enrichir avec le contexte mémoire si nécessaire
     if (
       this.config.starknetConfig.agentConfig?.memory?.enabled !== false &&
       this.memoryAgent
@@ -366,6 +420,18 @@ export class SupervisorAgent extends BaseAgent {
 
     logger.debug(`${depthIndent}SupervisorAgent: Invoking WorkflowController.`);
     try {
+      // Si un agent cible est spécifié, configurer workflowController pour démarrer avec cet agent
+      if (targetAgent) {
+        if (!config) config = {};
+        config.startNode =
+          targetAgent.startsWith('snak') && this.memoryAgent
+            ? 'memory'
+            : targetAgent;
+        if (targetAgent.startsWith('snak') && this.memoryAgent) {
+          config.selectedSnakAgent = targetAgent;
+        }
+      }
+
       const result = await this.workflowController.execute(message, config);
       logger.debug(
         `${depthIndent}SupervisorAgent: WorkflowController execution finished.`
@@ -458,14 +524,6 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Gets the StarknetAgent instance.
-   * @returns The StarknetAgent instance, or null if not initialized.
-   */
-  public getStarknetAgent(): StarknetAgent | null {
-    return this.starknetAgent;
-  }
-
-  /**
    * Gets the ToolsOrchestrator instance.
    * @returns The ToolsOrchestrator instance, or null if not initialized.
    */
@@ -479,14 +537,6 @@ export class SupervisorAgent extends BaseAgent {
    */
   public getMemoryAgent(): MemoryAgent | null {
     return this.memoryAgent;
-  }
-
-  /**
-   * Gets the ModelSelectionAgent instance.
-   * @returns The ModelSelectionAgent instance, or null if not initialized.
-   */
-  public getModelSelectionAgent(): ModelSelectionAgent | null {
-    return this.modelSelectionAgent;
   }
 
   /**
@@ -566,18 +616,40 @@ export class SupervisorAgent extends BaseAgent {
    * to all operator agents.
    */
   public async dispose(): Promise<void> {
-    logger.debug('SupervisorAgent: Disposing...');
-    if (this.workflowController) {
-      await this.workflowController.reset(); // Ensure graceful shutdown of workflow
-      logger.debug('SupervisorAgent: WorkflowController reset during dispose.');
+    logger.debug('SupervisorAgent: Disposing agents...');
+
+    // Dispose StarknetAgent if it exists
+    if (this.starknetAgent) {
+      await this.starknetAgent.dispose();
+      logger.debug('SupervisorAgent: StarknetAgent disposed');
+    }
+
+    // Dispose individual agents
+    if (this.modelSelectionAgent && this.modelSelectionAgent.dispose) {
+      await this.modelSelectionAgent.dispose();
+    }
+    if (this.memoryAgent && this.memoryAgent.dispose) {
+      await this.memoryAgent.dispose();
+    }
+    if (this.toolsOrchestrator && this.toolsOrchestrator.dispose) {
+      await this.toolsOrchestrator.dispose();
+    }
+    if (this.workflowController && this.workflowController.dispose) {
+      await this.workflowController.dispose();
     }
 
     this.modelSelectionAgent = null;
     this.starknetAgent = null;
     this.toolsOrchestrator = null;
     this.memoryAgent = null;
+    this.agentSelectionAgent = null;
     this.workflowController = null;
     this.operators.clear();
+    this.snakAgents = {};
+    this.defaultSnakAgent = null;
+
+    SupervisorAgent.instance = null; // Clear the singleton instance
+
     logger.debug(
       'SupervisorAgent: Cleared agent references and operator map. Dispose complete.'
     );
@@ -789,5 +861,80 @@ export class SupervisorAgent extends BaseAgent {
     }
 
     return false;
+  }
+
+  /**
+   * Enregistre un nouvel agent Snak dans le système
+   */
+  public registerSnakAgent(
+    id: string,
+    agent: StarknetAgent,
+    metadata?: any
+  ): void {
+    if (id === 'snak') {
+      logger.warn(
+        'SupervisorAgent: Cannot register a Snak agent with ID "snak" as it is reserved. Using "snak-default" instead.'
+      );
+      id = 'snak-default';
+    }
+
+    this.snakAgents[id] = agent;
+    if (metadata) {
+      (agent as any).metadata = metadata;
+    }
+
+    // Si c'est le premier agent Snak, le définir comme par défaut
+    if (Object.keys(this.snakAgents).length === 1) {
+      this.defaultSnakAgent = agent;
+    }
+
+    // Mettre à jour l'agent de sélection
+    if (this.agentSelectionAgent) {
+      this.updateAgentSelectionAgentRegistry();
+    }
+
+    logger.debug(`SupervisorAgent: Registered Snak agent "${id}"`);
+  }
+
+  /**
+   * Met à jour le registre pour l'agent de sélection
+   */
+  private updateAgentSelectionAgentRegistry(): void {
+    if (!this.agentSelectionAgent) return;
+
+    const registry = OperatorRegistry.getInstance();
+    const availableAgents: Record<string, IAgent> = {
+      supervisor: this,
+      ...registry.getAllAgents(),
+    };
+
+    // Ajouter tous les agents Snak
+    Object.entries(this.snakAgents).forEach(([id, agent]) => {
+      availableAgents[id] = agent;
+    });
+
+    // Assurer que l'agent par défaut est disponible sous 'snak'
+    if (this.defaultSnakAgent) {
+      availableAgents['snak'] = this.defaultSnakAgent;
+    }
+
+    this.agentSelectionAgent.setAvailableAgents(availableAgents);
+  }
+
+  /**
+   * Récupère un agent Snak par son ID
+   */
+  public getStarknetAgent(id?: string): StarknetAgent | null {
+    if (id && this.snakAgents[id]) {
+      return this.snakAgents[id];
+    }
+    return this.defaultSnakAgent || this.starknetAgent;
+  }
+
+  /**
+   * Récupère l'agent de sélection
+   */
+  public getAgentSelectionAgent(): AgentSelectionAgent | null {
+    return this.agentSelectionAgent;
   }
 }
