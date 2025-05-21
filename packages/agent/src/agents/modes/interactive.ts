@@ -15,7 +15,7 @@ import {
 } from '../core/utils.js';
 import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
 import { SupervisorAgent } from '../supervisor/supervisorAgent.js';
-import { baseSystemPrompt, interactiveRules } from '../../prompt/prompts.js';
+import { interactiveRules } from '../../prompt/prompts.js';
 import { TokenTracker } from '../../token/tokenTracking.js';
 
 /**
@@ -116,12 +116,7 @@ export const createInteractiveAgent = async (
     };
 
     const configPrompt = agent_config.prompt?.content || '';
-    const finalPrompt = agent_config.memory
-      ? `${configPrompt}
-User Memory Context:
-{memories}
-`
-      : `${configPrompt}`;
+    const finalPrompt = `${configPrompt}`;
 
     /**
      * Calls the appropriate language model with the current state and tools.
@@ -137,7 +132,6 @@ User Memory Context:
       }
 
       const interactiveSystemPrompt = `
-        ${baseSystemPrompt(agent_config)}
         ${interactiveRules}
         Available tools: ${toolsList.map((tool) => tool.name).join(', ')}
       `;
@@ -163,7 +157,6 @@ User Memory Context:
         const currentFormattedPrompt = await prompt.formatMessages({
           tool_names: toolsList.map((tool) => tool.name).join(', '),
           messages: currentMessages,
-          memories: state.memories || '',
         });
 
         if (modelSelector) {
@@ -231,7 +224,6 @@ User Memory Context:
             const emergencyPrompt = await prompt.formatMessages({
               tool_names: toolsList.map((tool) => tool.name).join(', '),
               messages: minimalMessages,
-              memories: '',
             });
 
             const existingModelSelector = ModelSelectionAgent.getInstance();
