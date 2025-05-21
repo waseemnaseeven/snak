@@ -139,6 +139,34 @@ process.on('unhandledRejection', (reason) => {
   gracefulShutdown('unhandledRejection');
 });
 
+async function loadMulti(
+  agentPath: string,
+  modelsConfigPath: string,
+  modelsConfig: ModelsConfig
+) {
+  console.log(chalk.dim('\nStarting multi-agent session...\n'));
+  console.log(chalk.dim(`- Config: ${chalk.bold(path.basename(agentPath))}`));
+  console.log(
+    chalk.dim(`- Models: ${chalk.bold(path.basename(modelsConfigPath))}\n`)
+  );
+  const spinner = createSpinner('Initializing Multi-Agent System').start();
+
+  try {
+    const terminateAgents = await launchMultiAgent(agentPath, modelsConfig);
+    console.log(chalk.green('\nAll agents have been launched successfully.'));
+    process.on('SIGINT', async () => {
+      console.log('\nGracefully shutting down from SIGINT (Ctrl+C)');
+      await terminateAgents();
+      process.exit(0);
+    });
+    await new Promise(() => {});
+  } catch (error) {
+    spinner.error({ text: 'Failed to initialize multi-agent launcher' });
+    logger.error('Error during multi-agent launch:', error);
+    throw error;
+  }
+}
+
 // Modified localRun to use our askQuestion wrapper
 const localRun = async (): Promise<void> => {
   clearScreen();
@@ -173,62 +201,23 @@ const localRun = async (): Promise<void> => {
         `Missing required environment variables: ${missing.join(', ')}`
       );
     }
+    // Load models configuration
+    const modelData = await fs.promises.readFile(modelsConfigPath, 'utf8');
+    const modelsConfig: ModelsConfig = JSON.parse(modelData) as ModelsConfig;
+    if (!modelsConfig) {
+      throw new Error(
+        `Failed to load models configuration from ${modelsConfigPath}`
+      );
+    }
 
     if (multi) {
-      console.log(chalk.dim('\nStarting multi-agent session...\n'));
-      console.log(
-        chalk.dim(`- Config: ${chalk.bold(path.basename(agentPath))}`)
-      );
-      console.log(
-        chalk.dim(`- Models: ${chalk.bold(path.basename(modelsConfigPath))}\n`)
-      );
-      const spinner = createSpinner('Initializing Multi-Agent System').start();
-
-      try {
-        spinner.success({
-          text: chalk.black(
-            `Multi-agent configuration loaded from: ${chalk.cyan(agentPath)}`
-          ),
-        });
-        const modelData = await fs.promises.readFile(modelsConfigPath, 'utf8');
-        const modelsConfig: ModelsConfig = JSON.parse(
-          modelData
-        ) as ModelsConfig;
-
-        console.log(chalk.dim('\nLaunching multi-agent environment...\n'));
-        const terminateAgents = await launchMultiAgent(agentPath, modelsConfig);
-
-        console.log(
-          chalk.green('\nAll agents have been launched successfully.')
-        );
-
-        process.on('SIGINT', async () => {
-          console.log('\nGracefully shutting down from SIGINT (Ctrl+C)');
-          await terminateAgents();
-          process.exit(0);
-        });
-        await new Promise(() => {});
-      } catch (error) {
-        spinner.error({ text: 'Failed to initialize multi-agent launcher' });
-        logger.error('Error during multi-agent launch:', error);
-        throw error;
-      }
+      loadMulti(agentPath, modelsConfigPath, modelsConfig);
     } else {
       // Load agent configuration
       let agent_config: AgentConfig = await load_json_config(agentPath);
       if (!agent_config) {
         throw new Error(`Failed to load agent configuration from ${agentPath}`);
       }
-
-      // Load models configuration
-      const modelData = await fs.promises.readFile(modelsConfigPath, 'utf8');
-      const modelsConfig: ModelsConfig = JSON.parse(modelData) as ModelsConfig;
-      if (!modelsConfig) {
-        throw new Error(
-          `Failed to load models configuration from ${modelsConfigPath}`
-        );
-      }
-
       const agentMode = agent_config.mode;
       clearScreen();
       console.log(logo);

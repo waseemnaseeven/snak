@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 import { createBox } from '../prompt/formatting.js';
 import { load_json_config } from '../index.js';
-import { logger, ModelsConfig } from '@snakagent/core';
+import { DatabaseCredentials, logger, ModelsConfig } from '@snakagent/core';
 import { EventEmitter } from 'events';
 import { StarknetAgent } from '../index.js';
 import { RpcProvider } from 'starknet';
@@ -70,24 +70,26 @@ async function launchAgentAsync(
       throw new Error(`Failed to load agent configuration from ${agentPath}`);
     }
     const agentConfigCopy = deepCopyAgentConfig(agentConfig);
-    agentConfigCopy.chat_id = `${agentConfigCopy.chat_id || agentType}_${agentId}`;
+    agentConfigCopy.chatId = `${agentConfigCopy.chatId || agentType}_${agentId}`;
     const modelSelectionAgent = new ModelSelectionAgent({
       useModelSelector: true,
       modelsConfig: modelsConfig,
     });
     await modelSelectionAgent.init();
 
+    const database: DatabaseCredentials = {
+      database: process.env.POSTGRES_DB as string,
+      host: process.env.POSTGRES_HOST as string,
+      user: process.env.POSTGRES_USER as string,
+      password: process.env.POSTGRES_PASSWORD as string,
+      port: parseInt(process.env.POSTGRES_PORT as string),
+    };
+
     const agent = new StarknetAgent({
       provider: new RpcProvider({ nodeUrl: process.env.STARKNET_RPC_URL }),
       accountPrivateKey: process.env.STARKNET_PRIVATE_KEY as string,
       accountPublicKey: process.env.STARKNET_PUBLIC_ADDRESS as string,
-      db_credentials: {
-        host: process.env.POSTGRES_HOST as string,
-        port: parseInt(process.env.POSTGRES_PORT as string),
-        user: process.env.POSTGRES_USER as string,
-        password: process.env.POSTGRES_PASSWORD as string,
-        database: process.env.POSTGRESS_ROOT_DB as string,
-      },
+      db_credentials: database,
       agentConfig: agentConfigCopy,
       modelSelector: modelSelectionAgent,
     });
