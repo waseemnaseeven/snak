@@ -307,8 +307,7 @@ If multiple agents could handle this query but you need more specific informatio
 If the query doesn\'t match any available agent\'s capabilities, respond with "NO_MATCHING_AGENT".`,
       });
 
-      // Utiliser le modèle 'smart' pour une analyse précise
-      const model = await this.modelSelector.getModelForTask([], 'smart');
+      const model = await this.modelSelector.getModelForTask([], 'fast');
       const result = await model.invoke([prompt]);
       const content =
         typeof result.content === 'string'

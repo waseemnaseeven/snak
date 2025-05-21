@@ -165,9 +165,7 @@ export class SupervisorAgent extends BaseAgent {
         const agentName = agentConfig?.name || 'Starknet RPC Agent';
         const agentGroup = agentConfig?.group || 'starknet';
 
-        // Créer un ID d'agent basé sur le nom et le groupe
-        const normalizedName = agentName.toLowerCase().replace(/\s+/g, '-');
-        const agentId = `${agentGroup}-${normalizedName}`;
+        const agentId = agentName.toLowerCase().replace(/\s+/g, '-');
 
         // Enregistrer l'agent avec son ID métier
         this.registerSnakAgent(agentId, this.snakAgent, {
