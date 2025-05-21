@@ -616,22 +616,22 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
       const invokeOptions: any = {};
 
       if (this.memory.enabled !== false) {
-        const maxIteration =
-          this.agentConfig?.maxIteration ??
-          this.memory.maxIteration ??
+        const maxIterations =
+          this.agentConfig?.maxIterations ??
+          this.memory.maxIterations ??
           this.memory.shortTermMemorySize ??
           15;
 
-        if (maxIteration !== 0) {
-          invokeOptions.maxIteration = maxIteration;
+        if (maxIterations !== 0) {
+          invokeOptions.maxIterations = maxIterations;
           invokeOptions.messageHandler = (messages: BaseMessage[]) => {
-            if (messages.length > maxIteration) {
+            if (messages.length > maxIterations) {
               logger.debug(
-                `Call data - message pruning: ${messages.length} messages exceeds limit ${maxIteration}.`
+                `Call data - message pruning: ${messages.length} messages exceeds limit ${maxIterations}.`
               );
               const prunedMessages = [
                 messages[0],
-                ...messages.slice(-(maxIteration - 1)),
+                ...messages.slice(-(maxIterations - 1)),
               ];
               logger.debug(
                 `Call data - pruned from ${messages.length} to ${prunedMessages.length} messages.`
@@ -641,7 +641,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
             return messages;
           };
           logger.debug(
-            `execute_call_data: Configured with maxIteration=${maxIteration}.`
+            `execute_call_data: Configured with maxIterations=${maxIterations}.`
           );
         } else {
           logger.debug(`execute_call_data: Running without recursion limit.`);
@@ -824,7 +824,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
 
       const app = this.agentReactExecutor.app;
       const agentJsonConfig = this.agentReactExecutor.json_config;
-      const maxGraphIterations = this.agentReactExecutor.maxIteration; // Renamed for clarity
+      const maxGraphIterations = this.agentReactExecutor.maxIterations; // Renamed for clarity
 
       const initialHumanMessage = new HumanMessage({
         content:
@@ -835,7 +835,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
 
       const threadConfig = {
         configurable: {
-          thread_id: agentJsonConfig?.chat_id || 'autonomous_session',
+          thread_id: agentJsonConfig?.chatId || 'autonomous_session',
         },
       };
 
@@ -1060,7 +1060,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         configurable: {
           thread_id: threadId,
         },
-        recursionLimit: this.agentReactExecutor.maxIteration,
+        recursionLimit: this.agentReactExecutor.maxIterations,
       };
 
       const initialHumanMessage = new HumanMessage({
@@ -1148,7 +1148,7 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         configurable: {
           thread_id: threadId,
         },
-        recursionLimit: this.agentReactExecutor.maxIteration,
+        recursionLimit: this.agentReactExecutor.maxIterations,
       };
 
       // Resume execution with the Command containing human input

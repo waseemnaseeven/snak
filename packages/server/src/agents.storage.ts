@@ -19,6 +19,7 @@ import {
 
 export interface AgentConfigJson {
   name: string;
+  group: string;
   prompt: AgentPromptSQL;
   interval: number;
   plugins: string[];
@@ -31,14 +32,14 @@ export interface AgentConfigJson {
 @Injectable()
 export class AgentStorage {
   private agentConfigs: AgentConfigSQL[] = [];
-  private agentInstances: Map<number, AgentSystem> = new Map();
+  private agentInstances: Map<string, AgentSystem> = new Map();
   private initialized: boolean = false;
   private initPromise: Promise<void>;
   constructor(private readonly config: ConfigurationService) {
     this.initPromise = this.initialize();
   }
 
-  private async initalize_database() {
+  private async initialize_database() {
     try {
       const q = [
         new Postgres.Query(`
@@ -64,7 +65,7 @@ export class AgentStorage {
             CREATE TABLE IF NOT EXISTS agents (
             id SERIAL PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
-            group_id INTEGER DEFAULT 0,
+            "group" VARCHAR(255) NOT NULL DEFAULT 'default_group',
             prompt agent_prompt NOT NULL,
             interval INTEGER NOT NULL DEFAULT 5,
             plugins TEXT[] NOT NULL DEFAULT '{}',
@@ -190,7 +191,7 @@ export class AgentStorage {
         port: parseInt(process.env.POSTGRES_PORT as string),
       });
 
-      await this.initalize_database();
+      await this.initialize_database();
       await this.init_models_config();
       await this.init_agents_config();
       this.initialized = true;
@@ -296,7 +297,9 @@ export class AgentStorage {
         createContextFromJson(agent_config.prompt)
       );
       const json_config: AgentConfig = {
+        id: agent_config.id,
         name: agent_config.name,
+        group: agent_config.group,
         prompt: systemMessagefromjson,
         plugins: agent_config.plugins,
         interval: agent_config.interval,
@@ -304,8 +307,8 @@ export class AgentStorage {
           enabled: agent_config.memory.enabled,
           shortTermMemorySize: agent_config.memory.short_term_memory_size,
         },
-        chat_id: 'snak_guide',
-        maxIteration: 15,
+        chatId: 'snak_guide',
+        maxIterations: 15,
         mode: AgentMode.INTERACTIVE,
       };
       const modelsConfig = await this.get_models_config();
@@ -348,18 +351,45 @@ export class AgentStorage {
       await this.initPromise;
     }
 
+    const baseName = agent_config.name;
+    const group = agent_config.group;
+
+    let finalName = baseName;
+    const nameCheckQuery = new Postgres.Query(
+      `SELECT name FROM agents WHERE "group" = $1 AND (name = $2 OR name LIKE $2 || '-%') ORDER BY LENGTH(name) DESC, name DESC LIMIT 1`,
+      [group, baseName]
+    );
+    const nameCheckResult = await Postgres.query<{ name: string }>(
+      nameCheckQuery
+    );
+
+    if (nameCheckResult.length > 0) {
+      const existingName = nameCheckResult[0].name;
+      if (existingName === baseName) {
+        finalName = `${baseName}-1`;
+      } else {
+        const escapedBaseName = baseName.replace(/[.*+?^${}()|[\\]]/g, '\\$&');
+        const suffixMatch = existingName.match(
+          new RegExp(`^${escapedBaseName}-(\d+)$`)
+        );
+        if (suffixMatch && suffixMatch[1]) {
+          const lastIndex = parseInt(suffixMatch[1], 10);
+          finalName = `${baseName}-${lastIndex + 1}`;
+        } else {
+          logger.warn(
+            `Unexpected name format found: ${existingName} for baseName: ${baseName} in group: ${group}. Attempting to suffix with -1.`
+          );
+          finalName = `${baseName}-1`;
+        }
+      }
+    }
+
     const q = new Postgres.Query(
-      `INSERT INTO agents (name, prompt, interval, plugins, memory, group_id) 
-VALUES ($1, ROW($2, $3, $4, $5), $6, $7, ROW($8, $9),     
-    (
-        CASE WHEN EXISTS (SELECT 1 FROM agents WHERE name = $10)
-             THEN COALESCE((SELECT MAX(group_id) FROM agents WHERE name = $11), 0) + 1
-             ELSE 0
-        END
-    )
-) RETURNING *`,
+      `INSERT INTO agents (name, "group", prompt, interval, plugins, memory) 
+       VALUES ($1, $2, ROW($3, $4, $5, $6), $7, $8, ROW($9, $10)) RETURNING *`,
       [
-        agent_config.name,
+        finalName,
+        group,
         agent_config.prompt.bio,
         agent_config.prompt.lore,
         agent_config.prompt.objectives,
@@ -368,16 +398,25 @@ VALUES ($1, ROW($2, $3, $4, $5), $6, $7, ROW($8, $9),
         agent_config.plugins,
         agent_config.memory.enabled,
         agent_config.memory.short_term_memory_size,
-        agent_config.name,
-        agent_config.name,
       ]
     );
     const q_res = await Postgres.query<AgentConfigSQL>(q);
     logger.debug(`Agent added to database: ${JSON.stringify(q_res)}`);
-    await this.createAgent(q_res[0]);
+
+    if (q_res.length > 0) {
+      const newAgentDbRecord = q_res[0];
+      const agentToCreate: AgentConfigSQL = {
+        ...newAgentDbRecord,
+        prompt: this.parseAgentPrompt(newAgentDbRecord.prompt as any),
+      };
+      await this.createAgent(agentToCreate);
+    } else {
+      logger.error('Failed to add agent to database, no record returned.');
+      throw new Error('Failed to add agent to database.');
+    }
   }
 
-  public getAgent(id: number): AgentSystem | undefined {
+  public getAgent(id: string): AgentSystem | undefined {
     if (!this.initialized) {
       return undefined;
     }
@@ -393,15 +432,15 @@ VALUES ($1, ROW($2, $3, $4, $5), $6, $7, ROW($8, $9),
   }
 
   // Add ResponseDTO for Error Handling in any public function
-  public async deleteAgent(id: number): Promise<void> {
+  public async deleteAgent(id: string): Promise<void> {
     if (!this.initialized) {
       await this.initPromise;
     }
     const q = new Postgres.Query(
-      `DELETE FROM agents WHERE name = $1 RETURNING *`,
+      `DELETE FROM agents WHERE id = $1 RETURNING *`,
       [id]
     );
-    const q_res = await Postgres.query<AgentConfig>(q);
+    const q_res = await Postgres.query<AgentConfigSQL>(q);
     logger.debug(`Agent deleted from database: ${JSON.stringify(q_res)}`);
     if (this.agentInstances.has(id)) {
       this.agentInstances.delete(id);

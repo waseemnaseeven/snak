@@ -14,7 +14,7 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 export interface MemoryConfig {
   enabled?: boolean;
   shortTermMemorySize?: number;
-  maxIteration?: number;
+  maxIterations?: number;
   embeddingModel?: string;
 }
 
@@ -31,7 +31,7 @@ export class MemoryAgent extends BaseAgent {
     super('memory-agent', AgentType.OPERATOR);
     this.config = {
       shortTermMemorySize: config.shortTermMemorySize || 15,
-      maxIteration: config.maxIteration,
+      maxIterations: config.maxIterations,
       embeddingModel: config.embeddingModel || 'Xenova/all-MiniLM-L6-v2',
     };
 

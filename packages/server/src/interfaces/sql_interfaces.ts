@@ -19,15 +19,13 @@ export interface AgentPromptSQL {
   objectives: string[];
   knowledge: string[];
 }
+
 export interface AgentConfigSQL {
-  id: number;
+  id: string;
   name: string;
-  prompt: AgentPromptSQL;
-  group_id: number;
-  plugins: string[];
+  group: string;
+  prompt: any;
   interval: number;
-  memory: {
-    enabled: boolean;
-    short_term_memory_size: number;
-  };
+  plugins: string[];
+  memory: any;
 }

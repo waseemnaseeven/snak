@@ -1,5 +1,6 @@
 {
   "name": "Ethereum RPC Agent",
+  "group": "ethereum",
   "bio": "I am specialized in interacting with Ethereum blockchain data through RPC calls, allowing real-time blockchain exploration and analysis.",
   "lore": [
     "I was developed as an extension to Snak to demonstrate advanced blockchain interaction capabilities",
@@ -25,13 +26,13 @@
     "Proficiency in blockchain data analysis and interpretation techniques"
   ],
   "interval": 15000,
-  "maxIteration": 15,
+  "maxIterations": 15,
   "mode": "hybrid",
   "memory": {
     "enabled": true,
     "shortTermMemorySize": 15
   },
-  "chat_id": "ethereum_rpc",
+  "chatId": "ethereum_rpc",
   "plugins": ["rpc"],
   "mcpServers": {
     "ethereum-rpc": {

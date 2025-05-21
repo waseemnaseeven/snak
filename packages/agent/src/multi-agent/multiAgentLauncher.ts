@@ -75,7 +75,7 @@ async function launchAgentAsync(
       useModelSelector: true,
       modelsConfig: modelsConfig,
     });
-	await modelSelectionAgent.init()
+    await modelSelectionAgent.init();
 
     const agent = new StarknetAgent({
       provider: new RpcProvider({ nodeUrl: process.env.STARKNET_RPC_URL }),

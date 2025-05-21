@@ -190,14 +190,13 @@ const localRun = async (): Promise<void> => {
             `Multi-agent configuration loaded from: ${chalk.cyan(agentPath)}`
           ),
         });
-		    const modelData = await fs.promises.readFile(modelsConfigPath, 'utf8');
-      		const modelsConfig: ModelsConfig = JSON.parse(modelData) as ModelsConfig;
+        const modelData = await fs.promises.readFile(modelsConfigPath, 'utf8');
+        const modelsConfig: ModelsConfig = JSON.parse(
+          modelData
+        ) as ModelsConfig;
 
         console.log(chalk.dim('\nLaunching multi-agent environment...\n'));
-        const terminateAgents = await launchMultiAgent(
-          agentPath,
-          modelsConfig
-        );
+        const terminateAgents = await launchMultiAgent(agentPath, modelsConfig);
 
         console.log(
           chalk.green('\nAll agents have been launched successfully.')
@@ -260,7 +259,7 @@ const localRun = async (): Promise<void> => {
       const nodeUrl = process.env.STARKNET_RPC_URL;
       if (!nodeUrl) {
         throw new Error(
-          "STARKNET_RPC_URL is not defined in environment variables"
+          'STARKNET_RPC_URL is not defined in environment variables'
         );
       }
 

@@ -3,6 +3,7 @@ import { RpcProvider } from 'starknet';
 import { logger, AgentConfig } from '@snakagent/core';
 import { metrics } from '@snakagent/core';
 import { DatabaseCredentials } from './types/database.js';
+import { z as Zod } from 'zod';
 
 /**
  * @interface StarknetAgentInterface

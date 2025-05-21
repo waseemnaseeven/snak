@@ -18,10 +18,7 @@ import {
 import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
 import { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { truncateToolResults, formatAgentResponse } from '../core/utils.js';
-import {
-  autonomousRules,
-  finalAnswerRules,
-} from '../../prompt/prompts.js';
+import { autonomousRules, finalAnswerRules } from '../../prompt/prompts.js';
 import { TokenTracker } from '../../token/tokenTracking.js';
 
 /**
@@ -401,7 +398,7 @@ export const createAutonomousAgent = async (
     return {
       app,
       agent_config,
-      maxIteration: agent_config.maxIteration,
+      maxIterations: agent_config.maxIterations,
     };
   } catch (error) {
     logger.error(`Failed to create autonomous agent graph: ${error}`);
