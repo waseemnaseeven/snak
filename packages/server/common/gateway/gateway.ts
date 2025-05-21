@@ -21,7 +21,13 @@ import {
 import { Server, Socket } from 'socket.io';
 import { logger, metrics } from '@snakagent/core';
 
-@WebSocketGateway()
+@WebSocketGateway({
+  cors: {
+    origin: 'http://localhost:4000',
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
+})
 export class MyGateway implements OnModuleInit {
   constructor(
     private readonly agentService: AgentService,
@@ -51,10 +57,11 @@ export class MyGateway implements OnModuleInit {
     try {
       //   const route = this.reflector.get('path', this.handleUserRequest);
       console.log('handleUserRequest:', userRequest.socket_id);
-      const agent = this.agentFactory.getAgent(userRequest.agent_id);
-      if (!agent) {
-        throw new ServerError('E01TA400');
-      }
+      // TODO add the agents check when the project will use the database instead of the mock
+      // const agent = this.agentFactory.getAgent(userRequest.agent_id);
+      // if (!agent) {
+      //   throw new ServerError('E01TA400');
+      // }
       //   const action = this.agentService.handleUserRequest(agent, userRequest);
 
       //   const response_metrics = await metrics.metricsAgentResponseTime(
@@ -84,7 +91,7 @@ export class MyGateway implements OnModuleInit {
 
       // Send each chunk with a delay
       for (let i = 0; i < storyChunks.length; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        await new Promise((resolve) => setTimeout(resolve, 100));
         logger.debug('Sending chunk:', storyChunks[i]);
         const response: AgentResponse = {
           status: 'success',
