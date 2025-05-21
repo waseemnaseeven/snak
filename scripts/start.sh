@@ -35,6 +35,33 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Make sure the script correctly transmits signals to child processes
+forward_signals() {
+  # Capture the PID of the most recent background process
+  local child_pid=$!
+
+  # Define a function to forward signals
+  trap_with_arg() {
+    local func="$1"; shift
+    for sig; do
+      # When we get this signal, send it to the child process
+      trap "eval '$func $sig'" "$sig"
+    done
+  }
+
+  # Function to send signal to child
+  signal_handler() {
+    local sig="$1"
+    echo -e "\n${YELLOW}Received signal $sig, forwarding to child process ($child_pid)${NC}"
+    if [ -n "$child_pid" ] && kill -0 $child_pid 2>/dev/null; then
+      kill -"$sig" "$child_pid"
+    fi
+  }
+
+  # Set up forwarding for these signals
+  trap_with_arg signal_handler SIGINT SIGTERM SIGHUP
+}
+
 # Check if a command is available in PATH
 check_command() {
   command -v "$1" > /dev/null 2>&1
@@ -110,8 +137,13 @@ run_with_progress() {
 
   progress_bar 0 "$message"
 
+  # Use exec to preserve stdin/stdout/stderr file descriptors
+  # This ensures signals are properly propagated
   eval "$command" > "$LOG_FILE" 2>&1 &
   local pid=$!
+
+  # Enable signal forwarding
+  forward_signals
 
   local progress=0
   while kill -0 $pid 2>/dev/null; do

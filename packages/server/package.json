@@ -11,7 +11,7 @@
     "clean": "rm -rf node_modules",
     "clean:dist": "rm -rf dist",
     "clean:all": "pnpm clean && pnpm clean:dist",
-    "format": "prettier --write \"src/**/*.ts\"",
+    "format": "prettier --write \"./**/*.ts\"",
     "dev": "nest start --watch",
     "start": "node dist/main"
   },
@@ -33,9 +33,10 @@
     "fastify": "^5.2.1",
     "helmet": "^8.0.0",
     "rxjs": "^7.8.1",
+    "@langchain/core": "^0.3.42",
     "@snakagent/agents": "workspace:*",
     "@snakagent/core": "workspace:*",
-    "pg": "^8.12.0"
+    "@snakagent/database": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.3",

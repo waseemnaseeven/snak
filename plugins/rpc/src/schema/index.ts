@@ -71,3 +71,7 @@ export type GetTransactionByBlockIdAndIndexParams = z.infer<
 >;
 export type ContractAddressParams = z.infer<typeof contractAddressSchema>;
 export type TransactionHashParams = z.infer<typeof transactionHashSchema>;
+
+export const emptyInputSchema = z.object({
+  input: z.object({}).optional().nullable(),
+});

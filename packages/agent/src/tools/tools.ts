@@ -1,7 +1,6 @@
 import { DynamicStructuredTool, tool } from '@langchain/core/tools';
 import { RpcProvider } from 'starknet';
-import { AgentConfig } from '../config/agentConfig.js';
-import { logger } from '@snakagent/core';
+import { logger, AgentConfig } from '@snakagent/core';
 import { metrics } from '@snakagent/core';
 import { DatabaseCredentials } from './types/database.js';
 
