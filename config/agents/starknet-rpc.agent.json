@@ -26,6 +26,6 @@
     "enabled": true,
     "shortTermMemorySize": 15
   },
-  "chatId": "ethereum_rpc",
+  "chatId": "starknet_rpc",
   "plugins": ["rpc"]
 }

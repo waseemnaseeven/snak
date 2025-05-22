@@ -17,7 +17,7 @@ import { ModelSelectionAgent } from './modelSelectionAgent.js';
  * Configuration for the tools orchestrator
  */
 export interface ToolsOrchestratorConfig {
-  snakAgent: SnakAgentInterface;
+  snakAgent: SnakAgentInterface | null;
   agentConfig: any;
   modelSelectionAgent: ModelSelectionAgent | null;
 }
@@ -26,7 +26,7 @@ export interface ToolsOrchestratorConfig {
  * Operator agent that manages tools orchestration
  */
 export class ToolsOrchestrator extends BaseAgent {
-  private snakAgent: SnakAgentInterface;
+  private snakAgent: SnakAgentInterface | null;
   private agentConfig: any;
   private tools: (Tool | StructuredTool | DynamicStructuredTool<any>)[] = [];
   private toolNode: ToolNode | null = null;
@@ -61,22 +61,31 @@ export class ToolsOrchestrator extends BaseAgent {
    */
   private async initializeTools(): Promise<void> {
     try {
-      const isSignature = this.snakAgent.getSignature().signature === 'wallet';
-
-      if (isSignature) {
-        this.tools = await createSignatureTools(this.agentConfig.plugins);
-        logger.debug(
-          `ToolsOrchestrator: Initialized signature tools (${this.tools.length})`
+      // Si snakAgent n'est pas disponible, initialiser avec un ensemble limité d'outils
+      if (!this.snakAgent) {
+        logger.info(
+          'ToolsOrchestrator: No SnakAgent provided, initializing with limited tools set'
         );
+        this.tools = [];
       } else {
-        const allowedTools = await createAllowedTools(
-          this.snakAgent,
-          this.agentConfig.plugins
-        );
-        this.tools = [...allowedTools];
-        logger.debug(
-          `ToolsOrchestrator: Initialized allowed tools (${this.tools.length})`
-        );
+        const isSignature =
+          this.snakAgent.getSignature().signature === 'wallet';
+
+        if (isSignature) {
+          this.tools = await createSignatureTools(this.agentConfig.plugins);
+          logger.debug(
+            `ToolsOrchestrator: Initialized signature tools (${this.tools.length})`
+          );
+        } else {
+          const allowedTools = await createAllowedTools(
+            this.snakAgent,
+            this.agentConfig.plugins
+          );
+          this.tools = [...allowedTools];
+          logger.debug(
+            `ToolsOrchestrator: Initialized allowed tools (${this.tools.length})`
+          );
+        }
       }
 
       if (

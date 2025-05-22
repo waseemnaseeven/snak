@@ -5,7 +5,6 @@ import { logger } from '@snakagent/core';
 import { IAgent } from '../core/baseAgent.js';
 import { RunnableConfig } from '@langchain/core/runnables';
 import crypto from 'crypto';
-import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
 import { AgentType } from '../core/baseAgent.js';
 
 /**

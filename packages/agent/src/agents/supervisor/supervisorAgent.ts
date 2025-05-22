@@ -125,22 +125,10 @@ export class SupervisorAgent extends BaseAgent {
         );
       }
 
-      logger.debug('SupervisorAgent: Initializing SnakAgent...');
-      this.snakAgent = new SnakAgent({
-        provider: this.config.starknetConfig.provider,
-        accountPublicKey: this.config.starknetConfig.accountPublicKey,
-        accountPrivateKey: this.config.starknetConfig.accountPrivateKey,
-        modelSelector: this.modelSelectionAgent,
-        memory: this.config.starknetConfig.agentConfig?.memory,
-        agentConfig: this.config.starknetConfig.agentConfig,
-        db_credentials: this.config.starknetConfig.db_credentials,
-      });
-      await this.snakAgent.init();
-      logger.debug('SupervisorAgent: SnakAgent initialized');
-
       logger.debug('SupervisorAgent: Initializing ToolsOrchestrator...');
       this.toolsOrchestrator = new ToolsOrchestrator({
-        snakAgent: this.snakAgent,
+        // Passer null en tant que snakAgent - ToolsOrchestrator doit gérer ce cas
+        snakAgent: null,
         agentConfig: agentConfig,
         modelSelectionAgent: this.modelSelectionAgent,
       });
@@ -158,37 +146,22 @@ export class SupervisorAgent extends BaseAgent {
       this.operators.set(this.agentSelectionAgent.id, this.agentSelectionAgent);
       logger.debug('SupervisorAgent: AgentSelectionAgent initialized');
 
-      // Enregistrer l'agent Starknet principal
-      if (this.snakAgent) {
-        // Extraire les métadonnées de configuration de l'agent
-        const agentConfig = this.snakAgent.getAgentConfig();
-        const agentName = agentConfig?.name || 'Starknet RPC Agent';
-        const agentGroup = agentConfig?.group || 'starknet';
-
-        const agentId = agentName.toLowerCase().replace(/\s+/g, '-');
-
-        // Enregistrer l'agent avec son ID métier
-        this.registerSnakAgent(agentId, this.snakAgent, {
-          name: agentName,
-          description:
-            agentConfig?.description ||
-            'The primary Starknet interaction agent',
-          group: agentGroup,
-        });
-
-        logger.debug(
-          `SupervisorAgent: Registered Starknet agent as "${agentId}"`
-        );
-      }
-
       // Mettre à jour les agents disponibles pour l'agent de sélection
       this.updateAgentSelectionAgentRegistry();
 
       logger.debug('SupervisorAgent: Initializing WorkflowController...');
-      await this.initializeWorkflowController();
+      // Initialiser le workflow controller même sans agents Starknet, ils seront ajoutés plus tard
+      await this.initializeWorkflowController(true);
       logger.debug('SupervisorAgent: WorkflowController initialized');
 
-      this.initializeMetrics(agentConfig);
+      // Initialiser les métriques uniquement si nécessaire
+      if (Object.keys(this.snakAgents).length > 0) {
+        this.initializeMetrics(agentConfig);
+      } else {
+        logger.info(
+          'SupervisorAgent: Metrics initialization skipped (no agents registered)'
+        );
+      }
 
       logger.info('SupervisorAgent: All agents initialized successfully');
     } catch (error) {
@@ -201,9 +174,12 @@ export class SupervisorAgent extends BaseAgent {
    * Initializes the WorkflowController with all available agents.
    * It gathers all initialized operator agents and the supervisor itself
    * to be managed by the workflow controller.
+   * @param allowNoSnakAgents Si true, permet l'initialisation même s'il n'y a pas d'agent Starknet
    * @throws Will throw an error if essential agents like the Starknet agent are missing.
    */
-  private async initializeWorkflowController(): Promise<void> {
+  private async initializeWorkflowController(
+    allowNoSnakAgents: boolean = false
+  ): Promise<void> {
     logger.debug('SupervisorAgent: Initializing WorkflowController components');
     try {
       const allAgents: Record<string, IAgent> = {
@@ -234,15 +210,23 @@ export class SupervisorAgent extends BaseAgent {
       });
 
       // Vérifier si au moins un agent d'exécution est disponible
-      if (
-        Object.keys(allAgents).filter(
-          (id) =>
-            id.startsWith('snak-') ||
-            (allAgents[id] && allAgents[id].type === AgentType.SNAK)
-        ).length === 0
-      ) {
+      const snakAgentsCount = Object.keys(allAgents).filter(
+        (id) =>
+          id.startsWith('snak-') ||
+          (allAgents[id] && allAgents[id].type === AgentType.SNAK)
+      ).length;
+
+      if (snakAgentsCount === 0 && !allowNoSnakAgents) {
         throw new Error(
           'WorkflowController requires at least one Starknet execution agent.'
+        );
+      } else if (snakAgentsCount === 0) {
+        logger.warn(
+          'WorkflowController: No Starknet agents available yet, but proceeding with initialization anyway'
+        );
+      } else {
+        logger.info(
+          `WorkflowController: Found ${snakAgentsCount} Starknet execution agents available`
         );
       }
 
@@ -1144,7 +1128,7 @@ export class SupervisorAgent extends BaseAgent {
   /**
    * Met à jour le registre pour l'agent de sélection
    */
-  private updateAgentSelectionAgentRegistry(): void {
+  public updateAgentSelectionAgentRegistry(): void {
     if (!this.agentSelectionAgent) return;
 
     const registry = OperatorRegistry.getInstance();
@@ -1215,5 +1199,36 @@ export class SupervisorAgent extends BaseAgent {
    */
   public getAgentSelectionAgent(): AgentSelectionAgent | null {
     return this.agentSelectionAgent;
+  }
+
+  /**
+   * Met à jour le WorkflowController avec les agents actuellement disponibles.
+   * Cette méthode est utile après l'enregistrement de nouveaux agents.
+   */
+  public async refreshWorkflowController(): Promise<void> {
+    if (!this.workflowController) {
+      logger.warn(
+        'SupervisorAgent: Cannot refresh WorkflowController as it is not initialized yet'
+      );
+      return;
+    }
+
+    logger.info(
+      'SupervisorAgent: Refreshing WorkflowController with newly registered agents'
+    );
+    try {
+      // Réinitialiser d'abord
+      await this.workflowController.reset();
+
+      // Puis réinitialiser avec les agents actuels (strictement cette fois)
+      await this.initializeWorkflowController(false);
+
+      logger.info('SupervisorAgent: WorkflowController successfully refreshed');
+    } catch (error) {
+      logger.error(
+        `SupervisorAgent: Failed to refresh WorkflowController: ${error}`
+      );
+      throw new Error(`Failed to refresh WorkflowController: ${error}`);
+    }
   }
 }
