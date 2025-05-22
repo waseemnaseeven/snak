@@ -158,7 +158,7 @@ export class SupervisorAgent extends BaseAgent {
       if (Object.keys(this.snakAgents).length > 0) {
         this.initializeMetrics(agentConfig);
       } else {
-        logger.info(
+        logger.debug(
           'SupervisorAgent: Metrics initialization skipped (no agents registered)'
         );
       }

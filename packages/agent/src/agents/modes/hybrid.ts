@@ -5,6 +5,7 @@ import {
   Annotation,
 } from '@langchain/langgraph';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
+import { Command } from '@langchain/langgraph';
 import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
 import {
   ChatPromptTemplate,
@@ -210,6 +211,16 @@ export const createHybridAgent = async (
         };
       }
 
+      // Extract originalUserQuery from first HumanMessage if available
+      const originalUserMessage = state.messages.find(
+        (msg): msg is HumanMessage => msg instanceof HumanMessage
+      );
+      const originalUserQuery = originalUserMessage 
+        ? typeof originalUserMessage.content === 'string'
+          ? originalUserMessage.content
+          : JSON.stringify(originalUserMessage.content)
+        : '';
+
       // System prompt with hybrid instructions
       const hybridSystemPrompt = `
         ${agent_config.prompt.content}
@@ -243,7 +254,10 @@ export const createHybridAgent = async (
       }
 
       const selectedModelType = modelSelector
-        ? await modelSelector.selectModelForMessages(state.messages)
+        ? await modelSelector.selectModelForMessages(
+            state.messages,
+            { originalUserQuery }
+          )
         : 'smart';
 
       const modelForThisTask = modelSelector

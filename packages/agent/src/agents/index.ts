@@ -126,7 +126,7 @@ export class AgentSystem {
       // Initialize the supervisor, which will initialize all other agents
       await this.supervisorAgent.init();
 
-      logger.info('AgentSystem: Initialization complete');
+      logger.debug('AgentSystem: Initialization complete');
     } catch (error) {
       logger.error(`AgentSystem: Initialization failed: ${error}`);
       throw new Error(`Failed to initialize agent system: ${error}`);

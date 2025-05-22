@@ -10,7 +10,7 @@ import {
   Tool,
 } from '@langchain/core/tools';
 import { AnyZodObject } from 'zod';
-import { AIMessage, BaseMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, BaseMessage, ToolMessage, HumanMessage } from '@langchain/core/messages';
 import {
   ChatPromptTemplate,
   MessagesPlaceholder,
@@ -204,8 +204,21 @@ export const createAutonomousAgent = async (
           messages: filteredMessages,
         });
 
+        // Extract originalUserQuery from first HumanMessage if available
+        const originalUserMessage = filteredMessages.find(
+          (msg): msg is HumanMessage => msg instanceof HumanMessage
+        );
+        const originalUserQuery = originalUserMessage 
+          ? typeof originalUserMessage.content === 'string'
+            ? originalUserMessage.content
+            : JSON.stringify(originalUserMessage.content)
+          : '';
+
         const selectedModelType =
-          await modelSelector.selectModelForMessages(filteredMessages);
+          await modelSelector.selectModelForMessages(
+            filteredMessages,
+            { originalUserQuery }
+          );
         const modelForThisTask = await modelSelector.getModelForTask(
           filteredMessages,
           selectedModelType

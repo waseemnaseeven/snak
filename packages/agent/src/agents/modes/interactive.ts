@@ -1,6 +1,6 @@
 import { StateGraph, MemorySaver, Annotation } from '@langchain/langgraph';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
-import { AIMessage, BaseMessage } from '@langchain/core/messages';
+import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
 import {
   ChatPromptTemplate,
   MessagesPlaceholder,
@@ -165,9 +165,22 @@ export const createInteractiveAgent = async (
               ? (state.memories as any).modelType
               : null;
 
+          // Extract originalUserQuery from first HumanMessage if available
+          const originalUserMessage = currentMessages.find(
+            (msg): msg is HumanMessage => msg instanceof HumanMessage
+          );
+          const originalUserQuery = originalUserMessage 
+            ? typeof originalUserMessage.content === 'string'
+              ? originalUserMessage.content
+              : JSON.stringify(originalUserMessage.content)
+            : '';
+
           const selectedModelType =
             stateModelType ||
-            (await modelSelector.selectModelForMessages(currentMessages));
+            (await modelSelector.selectModelForMessages(
+              currentMessages, 
+              { originalUserQuery }
+            ));
 
           logger.debug(
             `Using dynamically selected model: ${selectedModelType}`
