@@ -18,4 +18,7 @@ export type {
   ModelLevelConfig,
 } from './types/models/modelsConfig.js';
 
+export * from './common/server/dto/agents.js';
+export * from './common/server/dto/websocket.js';
+
 export { MODELS, ModelProviders } from './types/models/models.js';

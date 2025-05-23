@@ -291,6 +291,7 @@ export class SupervisorAgent extends BaseAgent {
                 : (input as AgentMessage).content,
             config
           );
+
           const finalResult =
             result instanceof BaseMessage
               ? result.content
@@ -371,16 +372,11 @@ export class SupervisorAgent extends BaseAgent {
         `${depthIndent}SupervisorAgent: WorkflowController execution finished.`
       );
 
-      let formattedResponse =
-        result instanceof BaseMessage
-          ? result.content
-          : this.formatResponse(result);
-
       logger.debug(
         `${depthIndent}SupervisorAgent: Execution complete. Returning formatted response.`
       );
       this.executionDepth--;
-      return formattedResponse;
+      return result;
     } catch (error) {
       logger.error(
         `${depthIndent}SupervisorAgent: Error during WorkflowController execution: ${error}`
@@ -397,7 +393,7 @@ export class SupervisorAgent extends BaseAgent {
    * @param response The response to format.
    * @returns The formatted response.
    */
-  private formatResponse(response: any): string {
+  public formatResponse(response: any): string {
     if (typeof response === 'string') {
       return response
         .split('\n')

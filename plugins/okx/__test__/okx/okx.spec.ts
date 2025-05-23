@@ -1,6 +1,6 @@
 import { RpcProvider } from 'starknet';
-import { CreateOKXAccountSignature } from '../../src/actions/createAccount';
-import { DeployOKXAccountSignature } from '../../src/actions/deployAccount';
+import { CreateOKXAccountSignature } from '../../src/actions/createAccount.js';
+import { DeployOKXAccountSignature } from '../../src/actions/deployAccount.js';
 
 describe('OKX Account Creation and Deployment', () => {
   let provider: RpcProvider;

@@ -1,8 +1,8 @@
-import { getOwnBalance } from '../../src/actions/getBalances';
+import { getOwnBalance } from '../../src/actions/getBalances.js';
 import {
   createMockInvalidStarknetAgent,
   createMockStarknetAgent,
-} from '../jest/setEnvVars';
+} from '../jest/setEnvVars.js';
 
 const agent = createMockStarknetAgent();
 const wrong_agent = createMockInvalidStarknetAgent();

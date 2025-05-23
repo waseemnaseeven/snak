@@ -16,6 +16,7 @@ import {
   ModelLevelConfig,
   ModelProviders,
 } from '@snakagent/core';
+import DatabaseStorage from '../common/database/database.js';
 
 export interface AgentConfigJson {
   name: string;
@@ -88,7 +89,6 @@ export class AgentStorage {
       logger.error('Error during agents_controller initialisation:', error);
       throw error;
     }
-    1;
   }
 
   private async initialize() {
@@ -96,14 +96,7 @@ export class AgentStorage {
       if (this.initialized) {
         return;
       }
-      await Postgres.connect({
-        database: process.env.POSTGRES_DB as string,
-        host: process.env.POSTGRES_HOST as string,
-        user: process.env.POSTGRES_USER as string,
-        password: process.env.POSTGRES_PASSWORD as string,
-        port: parseInt(process.env.POSTGRES_PORT as string),
-      });
-
+      await DatabaseStorage.connect();
       await this.init_models_config();
       await this.init_agents_config();
       this.initialized = true;
@@ -150,7 +143,7 @@ export class AgentStorage {
       const q = new Postgres.Query(`SELECT * FROM agents`);
       const q_res = await Postgres.query<AgentConfigSQL>(q);
       this.agentConfigs = [...q_res];
-      q_res.forEach((agent) => {
+      q_res.forEach((agent: AgentConfigSQL) => {
         agent.prompt = this.parseAgentPrompt(agent.prompt);
       });
       logger.debug(
@@ -299,7 +292,7 @@ export class AgentStorage {
 
     const q = new Postgres.Query(
       `INSERT INTO agents (name, "group", prompt, interval, plugins, memory) 
-       VALUES ($1, $2, ROW($3, $4, $5, $6), $7, $8, ROW($9, $10)) RETURNING *`,
+        VALUES ($1, $2, ROW($3, $4, $5, $6), $7, $8, ROW($9, $10)) RETURNING *`,
       [
         finalName,
         group,

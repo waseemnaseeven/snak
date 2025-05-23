@@ -1,9 +1,9 @@
-import { simulateInvokeTransaction } from '../../src/actions/simulateTransaction';
-import * as C from '../utils/constant';
+import { simulateInvokeTransaction } from '../../src/actions/simulateTransaction.js';
+import * as C from '../utils/constant.js';
 import {
   createMockInvalidStarknetAgent,
   createMockStarknetAgent,
-} from '../jest/setEnvVars';
+} from '../jest/setEnvVars.js';
 
 const agent = createMockStarknetAgent();
 const wrong_agent = createMockInvalidStarknetAgent();

@@ -1,4 +1,4 @@
-import { AgentRequestDTO } from '../dto/agents.js';
+import { AgentRequestDTO } from '@snakagent/core';
 import { IAgent } from './agent.interface.js';
 
 export interface AgentExecutionResponse {

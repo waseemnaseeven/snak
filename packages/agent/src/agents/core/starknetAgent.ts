@@ -462,6 +462,20 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
 
       let result: any;
       try {
+        try {
+          const stream = await this.agentReactExecutor.stream(
+            { messages: currentMessages },
+            { configurable: { thread_id: 'default' } }
+          );
+          const chunks = [];
+          for await (const chunk of stream) {
+            chunks.push(chunk);
+            logger.warn(`${chunk.content}|`);
+          }
+        } catch (error) {
+          logger.error(error);
+        }
+
         result = await this.agentReactExecutor.invoke(
           { messages: currentMessages },
           { configurable: { thread_id: 'default' } }

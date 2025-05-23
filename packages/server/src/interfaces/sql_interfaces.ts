@@ -6,10 +6,10 @@ export interface ConversationSQL {
 }
 
 export interface MessageSQL {
-  message_id: number;
-  conversation_id: number;
-  content: string;
-  sender_type: string;
+  id: string;
+  agent_id: string;
+  user_request: string;
+  agent_iteration: any;
   created_at: Date;
 }
 
