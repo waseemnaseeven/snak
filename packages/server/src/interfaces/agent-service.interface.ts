@@ -1,4 +1,4 @@
-import {   MessageRequest } from '@snakagent/core';
+import { MessageRequest } from '@snakagent/core';
 import { IAgent } from './agent.interface.js';
 import { AgentSystem } from '@snakagent/agents';
 
