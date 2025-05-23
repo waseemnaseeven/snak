@@ -12,6 +12,10 @@ import {
   StructuredTool,
 } from '@langchain/core/tools';
 
+// Global tracking to prevent duplicate connections
+let databaseConnectionPromise: Promise<void> | null = null;
+let isConnected = false;
+
 /**
  * Initializes the list of tools for the agent
  */
@@ -56,11 +60,33 @@ export async function initializeToolsList(
  */
 export const initializeDatabase = async (db: DatabaseCredentials) => {
   try {
-    await Postgres.connect(db);
+    // If already connected, just initialize memory
+    if (isConnected) {
+      await memory.init();
+      logger.debug('Agent memory table successfully initialized (connection exists)');
+      return;
+    }
+
+    // If connection is in progress, wait for it
+    if (databaseConnectionPromise) {
+      await databaseConnectionPromise;
+      await memory.init();
+      logger.debug('Agent memory table successfully initialized (waited for connection)');
+      return;
+    }
+
+    // Start connection process
+    databaseConnectionPromise = Postgres.connect(db);
+    await databaseConnectionPromise;
+    isConnected = true;
+    
     await memory.init();
     logger.debug('Agent memory table successfully created');
   } catch (error) {
     logger.error('Error creating memories table:', error);
+    // Reset connection state on failure
+    databaseConnectionPromise = null;
+    isConnected = false;
     throw error;
   }
 };

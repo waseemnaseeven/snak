@@ -37,3 +37,7 @@ export type { IAgent, AiConfig } from './common/index.js';
 
 export type { AgentSystemConfig } from './agents/index.js';
 export { AgentSystem } from './agents/index.js';
+
+// Supervisor exports
+export { SupervisorAgent } from './agents/supervisor/supervisorAgent.js';
+export type { SupervisorAgentConfig } from './agents/supervisor/supervisorAgent.js';

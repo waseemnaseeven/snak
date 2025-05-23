@@ -1,4 +1,5 @@
-import { IsNotEmpty } from 'class-validator';
+// packages/server/src/dto/agents.ts
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export interface Message {
   agent_id: string;
@@ -12,6 +13,21 @@ export class AgentRequestDTO {
   request: Message;
   @IsNotEmpty()
   agent_id: string;
+}
+
+export class SupervisorRequest {
+  @IsNotEmpty()
+  @IsString()
+  content: string;
+  
+  @IsOptional()
+  @IsString()
+  agentId?: string; // Optional: specify which agent to use
+}
+
+export class SupervisorRequestDTO {
+  @IsNotEmpty()
+  request: SupervisorRequest;
 }
 
 export class getMessagesFromAgentsDTO {

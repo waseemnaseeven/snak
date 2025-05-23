@@ -1177,6 +1177,53 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
+   * Désinscrire un agent Snak du système
+   */
+  public unregisterSnakAgent(id: string): void {
+    if (this.snakAgents[id]) {
+      // Dispose de l'agent si possible
+      const agent = this.snakAgents[id];
+      if (agent && typeof (agent as any).dispose === 'function') {
+        try {
+          (agent as any).dispose();
+        } catch (error) {
+          logger.error(`Error disposing agent ${id}:`, error);
+        }
+      }
+      
+      // Supprimer du registre
+      delete this.snakAgents[id];
+      logger.debug(`SupervisorAgent: Unregistered Snak agent "${id}"`);
+      
+      // Mettre à jour l'agent de sélection
+      this.updateAgentSelectionAgentRegistry();
+    } else {
+      logger.warn(`SupervisorAgent: Attempted to unregister non-existent agent "${id}"`);
+    }
+  }
+
+  /**
+   * Obtenir la liste des agents Snak enregistrés
+   */
+  public getRegisteredSnakAgents(): Record<string, SnakAgent> {
+    return { ...this.snakAgents };
+  }
+
+  /**
+   * Obtenir le nombre d'agents Snak enregistrés
+   */
+  public getRegisteredSnakAgentsCount(): number {
+    return Object.keys(this.snakAgents).length;
+  }
+
+  /**
+   * Vérifier si un agent Snak est enregistré
+   */
+  public isSnakAgentRegistered(id: string): boolean {
+    return id in this.snakAgents;
+  }
+
+  /**
    * Récupère un agent Snak par son ID
    */
   public getSnakAgent(id?: string): SnakAgent | null {
