@@ -282,7 +282,6 @@ export class SupervisorAgent extends BaseAgent {
         `${depthIndent}SupervisorAgent: Maximum execution depth (${this.executionDepth}) reached. Attempting direct execution via StarknetAgent.`
       );
       try {
-        console.log('Hello');
         if (this.starknetAgent) {
           const result = await this.starknetAgent.execute(
             typeof input === 'string'
@@ -293,7 +292,6 @@ export class SupervisorAgent extends BaseAgent {
             config
           );
 
-          console.log('hello', result);
           const finalResult =
             result instanceof BaseMessage
               ? result.content
@@ -373,12 +371,7 @@ export class SupervisorAgent extends BaseAgent {
       logger.debug(
         `${depthIndent}SupervisorAgent: WorkflowController execution finished.`
       );
-
-      // let formattedResponse =
-      //   result instanceof BaseMessage
-      //     ? result.content
-      //     : this.formatResponse(result);
-
+      
       logger.debug(
         `${depthIndent}SupervisorAgent: Execution complete. Returning formatted response.`
       );

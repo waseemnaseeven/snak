@@ -9,7 +9,7 @@ interface AgentPrompt {
   knowledge: string[];
 }
 
-// Need to change to the real agent config
+// TODO Need to change to the real agent config
 export interface AgentConfigDatabase {
   name: string;
   prompt: AgentPrompt;

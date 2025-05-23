@@ -205,7 +205,7 @@ export class AgentsController {
         userRequest.request
       );
       await metrics.metricsAgentResponseTime(
-        userRequest.request.agent_id.toString(),
+        userRequest.request.agent_id,
         'key',
         route,
         action
