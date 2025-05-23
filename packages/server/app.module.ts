@@ -11,6 +11,7 @@ import { GatewayModule } from './src/gateway.module.js';
   imports: [
     GatewayModule,
     ConfigModule,
+    // AgentsModule,
     CleanupModule,
     ThrottlerModule.forRoot({
       throttlers: [
@@ -26,6 +27,11 @@ import { GatewayModule } from './src/gateway.module.js';
       provide: APP_GUARD,
       useClass: ApiKeyGuard,
     },
+    // TODO add interceptor for agent response
+    // {
+    //   provide: APP_INTERCEPTOR,
+    //   useClass: AgentResponseInterceptor,
+    // },
     // TODO add interceptor for agent response
     // {
     //   provide: APP_INTERCEPTOR,

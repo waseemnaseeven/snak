@@ -1,8 +1,8 @@
-import { declareContract } from '../../src/actions/declareContract';
+import { declareContract } from '../../src/actions/declareContract.js';
 import {
   createMockStarknetAgent,
   createMockInvalidStarknetAgent,
-} from '../jest/setEnvVars';
+} from '../jest/setEnvVars.js';
 
 const agent = createMockStarknetAgent();
 const wrong_agent = createMockInvalidStarknetAgent();

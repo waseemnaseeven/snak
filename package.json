@@ -35,7 +35,7 @@
     "docker-teardown": "docker compose -f ./packages/database/compose.yaml rm -fsv",
     "start": "pnpm run docker-setup && ./scripts/start.sh ; ECODE=$? ; pnpm docker-teardown ; exit $ECODE",
     "start:normal": "pnpm run build && pnpm run docker-setup && lerna run --scope @snakagent/agents start -- ; ECODE=$? ; pnpm docker-teardown ; exit $ECODE",
-    "start:server": "pnpm run build && pnpm run docker-setup && lerna run start --scope \"@snakagent/server\" --scope \"@snakagent/client\" ; ECODE=$? ; pnpm docker-teardown ; exit $ECODE",
+    "start:server": "pnpm run build && pnpm run docker-setup && lerna run start --scope \"@snakagent/server\"; ECODE=$? ; pnpm docker-teardown ; exit $ECODE",
     "start:test": "turbo test",
     "test": "./scripts/run_all_test.sh",
     "dev": "lerna run --scope @snakagent/agents start --",
@@ -63,6 +63,7 @@
     "socket.io": "^4.8.1",
     "starknet": "^6.23.1",
     "util": "^0.12.5",
+    "uuid": "^11.1.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {
@@ -77,6 +78,7 @@
     "@types/pg": "^8.15.0",
     "@types/socket.io": "^3.0.2",
     "@types/supertest": "^6.0.2",
+    "@types/uuid": "^10.0.0",
     "@types/yargs": "^17.0.33",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
     "@typescript-eslint/parser": "^8.25.0",

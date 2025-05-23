@@ -1,19 +1,17 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
+import { AgentService } from '../services/agent.service.js';
+import { AgentStorage } from '../agents.storage.js';
 import {
+  metrics,
+  logger,
   AgentAddRequestDTO,
   AgentDeleteRequestDTO,
   AgentRequestDTO,
-  ConversationsRequestDTO,
-  getMessagesFromConversationIdDTO,
-  DeleteConversationRequestDTO,
-  AgentDeletesRequestDTO,
-} from './dto/agents.js';
-import { AgentService } from './services/agent.service.js';
-import { AgentStorage } from './agents.storage.js';
-import { metrics } from '@snakagent/core';
+  AgentsDeleteRequestDTO,
+  MessageFromAgentIdDTO,
+} from '@snakagent/core';
 import { Reflector } from '@nestjs/core';
-import { ServerError } from './utils/error.js';
-import { logger } from 'starknet';
+import { ServerError } from '../utils/error.js';
 
 export interface AgentResponse {
   status: 'success' | 'failure';
@@ -34,14 +32,17 @@ export class AgentsController {
   ): Promise<AgentResponse> {
     try {
       const route = this.reflector.get('path', this.handleUserRequest);
-      const agent = this.agentFactory.getAgent(userRequest.agent_id);
+      const agent = this.agentFactory.getAgent(userRequest.request.agent_id);
       if (!agent) {
         throw new ServerError('E01TA400');
       }
-      const action = this.agentService.handleUserRequest(agent, userRequest);
+      const action = this.agentService.handleUserRequest(
+        agent,
+        userRequest.request
+      );
 
       const response_metrics = await metrics.metricsAgentResponseTime(
-        userRequest.agent_id.toString(),
+        userRequest.request.agent_id.toString(),
         'key',
         route,
         action
@@ -60,9 +61,7 @@ export class AgentsController {
   }
 
   @Post('init_agent')
-  async addAgent(
-    @Body() userRequest: AgentAddRequestDTO
-  ): Promise<AgentResponse> {
+  async addAgent(@Body() userRequest: any): Promise<AgentResponse> {
     try {
       await this.agentFactory.addAgent(userRequest.agent);
       const response: AgentResponse = {
@@ -73,6 +72,28 @@ export class AgentsController {
     } catch (error) {
       logger.error('Error in addAgent:', error);
       throw new ServerError('E02TA200');
+    }
+  }
+
+  @Post('get_messages_from_agent')
+  async getMessagesFromAgent(
+    @Body() userRequest: MessageFromAgentIdDTO
+  ): Promise<AgentResponse> {
+    try {
+      const agent = this.agentFactory.getAgent(userRequest.agent_id);
+      if (!agent) {
+        throw new ServerError('E01TA400');
+      }
+      const messages =
+        await this.agentService.getMessageFromAgentId(userRequest);
+      const response: AgentResponse = {
+        status: 'success',
+        data: messages,
+      };
+      return response;
+    } catch (error) {
+      logger.error('Error in getMessagesFromAgent:', error);
+      throw new ServerError('E04TA100');
     }
   }
 
@@ -101,7 +122,7 @@ export class AgentsController {
 
   @Post('delete_agents')
   async deleteAgents(
-    @Body() userRequest: AgentDeletesRequestDTO
+    @Body() userRequest: AgentsDeleteRequestDTO
   ): Promise<AgentResponse[]> {
     try {
       let arr_response: AgentResponse[] = [];
@@ -150,73 +171,6 @@ export class AgentsController {
   //   }
   // }
 
-  @Post('delete_conversation')
-  async deleteConversation(
-    @Body() userRequest: DeleteConversationRequestDTO
-  ): Promise<AgentResponse> {
-    try {
-      const agent = this.agentFactory.getAgent(userRequest.agent_id);
-      if (!agent) {
-        throw new ServerError('E01TA400');
-      }
-
-      await this.agentService.deleteConversation(userRequest.conversation_id);
-      const response: AgentResponse = {
-        status: 'success',
-        data: `Conversation ${userRequest.conversation_id} deleted`,
-      };
-      return response;
-    } catch (error) {
-      throw new ServerError('E02TA200');
-    }
-  }
-
-  @Get('get_conversations_from_agent_id')
-  async getConversationsFromAgentId(
-    @Body() userRequest: ConversationsRequestDTO
-  ): Promise<AgentResponse> {
-    try {
-      const agent = this.agentFactory.getAgent(userRequest.agent_id);
-      if (!agent) {
-        throw new ServerError('E01TA400');
-      }
-      const conversations = await this.agentService.getConversationsFromAgentId(
-        userRequest.agent_id
-      );
-      const response: AgentResponse = {
-        status: 'success',
-        data: conversations,
-      };
-      return response;
-    } catch (error) {
-      logger.error('Error in getAllConversations:', error);
-      throw new ServerError('E05TA100');
-    }
-  }
-
-  @Get('get_messages_from_conversation_id')
-  async getMessagesFromConversationId(
-    @Body() userRequest: getMessagesFromConversationIdDTO
-  ): Promise<AgentResponse> {
-    try {
-      const agent = this.agentFactory.getAgent(userRequest.agent_id);
-      if (!agent) {
-        throw new ServerError('E01TA400');
-      }
-      const messages = await this.agentService.getMessageFromConversation(
-        userRequest.conversation_id
-      );
-      const response: AgentResponse = {
-        status: 'success',
-        data: messages,
-      };
-      return response;
-    } catch (error) {
-      logger.error('Error in getMessagesFromConversationName:', error);
-      throw new ServerError('E05TA100');
-    }
-  }
-
   @Get('get_agents')
   async getAgents(): Promise<AgentResponse> {
     try {
@@ -242,13 +196,16 @@ export class AgentsController {
   ): Promise<AgentResponse> {
     try {
       const route = this.reflector.get('path', this.handleSupervisorRequest);
-      const agent = this.agentFactory.getAgent(userRequest.agent_id);
+      const agent = this.agentFactory.getAgent(userRequest.request.agent_id);
       if (!agent) {
         throw new ServerError('E01TA400');
       }
-      const action = this.agentService.handleUserRequest(agent, userRequest);
+      const action = this.agentService.handleUserRequest(
+        agent,
+        userRequest.request
+      );
       await metrics.metricsAgentResponseTime(
-        userRequest.agent_id.toString(),
+        userRequest.request.agent_id.toString(),
         'key',
         route,
         action

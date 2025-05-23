@@ -19,6 +19,7 @@ services:
     volumes:
       - ./log:/etc/postgresql/log
       - ./data:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d
     depends_on:
       - init-logs
     command: >

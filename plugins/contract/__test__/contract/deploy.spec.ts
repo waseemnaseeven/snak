@@ -1,9 +1,9 @@
-import { getConstructorParams } from '../../src/actions/getConstructorParams';
-import { deployContract } from '../../src/actions/deployContract';
+import { getConstructorParams } from '../../src/actions/getConstructorParams.js';
+import { deployContract } from '../../src/actions/deployContract.js';
 import {
   createMockStarknetAgent,
   createMockInvalidStarknetAgent,
-} from '../jest/setEnvVars';
+} from '../jest/setEnvVars.js';
 
 const agent = createMockStarknetAgent();
 const wrong_agent = createMockInvalidStarknetAgent();

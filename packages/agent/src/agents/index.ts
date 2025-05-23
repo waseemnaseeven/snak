@@ -10,11 +10,18 @@ export interface Conversation {
   conversation_name: string;
 }
 
+export interface AgentIterations {
+  data: any;
+}
+export interface MessageRequest {
+  agent_id: string;
+  user_request: string;
+}
+
 export interface Message {
-  conversation_id: number;
-  sender_type: string;
-  content: string;
-  status: string;
+  agent_id: string;
+  user_request: string;
+  agent_iteration_id: string;
 }
 
 export interface ConversationResponse {
@@ -152,37 +159,19 @@ export class AgentSystem {
     }
   }
 
-  private async check_if_conversation_exists(
-    conversation_id: number
-  ): Promise<boolean> {
+  private async insert_message_into_db(
+    message: MessageRequest,
+    iteration: any
+  ): Promise<void> {
     try {
-      const conversation_q = new Postgres.Query(
-        `SELECT EXISTS(SELECT 1 FROM conversation WHERE conversation_id = $1)`,
-        [conversation_id]
-      );
-
-      const conversation_q_res = await Postgres.query<boolean>(
-        conversation_q
-      ).catch((error) => {
-        throw new Error(`Error checking conversation existence: ${error}`);
-      });
-      logger.debug('Conversation exists:', conversation_q_res);
-      return true;
-    } catch (error) {
-      logger.error(error);
-      throw error;
-    }
-  }
-  private async insert_message_into_db(message: Message): Promise<number> {
-    try {
+      logger.debug('Inserting message into DB:', message);
       const message_q = new Postgres.Query(
         `
-        INSERT INTO message (conversation_id, sender_type, content) VALUES ($1, $2, $3) RETURNING message_id`,
-        [message.conversation_id, message.sender_type, message.content]
+        INSERT INTO message (agent_id, user_request, agent_iteration) VALUES ($1, $2, $3) RETURNING id`,
+        [message.agent_id, message.user_request, iteration]
       );
-      const message_q_res = await Postgres.query<number>(message_q);
-      logger.debug(`Messagfe inserted into DB: ${message_q_res[0]}`);
-      return message_q_res[0];
+      const message_q_res = await Postgres.query<string>(message_q);
+      logger.debug('Message inserted into DB:', message_q_res);
     } catch (error) {
       logger.error(error);
       throw error;
@@ -197,7 +186,7 @@ export class AgentSystem {
    * @throws Will throw an error if the agent system is not initialized or if execution fails.
    */
   public async execute(
-    message: Message | string,
+    message: MessageRequest | string,
     config?: Record<string, any>
   ): Promise<any> {
     if (!this.supervisorAgent) {
@@ -206,35 +195,21 @@ export class AgentSystem {
 
     try {
       // TODO : make start send a message type instead of string
-      if (typeof message === 'string') {
-        message = {
-          conversation_id: 0,
-          sender_type: 'user',
-          content: message,
-          status: 'success',
-        };
-      }
       Postgres.connect(this.config.databaseCredentials);
-      logger.debug(
-        `AgentSystem: Executing command with input: ${JSON.stringify(message)}`
-      );
-      const response = await this.supervisorAgent.execute(
-        message.content,
-        config
-      );
+      const content =
+        typeof message === 'string' ? message : message.user_request;
+      const response = await this.supervisorAgent.execute(content, config);
       logger.debug(JSON.stringify(response));
-      await this.check_if_conversation_exists(message.conversation_id);
-      await this.insert_message_into_db(message);
-      if (typeof response === 'string') {
-        const r_msg: Message = {
-          conversation_id: message.conversation_id,
-          sender_type: 'ai',
-          content: response,
-          status: 'success',
-        };
-        await this.insert_message_into_db(r_msg);
+      logger.debug('AgentSystem: Execution result:', JSON.stringify(response));
+      if (typeof message === 'string') {
+        logger.info('The request has not been saved in the database');
+        return response;
+      } else {
+        logger.info('The request has been saved in the database');
+
+        await this.insert_message_into_db(message, response);
       }
-      return response;
+      return this.supervisorAgent.formatResponse(response);
     } catch (error) {
       logger.error(`AgentSystem: Execution error: ${error}`);
       throw error;

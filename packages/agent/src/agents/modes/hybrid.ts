@@ -11,7 +11,6 @@ import {
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
 import { logger } from '@snakagent/core';
-import { AgentConfig } from '../../config/agentConfig.js';
 import { StarknetAgentInterface } from '../../tools/tools.js';
 import {
   initializeToolsList,
@@ -19,11 +18,7 @@ import {
   formatAgentResponse,
 } from '../core/utils.js';
 import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
-import {
-  hybridRules,
-  baseSystemPrompt,
-  finalAnswerRules,
-} from '../../prompt/prompts.js';
+import { hybridRules, finalAnswerRules } from '../../prompt/prompts.js';
 import { TokenTracker } from '../../token/tokenTracking.js';
 
 /**
@@ -165,7 +160,7 @@ export const createHybridAgent = async (
      */
     async function callModel(state: typeof GraphState.State) {
       const currentIteration = state.iterations || 0;
-      const maxIterations = agent_config.maxIteration || 50;
+      const maxIterations = agent_config.maxIterations || 50;
 
       if (currentIteration >= maxIterations) {
         logger.warn(`Hybrid agent: Max iterations reached (${maxIterations})`);
@@ -217,10 +212,10 @@ export const createHybridAgent = async (
 
       // System prompt with hybrid instructions
       const hybridSystemPrompt = `
-        ${baseSystemPrompt(agent_config)}
+        ${agent_config.prompt.content}
 
         ${hybridRules}
-           
+
         Available tools: ${toolsList.map((tool) => tool.name).join(', ')}
       `;
 
@@ -438,7 +433,7 @@ export const createHybridAgent = async (
     return {
       app,
       agent_config,
-      maxIteration: agent_config.maxIteration || 50,
+      maxIterations: agent_config.maxIterations || 50,
     };
   } catch (error) {
     logger.error('Failed to create hybrid agent:', error, {

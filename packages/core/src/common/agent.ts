@@ -1,5 +1,7 @@
 import { RpcProvider } from 'starknet';
 import { SystemMessage } from '@langchain/core/messages';
+import { z as Zod } from 'zod';
+
 export interface StarknetTool<P = unknown> {
   name: string;
   plugins: string;
@@ -49,7 +51,7 @@ export interface RawAgentConfig {
   knowledge?: string[];
   interval: number;
   plugins: string[];
-  memory: boolean;
+  memory: MemoryConfig;
   mcpServers?: Record<string, any>;
   mode: AgentMode;
 }
@@ -57,20 +59,22 @@ export interface RawAgentConfig {
 export interface MemoryConfig {
   enabled?: boolean;
   shortTermMemorySize?: number;
-  maxIteration?: number;
+  maxIterations?: number;
   embeddingModel?: string;
 }
 
 export interface AgentConfig {
+  id: string;
   name: string;
+  group: string;
   prompt: SystemMessage;
   interval: number;
-  chat_id: string;
+  chatId: string;
   plugins: string[];
   memory: MemoryConfig;
   mcpServers?: Record<string, any>;
   mode: AgentMode;
-  maxIteration: number;
+  maxIterations: number;
 }
 
 export interface DatabaseCredentials {

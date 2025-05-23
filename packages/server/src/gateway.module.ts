@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { MyGateway } from '../common/gateway/gateway.js';
+import { MyGateway } from './controllers/gateway.controller.js';
 import { AgentService } from './services/agent.service.js';
 import { AgentStorage } from './agents.storage.js';
 import { ConfigurationService } from '../config/configuration.js';

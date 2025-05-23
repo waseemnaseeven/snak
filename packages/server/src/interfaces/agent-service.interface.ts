@@ -1,4 +1,4 @@
-import { AgentRequestDTO } from '../dto/agents.js';
+import { AgentRequestDTO, MessageRequest } from '../dto/agents.js';
 import { IAgent } from './agent.interface.js';
 import { AgentSystem } from '@snakagent/agents';
 
@@ -25,7 +25,7 @@ export interface AgentExecutionCallDataResponse {
 export interface IAgentService {
   handleUserRequest(
     agent: AgentSystem,
-    userRequest: AgentRequestDTO
+    userRequest: MessageRequest
   ): Promise<AgentExecutionResponse>;
   getAgentStatus(agent: IAgent): Promise<{
     isReady: boolean;

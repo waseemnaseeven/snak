@@ -9,7 +9,7 @@ import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
 import { StarknetAgent, StarknetAgentConfig } from '../core/starknetAgent.js';
 import { ToolsOrchestrator } from '../operators/toolOrchestratorAgent.js';
 import { MemoryAgent } from '../operators/memoryAgent.js';
-import { WorkflowController } from './worflowController.js';
+import { WorkflowController } from './workflowController.js';
 import {
   DatabaseCredentials,
   logger,
@@ -109,7 +109,7 @@ export class SupervisorAgent extends BaseAgent {
         logger.debug('SupervisorAgent: Initializing MemoryAgent...');
         this.memoryAgent = new MemoryAgent({
           shortTermMemorySize: agentConfig?.memory?.shortTermMemorySize || 15,
-          maxIteration: agentConfig?.memory?.maxIteration,
+          maxIterations: agentConfig?.memory?.maxIterations,
           embeddingModel: agentConfig?.memory?.embeddingModel,
         });
         await this.memoryAgent.init();
@@ -282,6 +282,7 @@ export class SupervisorAgent extends BaseAgent {
         `${depthIndent}SupervisorAgent: Maximum execution depth (${this.executionDepth}) reached. Attempting direct execution via StarknetAgent.`
       );
       try {
+        console.log('Hello');
         if (this.starknetAgent) {
           const result = await this.starknetAgent.execute(
             typeof input === 'string'
@@ -291,6 +292,8 @@ export class SupervisorAgent extends BaseAgent {
                 : (input as AgentMessage).content,
             config
           );
+
+          console.log('hello', result);
           const finalResult =
             result instanceof BaseMessage
               ? result.content
@@ -371,16 +374,16 @@ export class SupervisorAgent extends BaseAgent {
         `${depthIndent}SupervisorAgent: WorkflowController execution finished.`
       );
 
-      let formattedResponse =
-        result instanceof BaseMessage
-          ? result.content
-          : this.formatResponse(result);
+      // let formattedResponse =
+      //   result instanceof BaseMessage
+      //     ? result.content
+      //     : this.formatResponse(result);
 
       logger.debug(
         `${depthIndent}SupervisorAgent: Execution complete. Returning formatted response.`
       );
       this.executionDepth--;
-      return formattedResponse;
+      return result;
     } catch (error) {
       logger.error(
         `${depthIndent}SupervisorAgent: Error during WorkflowController execution: ${error}`
@@ -397,7 +400,7 @@ export class SupervisorAgent extends BaseAgent {
    * @param response The response to format.
    * @returns The formatted response.
    */
-  private formatResponse(response: any): string {
+  public formatResponse(response: any): string {
     if (typeof response === 'string') {
       return response
         .split('\n')
@@ -604,7 +607,7 @@ export class SupervisorAgent extends BaseAgent {
       // TODO: Remove chat_id from agent_config and move it to request body to support multiple conversations per agent
       const memories = await this.memoryAgent.retrieveRelevantMemories(
         message,
-        this.config.starknetConfig.agentConfig?.chat_id || 'default_chat'
+        this.config.starknetConfig.agentConfig?.chatId || 'default_chat'
       );
 
       if (memories.length === 0) {
