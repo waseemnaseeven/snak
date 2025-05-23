@@ -371,7 +371,7 @@ export class SupervisorAgent extends BaseAgent {
       logger.debug(
         `${depthIndent}SupervisorAgent: WorkflowController execution finished.`
       );
-      
+
       logger.debug(
         `${depthIndent}SupervisorAgent: Execution complete. Returning formatted response.`
       );
