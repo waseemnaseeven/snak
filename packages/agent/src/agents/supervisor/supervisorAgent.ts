@@ -23,6 +23,7 @@ import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
 import { RpcProvider } from 'starknet';
 import { AgentSelectionAgent } from '../operators/agentSelectionAgent.js';
 import { OperatorRegistry } from '../operators/operatorRegistry.js';
+
 /**
  * Configuration for the SupervisorAgent.
  */
@@ -321,13 +322,48 @@ export class SupervisorAgent extends BaseAgent {
     // Safeguard against extreme recursion within the supervisor itself, though primary loop control is via call paths.
     if (this.executionDepth > 5) {
       logger.warn(
-        `${depthIndent}SupervisorAgent: Critical execution depth (${this.executionDepth}) reached. Aborting.`
+        `${depthIndent}SupervisorAgent: Critical execution depth (${this.executionDepth}) reached. Attempting fallback.`
       );
-      this.executionDepth--;
-      return new AIMessage({
-        content: 'Error: Supervisor critical depth reached.',
-        additional_kwargs: { from: 'supervisor', final: true },
-      });
+
+      try {
+        // Try to execute with a fallback agent if available
+        if (this.snakAgent) {
+          const result = await this.snakAgent.execute(
+            typeof input === 'string'
+              ? input
+              : input instanceof BaseMessage
+                ? input
+                : (input as AgentMessage).content,
+            config
+          );
+
+          const finalResult =
+            result instanceof BaseMessage
+              ? result.content
+              : typeof result === 'string'
+                ? result
+                : JSON.stringify(result);
+          this.executionDepth--;
+          return finalResult;
+        }
+
+        // If no fallback agent is available, return error message
+        this.executionDepth--;
+        return new AIMessage({
+          content:
+            'Error: Supervisor critical depth reached. StarknetAgent not available for direct execution. Please try a simpler query.',
+          additional_kwargs: { from: 'supervisor', final: true },
+        });
+      } catch (error) {
+        logger.error(
+          `${depthIndent}SupervisorAgent: Error in direct execution attempt: ${error}`
+        );
+        this.executionDepth--;
+        return new AIMessage({
+          content: `Error during forced direct execution: ${error instanceof Error ? error.message : String(error)}`,
+          additional_kwargs: { from: 'supervisor', final: true },
+        });
+      }
     }
 
     let currentMessage: BaseMessage;
@@ -526,6 +562,7 @@ export class SupervisorAgent extends BaseAgent {
         directiveMessage.tool_calls = toolCallsFromSelection;
         directiveMessage.additional_kwargs.tool_calls = toolCallsFromSelection; // Also ensure in additional_kwargs for some router patterns
       }
+
       logger.debug(
         `${depthIndent}SupervisorAgent (${callPath}): Returning directive: ${JSON.stringify(directiveMessage.toJSON())}`
       );
@@ -726,7 +763,7 @@ export class SupervisorAgent extends BaseAgent {
    * @param response The response to format.
    * @returns The formatted response.
    */
-  private formatResponse(response: any): string {
+  public formatResponse(response: any): string {
     if (typeof response === 'string') {
       return response
         .split('\n')

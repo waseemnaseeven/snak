@@ -378,7 +378,6 @@ ${formatAgentResponse(content)}`);
           }
         : {}),
     });
-
     return app;
   } catch (error) {
     logger.error('Failed to create an interactive agent:', error);

@@ -31,15 +31,16 @@ CREATE TABLE IF NOT EXISTS agents (
 
 CREATE TABLE IF NOT EXISTS agent_iterations (
             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-            data JSONB NOT NULL
+            data JSONB NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
             );
 
 CREATE TABLE IF NOT EXISTS message (
             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
             agent_id UUID NOT NULL,
-            content TEXT NOT NULL,
-            -- agent_iteration_id UUID NOT NULL,
-            sender_type TEXT NOT NULL,
+            user_request TEXT NOT NULL,
+            agent_iteration JSONB NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
         );

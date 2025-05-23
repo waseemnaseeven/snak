@@ -1,7 +1,7 @@
-import { transfer } from '../..//src/actions/transfer';
-import * as C from '../utils/constant';
-import { createMockSnakAgent } from '../jest/setEnvVars';
-import { setupTestEnvironment } from '../utils/helper';
+import { transfer } from '../../src/actions/transfer.js';
+import * as C from '../utils/constant.js';
+import { createMockSnakAgent } from '../jest/setEnvVars.js';
+import { setupTestEnvironment } from '../utils/helper.js';
 
 const agent = createMockSnakAgent();
 

@@ -1,9 +1,9 @@
-import { simulateDeployTransaction } from '../../src/actions/simulateTransaction';
-import * as C from '../utils/constant';
+import { simulateDeployTransaction } from '../../src/actions/simulateTransaction.js';
+import * as C from '../utils/constant.js';
 import {
   createMockInvalidSnakAgent,
   createMockSnakAgent,
-} from '../jest/setEnvVars';
+} from '../jest/setEnvVars.js';
 
 const agent = createMockSnakAgent();
 const wrong_agent = createMockInvalidSnakAgent();

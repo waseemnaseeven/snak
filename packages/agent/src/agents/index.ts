@@ -12,11 +12,18 @@ export interface Conversation {
   conversation_name: string;
 }
 
+export interface AgentIterations {
+  data: any;
+}
+export interface MessageRequest {
+  agent_id: string;
+  user_request: string;
+}
+
 export interface Message {
   agent_id: string;
-  sender_type: string;
-  content: string;
-  status: string;
+  user_request: string;
+  agent_iteration_id: string;
 }
 
 export interface ConversationResponse {
@@ -217,16 +224,19 @@ export class AgentSystem {
     }
   }
 
-  private async insert_message_into_db(message: Message): Promise<number> {
+  private async insert_message_into_db(
+    message: MessageRequest,
+    iteration: any
+  ): Promise<void> {
     try {
       logger.debug('Inserting message into DB:', message);
       const message_q = new Postgres.Query(
         `
-        INSERT INTO message (agent_id, sender_type, content) VALUES ($1, $2, $3) RETURNING id`,
-        [message.agent_id, message.sender_type, message.content]
+        INSERT INTO message (agent_id, user_request, agent_iteration) VALUES ($1, $2, $3) RETURNING id`,
+        [message.agent_id, message.user_request, iteration]
       );
-      const message_q_res = await Postgres.query<number>(message_q);
-      return message_q_res[0];
+      const message_q_res = await Postgres.query<string>(message_q);
+      logger.debug('Message inserted into DB:', message_q_res);
     } catch (error) {
       logger.error(error);
       throw error;
@@ -241,7 +251,7 @@ export class AgentSystem {
    * @throws Will throw an error if the agent system is not initialized or if execution fails.
    */
   public async execute(
-    message: Message | string,
+    message: MessageRequest | string,
     config?: Record<string, any>
   ): Promise<any> {
     if (!this.supervisorAgent) {
@@ -251,25 +261,20 @@ export class AgentSystem {
     try {
       // TODO : make start send a message type instead of string
       Postgres.connect(this.config.databaseCredentials);
-      const content = typeof message === 'string' ? message : message.content;
+      const content =
+        typeof message === 'string' ? message : message.user_request;
       const response = await this.supervisorAgent.execute(content, config);
       logger.debug(JSON.stringify(response));
+      logger.debug('AgentSystem: Execution result:', JSON.stringify(response));
       if (typeof message === 'string') {
         logger.info('The request has not been saved in the database');
         return response;
       } else {
         logger.info('The request has been saved in the database');
-        await this.insert_message_into_db(message);
-        const r_msg: Message = {
-          agent_id: message.agent_id,
-          sender_type: 'ai',
-          content: response,
-          status: 'success',
-        };
-        await this.insert_message_into_db(r_msg);
-      }
 
-      return response;
+        await this.insert_message_into_db(message, response);
+      }
+      return this.supervisorAgent.formatResponse(response);
     } catch (error) {
       logger.error(`AgentSystem: Execution error: ${error}`);
       throw error;

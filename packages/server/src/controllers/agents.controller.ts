@@ -1,19 +1,21 @@
 // packages/server/src/agents.controller.ts
 import { Body, Controller, Get, Post } from '@nestjs/common';
+import { AgentService } from '../services/agent.service.js';
+import { AgentStorage } from '../agents.storage.js';
 import {
-  AgentAddRequestDTO,
   AgentDeleteRequestDTO,
   AgentRequestDTO,
   getMessagesFromAgentsDTO,
-  AgentDeletesRequestDTO,
-} from './dto/agents.js';
-import { AgentService } from './services/agent.service.js';
-import { AgentStorage } from './agents.storage.js';
-import { SupervisorService } from './services/supervisor.service.js';
-import { metrics } from '@snakagent/core';
+} from '../dto/agents.js';
+import { SupervisorService } from '../services/supervisor.service.js';
 import { Reflector } from '@nestjs/core';
-import { ServerError } from './utils/error.js';
-import { logger } from '@snakagent/core';
+import { ServerError } from '../utils/error.js';
+import {
+  logger,
+  metrics,
+  MessageFromAgentIdDTO,
+  AgentsDeleteRequestDTO,
+} from '@snakagent/core';
 
 export interface AgentResponse {
   status: 'success' | 'failure';
@@ -46,7 +48,14 @@ export class AgentsController {
       if (!agent) {
         throw new ServerError('E01TA400');
       }
-      const action = this.agentService.handleUserRequest(agent, userRequest);
+
+      // Convert Message to MessageRequest
+      const messageRequest = {
+        agent_id: userRequest.request.agent_id,
+        user_request: userRequest.request.content,
+      };
+
+      const action = this.agentService.handleUserRequest(agent, messageRequest);
 
       const response_metrics = await metrics.metricsAgentResponseTime(
         userRequest.request.agent_id.toString(),
@@ -114,9 +123,7 @@ export class AgentsController {
   }
 
   @Post('init_agent')
-  async addAgent(
-    @Body() userRequest: AgentAddRequestDTO
-  ): Promise<AgentResponse> {
+  async addAgent(@Body() userRequest: any): Promise<AgentResponse> {
     try {
       await this.agentFactory.addAgent(userRequest.agent);
       const response: AgentResponse = {
@@ -127,6 +134,28 @@ export class AgentsController {
     } catch (error) {
       logger.error('Error in addAgent:', error);
       throw new ServerError('E02TA200');
+    }
+  }
+
+  @Post('get_messages_from_agent')
+  async getMessagesFromAgent(
+    @Body() userRequest: MessageFromAgentIdDTO
+  ): Promise<AgentResponse> {
+    try {
+      const agent = this.agentFactory.getAgent(userRequest.agent_id);
+      if (!agent) {
+        throw new ServerError('E01TA400');
+      }
+      const messages =
+        await this.agentService.getMessageFromAgentId(userRequest);
+      const response: AgentResponse = {
+        status: 'success',
+        data: messages,
+      };
+      return response;
+    } catch (error) {
+      logger.error('Error in getMessagesFromAgent:', error);
+      throw new ServerError('E04TA100');
     }
   }
 
@@ -155,7 +184,7 @@ export class AgentsController {
 
   @Post('delete_agents')
   async deleteAgents(
-    @Body() userRequest: AgentDeletesRequestDTO
+    @Body() userRequest: AgentsDeleteRequestDTO
   ): Promise<AgentResponse[]> {
     try {
       let arr_response: AgentResponse[] = [];
@@ -190,10 +219,12 @@ export class AgentsController {
       if (!agent) {
         throw new ServerError('E01TA400');
       }
-      const messages = await this.agentService.getMessageFromAgentId(
-        userRequest.agent_id,
-        undefined
-      );
+      const messageRequest: MessageFromAgentIdDTO = {
+        agent_id: userRequest.agent_id,
+        limit_message: undefined,
+      };
+      const messages =
+        await this.agentService.getMessageFromAgentId(messageRequest);
       const response: AgentResponse = {
         status: 'success',
         data: messages,

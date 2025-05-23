@@ -20,6 +20,7 @@ import { AgentConfigSQL, AgentPromptSQL } from './interfaces/sql_interfaces.js';
 import { AgentSystemConfig, AgentSystem, AgentMode } from '@snakagent/agents';
 import { createContextFromJson } from '@snakagent/agents';
 import { SystemMessage } from '@langchain/core/messages';
+import DatabaseStorage from '../common/database/database.js';
 
 const logger = new Logger('AgentStorage');
 
@@ -137,6 +138,7 @@ export class AgentStorage implements OnModuleInit {
       // Add a small delay to ensure database is fully ready
       await new Promise((resolve) => setTimeout(resolve, 500));
 
+      await DatabaseStorage.connect();
       await this.init_models_config();
       await this.init_agents_config();
       this.initialized = true;
@@ -186,7 +188,7 @@ export class AgentStorage implements OnModuleInit {
       const q = new Postgres.Query(`SELECT * FROM agents`);
       const q_res = await Postgres.query<AgentConfigSQL>(q);
       this.agentConfigs = [...q_res];
-      q_res.forEach((agent) => {
+      q_res.forEach((agent: AgentConfigSQL) => {
         agent.prompt = this.parseAgentPrompt(agent.prompt);
       });
       logger.debug(
@@ -375,7 +377,7 @@ export class AgentStorage implements OnModuleInit {
 
     const q = new Postgres.Query(
       `INSERT INTO agents (name, "group", prompt, interval, plugins, memory) 
-       VALUES ($1, $2, ROW($3, $4, $5, $6), $7, $8, ROW($9, $10)) RETURNING *`,
+        VALUES ($1, $2, ROW($3, $4, $5, $6), $7, $8, ROW($9, $10)) RETURNING *`,
       [
         finalName,
         group,

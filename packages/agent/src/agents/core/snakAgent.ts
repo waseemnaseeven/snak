@@ -11,6 +11,7 @@ import { createInteractiveAgent } from '../modes/interactive.js';
 import { createAutonomousAgent } from '../modes/autonomous.js';
 import { createHybridAgent } from '../modes/hybrid.js';
 import { Command } from '@langchain/langgraph';
+
 /**
  * Configuration for SnakAgent
  */
@@ -370,8 +371,23 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       }
     }
 
+    // Handle original user query from config
+    const originalUserQuery = config?.originalUserQuery;
+    let currentMessages = messagesForGraph;
+
+    if (
+      originalUserQuery &&
+      currentMessages.length > 0 &&
+      currentMessages[0].additional_kwargs?.from === 'model-selector'
+    ) {
+      logger.debug(
+        `SnakAgent: Using original user query "${originalUserQuery}" instead of model-selector message.`
+      );
+      currentMessages = [new HumanMessage(originalUserQuery)];
+    }
+
     const graphState = {
-      messages: messagesForGraph,
+      messages: currentMessages,
       // memories: config?.memories || '' // if memories need to be explicitly passed to the graph state
     };
 
@@ -393,15 +409,35 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
     }
 
     logger.debug(
-      `SnakAgent: Invoking agent executor with ${messagesForGraph.length} messages. Thread ID: ${threadId || 'N/A'}`
+      `SnakAgent: Invoking agent executor with ${currentMessages.length} messages. Thread ID: ${threadId || 'N/A'}`
     );
 
     try {
+      let responseContent: string | any;
+
+      // Optional streaming support - can be enabled based on config
+      if (config?.enableStreaming) {
+        try {
+          const stream = await this.agentReactExecutor.stream(
+            graphState,
+            runnableConfig
+          );
+          const chunks = [];
+          for await (const chunk of stream) {
+            chunks.push(chunk);
+            logger.debug(`Stream chunk: ${chunk.content}|`);
+          }
+        } catch (streamError) {
+          logger.error(`Streaming error: ${streamError}`);
+          // Continue with regular invoke if streaming fails
+        }
+      }
+
       const result = await this.agentReactExecutor.invoke(
         graphState, // This is the state object for the graph
         runnableConfig // This is the config for the invoke call itself
       );
-      let responseContent: string | any;
+
       if (result?.messages?.length > 0) {
         for (let i = result.messages.length - 1; i >= 0; i--) {
           const msg = result.messages[i];
@@ -415,16 +451,13 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
             }
           }
         }
+      }
 
-        if (!responseContent) {
-          const lastMsg = result.messages[result.messages.length - 1];
-          responseContent =
-            lastMsg?.content ||
-            "I couldn't generate a specific response for this request.";
-        }
-      } else {
+      if (!responseContent) {
+        const lastMsg = result.messages[result.messages.length - 1];
         responseContent =
-          'No response could be generated. Please try again with a different request.';
+          lastMsg?.content ||
+          "I couldn't generate a specific response for this request.";
       }
 
       return new AIMessage({

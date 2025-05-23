@@ -1,6 +1,6 @@
 import { RpcProvider } from 'starknet';
-import { CreateOZAccountSignature } from '../../src/actions/createAccount';
-import { DeployOZAccountSignature } from '../../src/actions/deployAccount';
+import { CreateOZAccountSignature } from '../../src/actions/createAccount.js';
+import { DeployOZAccountSignature } from '../../src/actions/deployAccount.js';
 
 describe('OZ Account Creation and Deployment', () => {
   let provider: RpcProvider;

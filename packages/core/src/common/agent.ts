@@ -49,7 +49,6 @@ export interface RawAgentConfig {
   bio?: string;
   objectives?: string[];
   knowledge?: string[];
-  prompt: SystemMessage;
   interval: number;
   plugins: string[];
   memory: MemoryConfig;
