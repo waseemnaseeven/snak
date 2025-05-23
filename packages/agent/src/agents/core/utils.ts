@@ -63,7 +63,9 @@ export const initializeDatabase = async (db: DatabaseCredentials) => {
     // If already connected, just initialize memory
     if (isConnected) {
       await memory.init();
-      logger.debug('Agent memory table successfully initialized (connection exists)');
+      logger.debug(
+        'Agent memory table successfully initialized (connection exists)'
+      );
       return;
     }
 
@@ -71,7 +73,9 @@ export const initializeDatabase = async (db: DatabaseCredentials) => {
     if (databaseConnectionPromise) {
       await databaseConnectionPromise;
       await memory.init();
-      logger.debug('Agent memory table successfully initialized (waited for connection)');
+      logger.debug(
+        'Agent memory table successfully initialized (waited for connection)'
+      );
       return;
     }
 
@@ -79,7 +83,7 @@ export const initializeDatabase = async (db: DatabaseCredentials) => {
     databaseConnectionPromise = Postgres.connect(db);
     await databaseConnectionPromise;
     isConnected = true;
-    
+
     await memory.init();
     logger.debug('Agent memory table successfully created');
   } catch (error) {

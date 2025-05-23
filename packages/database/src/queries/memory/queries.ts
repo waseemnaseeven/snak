@@ -25,7 +25,7 @@ export namespace memory {
 
     // Start initialization and store the promise
     initPromise = performInit();
-    
+
     try {
       await initPromise;
       isInitialized = true;

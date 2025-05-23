@@ -215,7 +215,7 @@ export const createHybridAgent = async (
       const originalUserMessage = state.messages.find(
         (msg): msg is HumanMessage => msg instanceof HumanMessage
       );
-      const originalUserQuery = originalUserMessage 
+      const originalUserQuery = originalUserMessage
         ? typeof originalUserMessage.content === 'string'
           ? originalUserMessage.content
           : JSON.stringify(originalUserMessage.content)
@@ -254,10 +254,9 @@ export const createHybridAgent = async (
       }
 
       const selectedModelType = modelSelector
-        ? await modelSelector.selectModelForMessages(
-            state.messages,
-            { originalUserQuery }
-          )
+        ? await modelSelector.selectModelForMessages(state.messages, {
+            originalUserQuery,
+          })
         : 'smart';
 
       const modelForThisTask = modelSelector

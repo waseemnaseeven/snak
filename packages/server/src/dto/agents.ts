@@ -19,7 +19,7 @@ export class SupervisorRequest {
   @IsNotEmpty()
   @IsString()
   content: string;
-  
+
   @IsOptional()
   @IsString()
   agentId?: string; // Optional: specify which agent to use

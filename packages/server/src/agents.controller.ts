@@ -77,7 +77,7 @@ export class AgentsController {
       }
 
       const route = this.reflector.get('path', this.handleSupervisorRequest);
-      
+
       // Prepare config for supervisor execution
       const config: Record<string, any> = {};
       if (userRequest.request.agentId) {
@@ -102,8 +102,10 @@ export class AgentsController {
         status: 'success',
         data: result,
       };
-      
-      logger.debug(`Supervisor request processed successfully: ${JSON.stringify(result)}`);
+
+      logger.debug(
+        `Supervisor request processed successfully: ${JSON.stringify(result)}`
+      );
       return response;
     } catch (error) {
       logger.error('Error in handleSupervisorRequest:', error);
@@ -226,13 +228,13 @@ export class AgentsController {
     try {
       const isInitialized = this.supervisorService.isInitialized();
       const supervisor = this.supervisorService.getSupervisor();
-      
+
       const response: AgentResponse = {
         status: 'success',
         data: {
           initialized: isInitialized,
           supervisorAvailable: supervisor !== null,
-          registeredAgents: this.agentFactory.getAllAgents()?.length || 0
+          registeredAgents: this.agentFactory.getAllAgents()?.length || 0,
         },
       };
       return response;
@@ -250,13 +252,14 @@ export class AgentsController {
       // Legacy endpoint - convert to new format and redirect
       const supervisorRequest: SupervisorRequestDTO = {
         request: {
-          content: typeof userRequest.request === 'string' 
-            ? userRequest.request 
-            : userRequest.request.content,
-          agentId: userRequest.agent_id
-        }
+          content:
+            typeof userRequest.request === 'string'
+              ? userRequest.request
+              : userRequest.request.content,
+          agentId: userRequest.agent_id,
+        },
       };
-      
+
       return await this.handleSupervisorRequest(supervisorRequest);
     } catch (error) {
       logger.error('Error in handleLegacySupervisorRequest:', error);

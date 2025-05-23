@@ -2,19 +2,15 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigurationService } from '../../config/configuration.js';
 import { DatabaseService } from './database.service.js';
-import { 
-  AgentSystem, 
+import {
+  AgentSystem,
   SupervisorAgent,
   AgentMode,
   SnakAgent,
-  SnakAgentConfig
+  SnakAgentConfig,
 } from '@snakagent/agents';
 import { Postgres } from '@snakagent/database';
-import { 
-  AgentConfig, 
-  ModelsConfig,
-  ModelLevelConfig,
-} from '@snakagent/core';
+import { AgentConfig, ModelsConfig, ModelLevelConfig } from '@snakagent/core';
 import { AgentConfigSQL } from '../interfaces/sql_interfaces.js';
 import { createContextFromJson } from '@snakagent/agents';
 import { SystemMessage } from '@langchain/core/messages';
@@ -41,34 +37,41 @@ export class SupervisorService implements OnModuleInit {
 
     try {
       this.logger.log('Initializing SupervisorService...');
-      
+
       // Wait for database to be initialized with retry logic
       if (!this.databaseService.isInitialized()) {
         this.logger.log('Waiting for database initialization...');
         let attempts = 0;
         const maxAttempts = 10;
         const waitTime = 500; // 500ms
-        
-        while (!this.databaseService.isInitialized() && attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, waitTime));
+
+        while (
+          !this.databaseService.isInitialized() &&
+          attempts < maxAttempts
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
           attempts++;
-          this.logger.debug(`Database initialization attempt ${attempts}/${maxAttempts}`);
+          this.logger.debug(
+            `Database initialization attempt ${attempts}/${maxAttempts}`
+          );
         }
-        
+
         if (!this.databaseService.isInitialized()) {
-          throw new Error(`Database not initialized after ${maxAttempts} attempts`);
+          throw new Error(
+            `Database not initialized after ${maxAttempts} attempts`
+          );
         }
       }
-      
+
       // Add a small delay to ensure database is fully ready
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
       // Initialize supervisor agent
       await this.initializeSupervisor();
-      
+
       // Register existing agents from database
       await this.registerExistingAgents();
-      
+
       this.initialized = true;
       this.logger.log('SupervisorService initialized successfully');
     } catch (error) {
@@ -83,7 +86,7 @@ export class SupervisorService implements OnModuleInit {
     try {
       // Get models configuration
       const modelsConfig = await this.getModelsConfig();
-      
+
       // Create supervisor configuration
       const supervisorConfig = {
         modelsConfig: modelsConfig,
@@ -106,15 +109,15 @@ export class SupervisorService implements OnModuleInit {
             memory: { enabled: true, shortTermMemorySize: 15 },
             chatId: 'supervisor_chat',
             maxIterations: 15,
-          } as AgentConfig
+          } as AgentConfig,
         },
-        debug: process.env.DEBUG === 'true'
+        debug: process.env.DEBUG === 'true',
       };
 
       // Create and initialize supervisor
       this.supervisor = new SupervisorAgent(supervisorConfig);
       await this.supervisor.init();
-      
+
       this.logger.log('Supervisor agent initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize supervisor agent:', error);
@@ -126,7 +129,7 @@ export class SupervisorService implements OnModuleInit {
     try {
       const q = new Postgres.Query(`SELECT * FROM models_config`);
       const q_res = await Postgres.query<ModelsConfig>(q);
-      
+
       if (q_res.length === 0) {
         throw new Error('No models configuration found');
       }
@@ -160,40 +163,52 @@ export class SupervisorService implements OnModuleInit {
   private async registerExistingAgents(): Promise<void> {
     try {
       this.logger.log('Registering existing agents from database...');
-      
+
       const existingAgentsQuery = new Postgres.Query(`SELECT * FROM agents`);
-      const existingAgents = await Postgres.query<AgentConfigSQL>(existingAgentsQuery);
-      
+      const existingAgents =
+        await Postgres.query<AgentConfigSQL>(existingAgentsQuery);
+
       for (const agentConfig of existingAgents) {
         try {
           // Parse agent prompt if it's a string
           if (typeof agentConfig.prompt === 'string') {
             agentConfig.prompt = this.parseAgentPrompt(agentConfig.prompt);
           }
-          
+
           // Create SnakAgent for this configuration
           const snakAgent = await this.createSnakAgentFromConfig(agentConfig);
-          
+
           // Register with supervisor
           if (this.supervisor && snakAgent) {
             const metadata = {
               name: agentConfig.name,
               description: `Agent from group: ${agentConfig.group}`,
-              group: agentConfig.group
+              group: agentConfig.group,
             };
-            
-            this.supervisor.registerSnakAgent(agentConfig.id, snakAgent, metadata);
-            this.logger.log(`Registered existing agent: ${agentConfig.name} (${agentConfig.id})`);
+
+            this.supervisor.registerSnakAgent(
+              agentConfig.id,
+              snakAgent,
+              metadata
+            );
+            this.logger.log(
+              `Registered existing agent: ${agentConfig.name} (${agentConfig.id})`
+            );
           }
         } catch (error) {
-          this.logger.error(`Failed to register existing agent ${agentConfig.id}:`, error);
+          this.logger.error(
+            `Failed to register existing agent ${agentConfig.id}:`,
+            error
+          );
         }
       }
-      
+
       // Refresh workflow controller after registering all agents
       if (this.supervisor) {
         await this.supervisor.refreshWorkflowController();
-        this.logger.log(`Registered ${existingAgents.length} existing agents with supervisor`);
+        this.logger.log(
+          `Registered ${existingAgents.length} existing agents with supervisor`
+        );
       }
     } catch (error) {
       this.logger.error('Error registering existing agents:', error);
@@ -204,11 +219,11 @@ export class SupervisorService implements OnModuleInit {
   private parseAgentPrompt(agent_prompt: any): any {
     const str_without_double_quote: string = agent_prompt.replace(/"/g, '');
     const agent_prompt_split: string[] = str_without_double_quote.split('{');
-    
+
     for (let i = 0; i < agent_prompt_split.length; i++) {
       agent_prompt_split[i] = agent_prompt_split[i].replace(/}/g, '');
     }
-    
+
     return {
       bio: agent_prompt_split[0],
       lore: agent_prompt_split[1].split(','),
@@ -217,7 +232,9 @@ export class SupervisorService implements OnModuleInit {
     };
   }
 
-  private async createSnakAgentFromConfig(agentConfig: AgentConfigSQL): Promise<any> {
+  private async createSnakAgentFromConfig(
+    agentConfig: AgentConfigSQL
+  ): Promise<any> {
     try {
       const database = {
         database: process.env.POSTGRES_DB as string,
@@ -227,8 +244,10 @@ export class SupervisorService implements OnModuleInit {
         port: parseInt(process.env.POSTGRES_PORT as string),
       };
 
-      const systemMessage = new SystemMessage(createContextFromJson(agentConfig.prompt));
-      
+      const systemMessage = new SystemMessage(
+        createContextFromJson(agentConfig.prompt)
+      );
+
       const jsonConfig: AgentConfig = {
         id: agentConfig.id,
         name: agentConfig.name,
@@ -246,8 +265,10 @@ export class SupervisorService implements OnModuleInit {
       };
 
       // Get the ModelSelectionAgent from the existing supervisor
-      const modelSelector = this.supervisor?.getOperator('model-selector') as any;
-      
+      const modelSelector = this.supervisor?.getOperator(
+        'model-selector'
+      ) as any;
+
       if (!modelSelector) {
         throw new Error('ModelSelectionAgent not available in supervisor');
       }
@@ -266,7 +287,7 @@ export class SupervisorService implements OnModuleInit {
       // Create the SnakAgent directly
       const snakAgent = new SnakAgent(snakAgentConfig);
       await snakAgent.init();
-      
+
       return snakAgent;
     } catch (error) {
       this.logger.error(`Error creating SnakAgent from config:`, error);
@@ -277,21 +298,33 @@ export class SupervisorService implements OnModuleInit {
   /**
    * Register a new agent with the supervisor
    */
-  async registerAgentWithSupervisor(agentId: string, agentSystem: AgentSystem, metadata?: any): Promise<void>;
-  async registerAgentWithSupervisor(agentId: string, snakAgent: SnakAgent, metadata?: any): Promise<void>;
-  async registerAgentWithSupervisor(agentId: string, agent: AgentSystem | SnakAgent, metadata?: any): Promise<void> {
+  async registerAgentWithSupervisor(
+    agentId: string,
+    agentSystem: AgentSystem,
+    metadata?: any
+  ): Promise<void>;
+  async registerAgentWithSupervisor(
+    agentId: string,
+    snakAgent: SnakAgent,
+    metadata?: any
+  ): Promise<void>;
+  async registerAgentWithSupervisor(
+    agentId: string,
+    agent: AgentSystem | SnakAgent,
+    metadata?: any
+  ): Promise<void> {
     if (!this.supervisor) {
       throw new Error('Supervisor not initialized');
     }
 
     try {
       let snakAgent: SnakAgent;
-      
+
       // Check if it's an AgentSystem or a SnakAgent
       if (agent instanceof AgentSystem) {
         // Extract the SnakAgent from the AgentSystem
         const extractedAgent = agent.getSupervisor()?.getSnakAgent();
-        
+
         if (!extractedAgent) {
           throw new Error('Failed to extract SnakAgent from AgentSystem');
         }
@@ -300,16 +333,21 @@ export class SupervisorService implements OnModuleInit {
         // It's already a SnakAgent
         snakAgent = agent;
       }
-      
+
       // Register with supervisor
       this.supervisor.registerSnakAgent(agentId, snakAgent, metadata);
-      
+
       // Refresh workflow controller
       await this.supervisor.refreshWorkflowController();
-      
-      this.logger.log(`Successfully registered agent ${agentId} with supervisor`);
+
+      this.logger.log(
+        `Successfully registered agent ${agentId} with supervisor`
+      );
     } catch (error) {
-      this.logger.error(`Failed to register agent ${agentId} with supervisor:`, error);
+      this.logger.error(
+        `Failed to register agent ${agentId} with supervisor:`,
+        error
+      );
       throw error;
     }
   }
@@ -325,13 +363,18 @@ export class SupervisorService implements OnModuleInit {
     try {
       // Remove from supervisor's registry
       this.supervisor.unregisterSnakAgent(agentId);
-      
+
       // Refresh workflow controller after unregistering
       await this.supervisor.refreshWorkflowController();
-      
-      this.logger.log(`Successfully unregistered agent ${agentId} from supervisor`);
+
+      this.logger.log(
+        `Successfully unregistered agent ${agentId} from supervisor`
+      );
     } catch (error) {
-      this.logger.error(`Failed to unregister agent ${agentId} from supervisor:`, error);
+      this.logger.error(
+        `Failed to unregister agent ${agentId} from supervisor:`,
+        error
+      );
       throw error;
     }
   }
@@ -339,7 +382,10 @@ export class SupervisorService implements OnModuleInit {
   /**
    * Execute a request through the supervisor
    */
-  async executeRequest(input: string, config?: Record<string, any>): Promise<any> {
+  async executeRequest(
+    input: string,
+    config?: Record<string, any>
+  ): Promise<any> {
     if (!this.supervisor) {
       throw new Error('Supervisor not initialized');
     }

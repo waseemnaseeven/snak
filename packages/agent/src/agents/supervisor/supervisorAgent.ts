@@ -1190,15 +1190,17 @@ export class SupervisorAgent extends BaseAgent {
           logger.error(`Error disposing agent ${id}:`, error);
         }
       }
-      
+
       // Supprimer du registre
       delete this.snakAgents[id];
       logger.debug(`SupervisorAgent: Unregistered Snak agent "${id}"`);
-      
+
       // Mettre à jour l'agent de sélection
       this.updateAgentSelectionAgentRegistry();
     } else {
-      logger.warn(`SupervisorAgent: Attempted to unregister non-existent agent "${id}"`);
+      logger.warn(
+        `SupervisorAgent: Attempted to unregister non-existent agent "${id}"`
+      );
     }
   }
 

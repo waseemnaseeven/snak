@@ -169,7 +169,7 @@ export const createInteractiveAgent = async (
           const originalUserMessage = currentMessages.find(
             (msg): msg is HumanMessage => msg instanceof HumanMessage
           );
-          const originalUserQuery = originalUserMessage 
+          const originalUserQuery = originalUserMessage
             ? typeof originalUserMessage.content === 'string'
               ? originalUserMessage.content
               : JSON.stringify(originalUserMessage.content)
@@ -177,10 +177,9 @@ export const createInteractiveAgent = async (
 
           const selectedModelType =
             stateModelType ||
-            (await modelSelector.selectModelForMessages(
-              currentMessages, 
-              { originalUserQuery }
-            ));
+            (await modelSelector.selectModelForMessages(currentMessages, {
+              originalUserQuery,
+            }));
 
           logger.debug(
             `Using dynamically selected model: ${selectedModelType}`

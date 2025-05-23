@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
 import { Postgres } from '@snakagent/database';
 
 @Injectable()
@@ -23,7 +28,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
     try {
       this.logger.log('Initializing database connection...');
-      
+
       await Postgres.connect({
         database: process.env.POSTGRES_DB as string,
         host: process.env.POSTGRES_HOST as string,
@@ -59,4 +64,4 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   isInitialized(): boolean {
     return this.initialized;
   }
-} 
+}

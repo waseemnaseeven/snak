@@ -1,5 +1,11 @@
 // packages/server/src/agents.storage.ts
-import { Injectable, Inject, forwardRef, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  forwardRef,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigurationService } from '../config/configuration.js';
 import { DatabaseService } from './services/database.service.js';
 import { SupervisorService } from './services/supervisor.service.js';
@@ -102,27 +108,34 @@ export class AgentStorage implements OnModuleInit {
       if (this.initialized) {
         return;
       }
-      
+
       // Wait for database to be initialized with retry logic
       if (!this.databaseService.isInitialized()) {
         logger.log('Waiting for database initialization...');
         let attempts = 0;
         const maxAttempts = 10;
         const waitTime = 500; // 500ms
-        
-        while (!this.databaseService.isInitialized() && attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, waitTime));
+
+        while (
+          !this.databaseService.isInitialized() &&
+          attempts < maxAttempts
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
           attempts++;
-          logger.debug(`Database initialization attempt ${attempts}/${maxAttempts}`);
+          logger.debug(
+            `Database initialization attempt ${attempts}/${maxAttempts}`
+          );
         }
-        
+
         if (!this.databaseService.isInitialized()) {
-          throw new Error(`Database not initialized after ${maxAttempts} attempts`);
+          throw new Error(
+            `Database not initialized after ${maxAttempts} attempts`
+          );
         }
       }
 
       // Add a small delay to ensure database is fully ready
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       await this.init_models_config();
       await this.init_agents_config();
@@ -179,14 +192,14 @@ export class AgentStorage implements OnModuleInit {
       logger.debug(
         `Agents configuration loaded: ${JSON.stringify(this.agentConfigs)}`
       );
-      
+
       // Create agent instances but don't register with supervisor yet
       // (SupervisorService will handle this during its initialization)
       for (const agentConfig of this.agentConfigs) {
         await this.createAgentInstance(agentConfig);
         logger.debug(`Agent instance created: ${JSON.stringify(agentConfig)}`);
       }
-      
+
       return q_res;
     } catch (error) {
       logger.error('Error during agents_controller initialisation:', error);
@@ -264,7 +277,7 @@ export class AgentStorage implements OnModuleInit {
 
       const agent = new AgentSystem(config);
       await agent.init();
-      
+
       // Store for later reuse
       if (this.agentInstances.has(agent_config.id)) {
         logger.debug(
@@ -276,7 +289,7 @@ export class AgentStorage implements OnModuleInit {
         }
         throw new Error('AgentExecutor not found in instances map');
       }
-      
+
       this.agentInstances.set(agent_config.id, agent);
       return agent;
     } catch (error) {
@@ -291,26 +304,28 @@ export class AgentStorage implements OnModuleInit {
     try {
       // Create the agent instance
       const agent = await this.createAgentInstance(agent_config);
-      
+
       // Register with supervisor if available
       if (this.supervisorService.isInitialized()) {
         const metadata = {
           name: agent_config.name,
           description: `Agent from group: ${agent_config.group}`,
-          group: agent_config.group
+          group: agent_config.group,
         };
-        
+
         await this.supervisorService.registerAgentWithSupervisor(
-          agent_config.id, 
-          agent, 
+          agent_config.id,
+          agent,
           metadata
         );
-        
+
         logger.debug(`Agent ${agent_config.id} registered with supervisor`);
       } else {
-        logger.warn(`Supervisor not initialized, agent ${agent_config.id} not registered with supervisor`);
+        logger.warn(
+          `Supervisor not initialized, agent ${agent_config.id} not registered with supervisor`
+        );
       }
-      
+
       return agent;
     } catch (error) {
       console.error('Error creating agent:', error);
@@ -383,11 +398,13 @@ export class AgentStorage implements OnModuleInit {
         ...newAgentDbRecord,
         prompt: this.parseAgentPrompt(newAgentDbRecord.prompt as any),
       };
-      
+
       // Create agent and register with supervisor
       await this.createAgent(agentToCreate);
-      
-      logger.debug(`Agent ${newAgentDbRecord.id} created and registered with supervisor`);
+
+      logger.debug(
+        `Agent ${newAgentDbRecord.id} created and registered with supervisor`
+      );
     } else {
       logger.error('Failed to add agent to database, no record returned.');
       throw new Error('Failed to add agent to database.');
@@ -414,7 +431,7 @@ export class AgentStorage implements OnModuleInit {
     if (!this.initialized) {
       await this.initialize();
     }
-    
+
     // Remove from database
     const q = new Postgres.Query(
       `DELETE FROM agents WHERE id = $1 RETURNING *`,
@@ -422,11 +439,11 @@ export class AgentStorage implements OnModuleInit {
     );
     const q_res = await Postgres.query<AgentConfigSQL>(q);
     logger.debug(`Agent deleted from database: ${JSON.stringify(q_res)}`);
-    
+
     // Remove from local instances
     if (this.agentInstances.has(id)) {
       const agent = this.agentInstances.get(id);
-      
+
       // Dispose of the agent properly
       if (agent) {
         try {
@@ -435,10 +452,10 @@ export class AgentStorage implements OnModuleInit {
           logger.error(`Error disposing agent ${id}:`, error);
         }
       }
-      
+
       this.agentInstances.delete(id);
     }
-    
+
     // Unregister from supervisor
     if (this.supervisorService.isInitialized()) {
       try {
@@ -461,13 +478,13 @@ export class AgentStorage implements OnModuleInit {
    * Execute a request through the supervisor
    */
   public async executeRequestThroughSupervisor(
-    input: string, 
+    input: string,
     config?: Record<string, any>
   ): Promise<any> {
     if (!this.supervisorService.isInitialized()) {
       throw new Error('Supervisor service not initialized');
     }
-    
+
     return await this.supervisorService.executeRequest(input, config);
   }
 }

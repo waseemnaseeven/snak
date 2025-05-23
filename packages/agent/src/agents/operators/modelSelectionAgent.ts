@@ -258,12 +258,17 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
 
       // Determine content to analyze based on config or last message
       let analysisContent = '';
-      
-      if (config?.originalUserQuery && typeof config.originalUserQuery === 'string') {
+
+      if (
+        config?.originalUserQuery &&
+        typeof config.originalUserQuery === 'string'
+      ) {
         // Use originalUserQuery from config if available
         analysisContent = config.originalUserQuery;
         if (this.debugMode) {
-          logger.debug(`Using originalUserQuery for model selection: "${analysisContent.substring(0, 100)}..."`);
+          logger.debug(
+            `Using originalUserQuery for model selection: "${analysisContent.substring(0, 100)}..."`
+          );
         }
       } else {
         // Fall back to using the last message
@@ -281,14 +286,16 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
               ? lastMessage.content
               : JSON.stringify(lastMessage.content)
             : '';
-        
+
         analysisContent = content;
       }
 
       let nextStepsSection = '';
 
       // Extract "NEXT STEPS" section for more focused analysis if present
-      const nextStepsMatch = analysisContent.match(/NEXT STEPS:(.*?)($|(?=\n\n))/s);
+      const nextStepsMatch = analysisContent.match(
+        /NEXT STEPS:(.*?)($|(?=\n\n))/s
+      );
       if (nextStepsMatch && nextStepsMatch[1]) {
         nextStepsSection = nextStepsMatch[1].trim();
         if (this.debugMode) {
@@ -631,12 +638,17 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
 
     // Extract original user query from config if it exists
     let originalQuery = '';
-    
-    if (config?.originalUserQuery && typeof config.originalUserQuery === 'string') {
+
+    if (
+      config?.originalUserQuery &&
+      typeof config.originalUserQuery === 'string'
+    ) {
       // Use the original user query from config if available
       originalQuery = config.originalUserQuery;
       if (this.debugMode) {
-        logger.debug(`ModelSelectionAgent: Using originalUserQuery from config for model selection: "${originalQuery.substring(0, 100)}..."`);
+        logger.debug(
+          `ModelSelectionAgent: Using originalUserQuery from config for model selection: "${originalQuery.substring(0, 100)}..."`
+        );
       }
     } else {
       // Otherwise, attempt to find the original user query from HumanMessages
@@ -648,9 +660,11 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
           ? originalUserMessage.content
           : JSON.stringify(originalUserMessage.content)
         : '';
-      
+
       if (this.debugMode && originalQuery) {
-        logger.debug(`ModelSelectionAgent: No originalUserQuery in config, extracted from messages: "${originalQuery.substring(0, 100)}..."`);
+        logger.debug(
+          `ModelSelectionAgent: No originalUserQuery in config, extracted from messages: "${originalQuery.substring(0, 100)}..."`
+        );
       }
     }
 

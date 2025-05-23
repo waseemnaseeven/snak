@@ -272,8 +272,11 @@ export class AgentSelectionAgent extends BaseAgent {
       const agentDescriptions = Object.entries(this.agentInfo)
         .map(([id, info]) => {
           const name = info.name || id;
-          const group = info.group ? `Group: ${info.group}` : '';
-          return `- ${id} (${name}) ${group ? `[${group}]` : ''}: ${info.description}`;
+          const group = info.group ? ` [Group: ${info.group}]` : '';
+          const description = info.description || 'No description available';
+
+          // Format simplifié : nom + groupe + description
+          return `- ${name}${group}: ${description}`;
         })
         .join('\n');
 
@@ -482,7 +485,12 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
           const agent = this.agentInfo[id];
           if (!agent) return id;
 
-          return `- ${id}${agent.name ? ` (${agent.name})` : ''}${agent.group ? ` [${agent.group}]` : ''}: ${agent.description}`;
+          const name = agent.name || id;
+          const group = agent.group ? ` [Group: ${agent.group}]` : '';
+          const description = agent.description || 'No description available';
+
+          // Format simplifié : nom + groupe + description
+          return `- ${name}${group}: ${description}`;
         })
         .join('\n');
 

@@ -147,7 +147,9 @@ export class AgentSystem {
       logger.debug('AgentSystem: Creating and registering SnakAgent...');
 
       // Get the ModelSelectionAgent from the supervisor
-      const modelSelector = this.supervisorAgent?.getOperator('model-selector') as any;
+      const modelSelector = this.supervisorAgent?.getOperator(
+        'model-selector'
+      ) as any;
 
       // Create SnakAgent configuration
       const snakAgentConfig: SnakAgentConfig = {
@@ -175,7 +177,11 @@ export class AgentSystem {
           group: this.agentConfig.group || 'starknet',
         };
 
-        this.supervisorAgent.registerSnakAgent(agentId, this.snakAgent, metadata);
+        this.supervisorAgent.registerSnakAgent(
+          agentId,
+          this.snakAgent,
+          metadata
+        );
 
         // Refresh the workflow controller to include the new agent
         await this.supervisorAgent.refreshWorkflowController();
@@ -185,7 +191,9 @@ export class AgentSystem {
         throw new Error('SupervisorAgent not initialized');
       }
     } catch (error) {
-      logger.error(`AgentSystem: Failed to create and register SnakAgent: ${error}`);
+      logger.error(
+        `AgentSystem: Failed to create and register SnakAgent: ${error}`
+      );
       throw error;
     }
   }
@@ -307,7 +315,7 @@ export class AgentSystem {
    */
   public async dispose(): Promise<void> {
     logger.debug('AgentSystem: Disposing resources');
-    
+
     // Dispose the SnakAgent if it exists
     if (this.snakAgent) {
       try {
@@ -317,7 +325,7 @@ export class AgentSystem {
       }
       this.snakAgent = null;
     }
-    
+
     this.supervisorAgent = null;
     logger.info('AgentSystem: Resources disposed');
   }
