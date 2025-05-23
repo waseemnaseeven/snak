@@ -407,6 +407,29 @@ export class SupervisorAgent extends BaseAgent {
       let toolCallsFromSelection: any[] | undefined = undefined;
       let needsClarification = false;
 
+      // Check if there's a pre-selected agent (bypass agent selector entirely)
+      const preSelectedAgent = config?.selectedSnakAgent;
+      if (preSelectedAgent && this.snakAgents[preSelectedAgent]) {
+        logger.debug(
+          `${depthIndent}SupervisorAgent (${callPath}): Pre-selected agent "${preSelectedAgent}" found, bypassing AgentSelectionAgent entirely.`
+        );
+        responseContent = `Supervisor: Routing directly to pre-selected agent "${preSelectedAgent}".`;
+        nextAgent = preSelectedAgent;
+
+        this.executionDepth--;
+        const directiveMessage = new AIMessage({
+          content: responseContent,
+          additional_kwargs: {
+            from: 'supervisor',
+            next_agent: nextAgent,
+          },
+        });
+        logger.debug(
+          `${depthIndent}SupervisorAgent (${callPath}): Returning direct routing directive: ${JSON.stringify(directiveMessage.toJSON())}`
+        );
+        return directiveMessage;
+      }
+
       // Use original query if available and appropriate for agent selection, otherwise current message content.
       const queryForSelection = (originalUserQueryFromConfig ||
         (typeof currentMessage.content === 'string'
@@ -571,6 +594,13 @@ export class SupervisorAgent extends BaseAgent {
         );
         workflowConfig.selectedSnakAgent = finalTargetNodeForSnak;
         workflowConfig.startNode = this.memoryAgent.id;
+      } else if (finalTargetNodeForSnak && isSnakAgent) {
+        // Si un agent Snak spécifique est ciblé mais qu'on ne passe pas par la mémoire,
+        // définir selectedSnakAgent pour que le router puisse bypasser l'agent selector
+        logger.debug(
+          `${depthIndent}SupervisorAgent (${callPath}): Snak agent \"${finalTargetNodeForSnak}\" targeted. Setting selectedSnakAgent to bypass agent selector.`
+        );
+        workflowConfig.selectedSnakAgent = finalTargetNodeForSnak;
       }
 
       try {

@@ -42,14 +42,14 @@ export class AgentsController {
   ): Promise<AgentResponse> {
     try {
       const route = this.reflector.get('path', this.handleUserRequest);
-      const agent = this.agentFactory.getAgent(userRequest.agent_id);
+      const agent = this.agentFactory.getAgent(userRequest.request.agent_id);
       if (!agent) {
         throw new ServerError('E01TA400');
       }
       const action = this.agentService.handleUserRequest(agent, userRequest);
 
       const response_metrics = await metrics.metricsAgentResponseTime(
-        userRequest.agent_id.toString(),
+        userRequest.request.agent_id.toString(),
         'key',
         route,
         action
@@ -256,7 +256,7 @@ export class AgentsController {
             typeof userRequest.request === 'string'
               ? userRequest.request
               : userRequest.request.content,
-          agentId: userRequest.agent_id,
+          agentId: userRequest.request.agent_id,
         },
       };
 

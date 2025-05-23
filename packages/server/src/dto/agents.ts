@@ -11,8 +11,6 @@ export interface Message {
 export class AgentRequestDTO {
   @IsNotEmpty()
   request: Message;
-  @IsNotEmpty()
-  agent_id: string;
 }
 
 export class SupervisorRequest {

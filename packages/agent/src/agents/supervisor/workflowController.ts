@@ -239,6 +239,18 @@ export class WorkflowController {
                 );
               }
 
+              // Special handling for selectedSnakAgent in supervisor
+              if (
+                agentId === 'supervisor' &&
+                state.metadata?.selectedSnakAgent
+              ) {
+                updatedMetadata.selectedSnakAgent =
+                  state.metadata.selectedSnakAgent;
+                logger.debug(
+                  `WorkflowController[Exec:${execId}]: Node[${agentId}] - Passing selectedSnakAgent to supervisor: "${state.metadata.selectedSnakAgent}"`
+                );
+              }
+
               // Prepare configuration with metadata
               const config = {
                 ...(runnable_config || {}),
@@ -650,6 +662,20 @@ export class WorkflowController {
 
     // Default routing logic: if a supervisor, use agent-selector, else back to supervisor or snak
     if (messageSource === 'supervisor') {
+      // Check if there's a specific agent selected by the supervisor (bypass agent selector)
+      if (
+        state.metadata?.selectedSnakAgent &&
+        this.agents[state.metadata.selectedSnakAgent]
+      ) {
+        const selectedAgent = state.metadata.selectedSnakAgent;
+        logger.debug(
+          `WorkflowController[Exec:${execId}]: Router - From supervisor, specific agent "${selectedAgent}" pre-selected, routing there directly (bypassing agent selector)`
+        );
+        // Clear the selectedSnakAgent to prevent routing loops
+        delete state.metadata.selectedSnakAgent;
+        return selectedAgent;
+      }
+
       // After supervisor, check if we have a specific Starknet agent to route to
       const starknetAgents = Object.keys(this.agents).filter(
         (id) =>
