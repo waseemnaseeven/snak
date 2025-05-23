@@ -1,4 +1,4 @@
-import { AgentRequestDTO, MessageRequest } from '../dto/agents.js';
+import {   MessageRequest } from '@snakagent/core';
 import { IAgent } from './agent.interface.js';
 import { AgentSystem } from '@snakagent/agents';
 
