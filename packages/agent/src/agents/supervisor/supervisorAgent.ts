@@ -597,7 +597,7 @@ export class SupervisorAgent extends BaseAgent {
     }
 
     try {
-      // TODO: Remove chat_id from agent_config and move it to request body to support multiple conversations per agent
+      // TODO: Remove chatId from agent_config and move it to request body to support multiple conversations per agent
       const memories = await this.memoryAgent.retrieveRelevantMemories(
         message,
         this.config.starknetConfig.agentConfig?.chatId || 'default_chat'

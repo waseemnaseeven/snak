@@ -40,22 +40,6 @@ export class AgentService implements IAgentService {
     });
 
     try {
-      // const status = await this.getAgentStatus(agent);
-      // if (!status.isReady) {
-      //   throw new AgentCredentialsError('Agent is not properly configured');
-      // }
-      // const status = await this.getAgentStatus(agent);
-      // if (!status.isReady) {
-      //   throw new AgentCredentialsError('Agent is not properly configured');
-      // }
-
-      // if (!(await agent.validateRequest(userRequest.request))) {
-      //   throw new AgentValidationError('Invalid request format or parameters');
-      // }
-      // if (!(await agent.validateRequest(userRequest.request))) {
-      //   throw new AgentValidationError('Invalid request format or parameters');
-      // }
-
       const result = await agent.execute(userRequest);
 
       this.logger.debug({

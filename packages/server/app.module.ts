@@ -11,7 +11,6 @@ import { GatewayModule } from './src/gateway.module.js';
   imports: [
     GatewayModule,
     ConfigModule,
-    // AgentsModule,
     CleanupModule,
     ThrottlerModule.forRoot({
       throttlers: [

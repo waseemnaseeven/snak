@@ -4,7 +4,6 @@ import { AgentStorage } from '../agents.storage.js';
 import {
   metrics,
   logger,
-  AgentAddRequestDTO,
   AgentDeleteRequestDTO,
   AgentRequestDTO,
   AgentsDeleteRequestDTO,
