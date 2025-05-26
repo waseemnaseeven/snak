@@ -1,4 +1,3 @@
-// agents/supervisor/workflowController.ts
 import { MemorySaver, StateGraph, END, START } from '@langchain/langgraph';
 import { BaseMessage, AIMessage, HumanMessage } from '@langchain/core/messages';
 import { logger } from '@snakagent/core';
@@ -111,7 +110,6 @@ export class WorkflowController {
   public async init(): Promise<void> {
     logger.debug('WorkflowController: Starting initialization');
     try {
-      // Create state graph
       const workflow = new StateGraph<WorkflowState>({
         channels: {
           messages: {
@@ -147,7 +145,6 @@ export class WorkflowController {
         },
       });
 
-      // Add nodes for each agent
       for (const [agentId, agent] of Object.entries(this.agents)) {
         const execId = this.executionId || 'unknown';
         workflow.addNode(
@@ -163,7 +160,6 @@ export class WorkflowController {
             }
 
             try {
-              // Check if max iterations is reached
               if (state.iterationCount >= this.maxIterations) {
                 logger.warn(
                   `WorkflowController[Exec:${execId}]: Node[${agentId}] - Maximum iterations (${this.maxIterations}) reached.`
@@ -184,13 +180,11 @@ export class WorkflowController {
                 };
               }
 
-              // Track agent executions to detect loops
               const agentExecutionCount =
                 state.metadata.agentExecutionCount || {};
               const currentCount = agentExecutionCount[agentId] || 0;
               const newCount = currentCount + 1;
 
-              // Update metadata
               const updatedMetadata: Record<string, any> = {
                 ...state.metadata,
                 agentExecutionCount: {
@@ -199,7 +193,6 @@ export class WorkflowController {
                 },
               };
 
-              // If non-tool agent is called too many times, force termination
               if (newCount > 3 && agentId !== 'tools') {
                 logger.warn(
                   `WorkflowController[Exec:${execId}]: Node[${agentId}] - Agent called ${newCount} times, forcing END.`
@@ -220,7 +213,6 @@ export class WorkflowController {
                 };
               }
 
-              // Get last message or use empty message if none exists
               const lastMessage =
                 state.messages.length > 0
                   ? state.messages[state.messages.length - 1]
@@ -230,7 +222,6 @@ export class WorkflowController {
                 `WorkflowController[Exec:${execId}]: Node[${agentId}] - Last message to process: Type=${lastMessage._getType()}, From=${lastMessage.additional_kwargs?.from || 'initial'}`
               );
 
-              // Extract original user query and add to configuration
               const originalUserQuery = this.extractOriginalUserQuery(state);
               if (originalUserQuery) {
                 updatedMetadata.originalUserQuery = originalUserQuery;
@@ -239,7 +230,6 @@ export class WorkflowController {
                 );
               }
 
-              // Special handling for selectedSnakAgent in supervisor
               if (
                 agentId === 'supervisor' &&
                 state.metadata?.selectedSnakAgent
@@ -251,14 +241,12 @@ export class WorkflowController {
                 );
               }
 
-              // Prepare configuration with metadata
               const config = {
                 ...(runnable_config || {}),
                 ...updatedMetadata,
                 toolCalls: state.toolCalls,
               };
 
-              // Execute agent
               logger.debug(
                 `WorkflowController[Exec:${execId}]: Node[${agentId}] - Calling agent.execute()...`
               );
@@ -271,7 +259,6 @@ export class WorkflowController {
                 `WorkflowController[Exec:${execId}]: Node[${agentId}] - Agent execution finished. Processing result...`
               );
 
-              // Handle different result formats
               let response: BaseMessage[];
 
               if (Array.isArray(result)) {
@@ -288,11 +275,9 @@ export class WorkflowController {
                 typeof result === 'object' &&
                 'messages' in result
               ) {
-                // Case where result contains messages
                 response = Array.isArray(result.messages)
                   ? result.messages.map((msg: any) => {
                       if (msg instanceof BaseMessage) {
-                        // Add source agent info if it doesn't exist
                         if (
                           !msg.additional_kwargs ||
                           !msg.additional_kwargs.from
@@ -319,7 +304,6 @@ export class WorkflowController {
                       }),
                     ];
               } else if (result instanceof BaseMessage) {
-                // Ensure message contains source agent info
                 if (
                   !result.additional_kwargs ||
                   !result.additional_kwargs.from
@@ -337,7 +321,6 @@ export class WorkflowController {
                   response = [result];
                 }
               } else {
-                // Fallback for other result types
                 response = [
                   new AIMessage({
                     content: String(result),
@@ -346,16 +329,13 @@ export class WorkflowController {
                 ];
               }
 
-              // Determine next agent based on result
               let nextAgent: string | undefined = undefined;
               let isFinal: boolean = false;
 
-              // Check if specific agent is requested in result
               if (result && typeof result === 'object') {
                 if ('nextAgent' in result) {
                   nextAgent = result.nextAgent as string;
 
-                  // Check that we don't send to current agent (except for tools)
                   if (nextAgent === agentId && agentId !== 'tools') {
                     logger.warn(
                       `WorkflowController[Exec:${execId}]: Node[${agentId}] - Agent "${agentId}" trying to route to itself, redirecting to supervisor instead`
@@ -369,7 +349,6 @@ export class WorkflowController {
                 }
               }
 
-              // Check messages if a message is marked as final
               const lastResponseMessage = response[response.length - 1];
               if (
                 lastResponseMessage &&
@@ -379,8 +358,6 @@ export class WorkflowController {
                 isFinal = true;
               }
 
-              // If current agent is supervisor and no next agent specified,
-              // and it's the second consecutive supervisor call, force end.
               if (agentId === 'supervisor' && !nextAgent && !isFinal) {
                 const history = state.metadata.agentHistory || [];
                 if (
@@ -394,7 +371,6 @@ export class WorkflowController {
                 }
               }
 
-              // Check tool calls
               let toolCalls: any[] = [];
               if (
                 lastResponseMessage instanceof AIMessage &&
@@ -404,19 +380,16 @@ export class WorkflowController {
               ) {
                 toolCalls = lastResponseMessage.tool_calls;
 
-                // Automatically direct to tools orchestrator if tool calls detected
                 if (!nextAgent && 'tools' in this.agents) {
                   nextAgent = 'tools';
                 }
               }
 
-              // Build output state
               const outputState: Partial<WorkflowState> = {
                 messages: response,
-                metadata: updatedMetadata, // Ensure metadata is included
+                metadata: updatedMetadata,
               };
 
-              // If this is final response, force workflow end
               if (isFinal) {
                 if (this.debug) {
                   logger.debug(
@@ -424,16 +397,13 @@ export class WorkflowController {
                   );
                 }
                 outputState.currentAgent = END;
-              }
-              // Otherwise, add next agent if specified
-              else if (nextAgent) {
+              } else if (nextAgent) {
                 logger.debug(
                   `WorkflowController[Exec:${execId}]: Node[${agentId}] - Setting next agent to "${nextAgent}" based on result.`
                 );
                 outputState.currentAgent = nextAgent;
               }
 
-              // Add tool calls if present
               if (toolCalls.length > 0) {
                 logger.debug(
                   `WorkflowController[Exec:${execId}]: Node[${agentId}] - Adding ${toolCalls.length} tool calls to state.`
@@ -453,7 +423,6 @@ export class WorkflowController {
                 `WorkflowController[Exec:${execId}]: Node[${agentId}] - ERROR executing agent: ${error}`
               );
 
-              // Create error message
               const errorMessage = new AIMessage({
                 content: `Error executing agent "${agentId}": ${error instanceof Error ? error.message : String(error)}`,
                 additional_kwargs: {
@@ -462,8 +431,6 @@ export class WorkflowController {
                 },
               });
 
-              // If supervisor generates an error, avoid loop
-              // by terminating workflow
               if (agentId === 'supervisor') {
                 logger.debug(
                   `WorkflowController[Exec:${execId}]: Node[${agentId}] - Error in supervisor, forcing END.`
@@ -471,17 +438,16 @@ export class WorkflowController {
                 return {
                   messages: [errorMessage],
                   error: String(error),
-                  currentAgent: END, // Force end to avoid a loop
+                  currentAgent: END,
                 };
               }
 
-              // For other agents, return to supervisor
               logger.debug(
                 `WorkflowController[Exec:${execId}]: Node[${agentId}] - Error in agent, returning to supervisor.`
               );
               return {
                 messages: [errorMessage],
-                currentAgent: 'supervisor', // Return to supervisor in case of error
+                currentAgent: 'supervisor',
                 error: String(error),
               };
             }
@@ -489,48 +455,36 @@ export class WorkflowController {
         );
       }
 
-      // Set the entry point
       logger.debug(
         `WorkflowController: Setting entry point to ${this.entryPoint}`
       );
       workflow.addEdge(START as any, this.entryPoint as any);
 
-      // Route transitions based on current agent
       for (const agentId of Object.keys(this.agents)) {
-        // Create routing map for this agent
         const routingMap: Record<string, string | typeof END> = {};
 
-        // Add each agent as a possible destination
         for (const targetId of Object.keys(this.agents)) {
           routingMap[targetId] = targetId;
         }
 
-        // Add END as a possible destination
         routingMap[END] = END;
-
-        // Add hybrid_pause as a possible destination
         routingMap['hybrid_pause'] = 'hybrid_pause';
 
-        // Add conditional transitions
         logger.debug(
           `WorkflowController: Adding conditional edges from "${agentId}" with router function`
         );
         workflow.addConditionalEdges(
           // @ts-expect-error - The type definition expects "__start__" but routing from agentId is intended here
-          agentId, // Source node is current agent
-          (state: WorkflowState) => this.router(state), // Decision function
-          routingMap as Record<string, string | typeof END> // Explicit cast added
+          agentId,
+          (state: WorkflowState) => this.router(state),
+          routingMap as Record<string, string | typeof END>
         );
       }
 
-      // Add a special node for hybrid mode pauses
       workflow.addNode('hybrid_pause', async () => {
-        // This node just returns the current state
-        // The actual pause happens at the higher level when hybrid_pause is returned
         return {};
       });
 
-      // Compile workflow
       logger.debug('WorkflowController: Compiling workflow');
       this.workflow = workflow.compile({
         checkpointer: this.checkpointEnabled ? this.checkpointer : undefined,
@@ -566,7 +520,6 @@ export class WorkflowController {
       return END;
     }
 
-    // Check for max iterations
     if (state.iterationCount >= this.maxIterations) {
       logger.warn(
         `WorkflowController[Exec:${execId}]: Router - Max iterations reached, ending workflow.`
@@ -574,16 +527,16 @@ export class WorkflowController {
       return END;
     }
 
-    // Get the last message to determine the next step
     if (!state.messages || state.messages.length === 0) {
       logger.warn(
         `WorkflowController[Exec:${execId}]: Router - No messages in state, ending workflow.`
       );
       return END;
     }
+
     const lastMessage = state.messages[state.messages.length - 1];
 
-    // Gérer les messages de l'agent de sélection qui demandent une clarification
+    // Handle selection agent messages requesting clarification
     if (
       lastMessage instanceof AIMessage &&
       lastMessage.additional_kwargs?.needsClarification === true
@@ -592,15 +545,12 @@ export class WorkflowController {
         `WorkflowController[Exec:${execId}]: Router - Agent ${lastMessage.additional_kwargs?.from || state.currentAgent} requesting clarification from user, ending workflow to get user input`
       );
 
-      // Mark state as requiring clarification
       state.metadata.requiresClarification = true;
       state.metadata.clarificationMessage = lastMessage;
 
-      // End the workflow to allow for user input
       return END;
     }
 
-    // If there are tool calls, route to the tool orchestrator
     if (
       lastMessage.additional_kwargs?.tool_calls &&
       lastMessage.additional_kwargs.tool_calls.length > 0
@@ -614,11 +564,10 @@ export class WorkflowController {
         logger.warn(
           `WorkflowController[Exec:${execId}]: Router - Tool calls detected, but no "tools" agent (ToolsOrchestrator) available. Ending workflow.`
         );
-        return END; // Or handle error appropriately
+        return END;
       }
     }
 
-    // Check for a specific agent request in the message's additional_kwargs
     if (lastMessage.additional_kwargs?.next_agent) {
       const nextAgent = lastMessage.additional_kwargs.next_agent as string;
       if (this.agents[nextAgent]) {
@@ -634,7 +583,6 @@ export class WorkflowController {
       }
     }
 
-    // Check for nextAgent in additional_kwargs (used by AgentSelector)
     if (lastMessage.additional_kwargs?.nextAgent) {
       const nextAgent = lastMessage.additional_kwargs.nextAgent as string;
       if (this.agents[nextAgent]) {
@@ -650,7 +598,6 @@ export class WorkflowController {
       }
     }
 
-    // Determine the default next agent based on the current agent or message source
     const currentAgentId = state.currentAgent;
     const messageSource = lastMessage.additional_kwargs?.from || currentAgentId;
 
@@ -660,9 +607,7 @@ export class WorkflowController {
       );
     }
 
-    // Default routing logic: if a supervisor, use agent-selector, else back to supervisor or snak
     if (messageSource === 'supervisor') {
-      // Check if there's a specific agent selected by the supervisor (bypass agent selector)
       if (
         state.metadata?.selectedSnakAgent &&
         this.agents[state.metadata.selectedSnakAgent]
@@ -671,18 +616,15 @@ export class WorkflowController {
         logger.debug(
           `WorkflowController[Exec:${execId}]: Router - From supervisor, specific agent "${selectedAgent}" pre-selected, routing there directly (bypassing agent selector)`
         );
-        // Clear the selectedSnakAgent to prevent routing loops
         delete state.metadata.selectedSnakAgent;
         return selectedAgent;
       }
 
-      // After supervisor, check if we have any Snak agents to route to
       const snakAgents = Object.keys(this.agents).filter(
         (id) => this.agents[id].type === AgentType.SNAK
       );
 
       if (snakAgents.length > 0) {
-        // If we have multiple agents, prefer the agent-selector
         if (snakAgents.length > 1 && this.agents['agent-selector']) {
           logger.debug(
             `WorkflowController[Exec:${execId}]: Router - From supervisor, multiple Snak agents available, routing to "agent-selector"`
@@ -690,14 +632,12 @@ export class WorkflowController {
           return 'agent-selector';
         }
 
-        // Otherwise use the first available Snak agent
         logger.debug(
           `WorkflowController[Exec:${execId}]: Router - From supervisor, routing to Snak agent "${snakAgents[0]}"`
         );
         return snakAgents[0];
       }
 
-      // If no Snak agent, try agent-selector
       if (this.agents['agent-selector']) {
         logger.debug(
           `WorkflowController[Exec:${execId}]: Router - From supervisor, no Snak agent, routing to "agent-selector"`
@@ -710,7 +650,6 @@ export class WorkflowController {
       );
       return END;
     } else if (messageSource === 'agent-selector') {
-      // agent-selector should have provided nextAgent, but if not, try to find a suitable agent
       const snakAgents = Object.keys(this.agents).filter(
         (id) => this.agents[id].type === AgentType.SNAK
       );
@@ -727,8 +666,6 @@ export class WorkflowController {
       );
       return END;
     } else if (messageSource === 'tools') {
-      // After tools, usually back to the agent that called the tools (often 'snak' or a specialized agent).
-      // This needs context. Assuming 'snak-main' as a general fallback.
       const previousAgent = state.metadata?.lastActiveAgent || 'snak-main';
 
       if (this.agents[previousAgent]) {
@@ -738,7 +675,6 @@ export class WorkflowController {
         return previousAgent;
       }
 
-      // Fallback to any available Snak agent
       const snakAgents = Object.keys(this.agents).filter(
         (id) => this.agents[id].type === AgentType.SNAK
       );
@@ -759,30 +695,26 @@ export class WorkflowController {
       messageSource in this.agents
     ) {
       const agentFromSource =
-        this.agents[messageSource as keyof typeof this.agents]; // Type assertion after confirming key
+        this.agents[messageSource as keyof typeof this.agents];
       if (
         agentFromSource &&
         (messageSource === 'snak' ||
           agentFromSource.type === AgentType.SNAK ||
           agentFromSource.type === AgentType.OPERATOR)
       ) {
-        // After a core agent like snak or an operator, the flow might end or go to supervisor for next steps.
-        // If the message is final, end. Otherwise, default to END unless next_agent is specified.
         if (lastMessage.additional_kwargs?.final === true) {
           logger.debug(
             `WorkflowController[Exec:${execId}]: Router - From "${messageSource}", message is final. Ending workflow.`
           );
           return END;
         }
-        // If not final, and no other specific routing is given by next_agent or tool_calls, assume the agent's task is done.
         logger.debug(
           `WorkflowController[Exec:${execId}]: Router - From "${messageSource}" (Snak/Operator), no explicit next_agent or tool_calls, and not marked final. Ending workflow.`
         );
-        return END; // Default to END if no other instruction
+        return END;
       }
     }
 
-    // Default fallback: if no other routing rule applies, end the workflow.
     logger.warn(
       `WorkflowController[Exec:${execId}]: Router - No specific routing rule matched for message from "${messageSource}". Ending workflow.`
     );
@@ -842,10 +774,9 @@ export class WorkflowController {
         `WorkflowController[Exec:${this.executionId}]: Using thread ID: ${threadId}`
       );
 
-      // Permettre de spécifier un nœud de départ
+      // Allow specifying a start node
       let initialAgent = config?.startNode || this.entryPoint;
 
-      // Check if we should bypass the supervisor and start directly with a specific agent
       const shouldBypassSupervisor =
         config?.startNode && config.startNode !== this.entryPoint;
 
@@ -853,7 +784,6 @@ export class WorkflowController {
         logger.warn(
           `WorkflowController[Exec:${this.executionId}]: Specified start node "${initialAgent}" not found, using default entry point "${this.entryPoint}"`
         );
-        // If bypass was intended but agent not found, don't bypass
         if (shouldBypassSupervisor) {
           logger.warn(
             `WorkflowController[Exec:${this.executionId}]: Cannot bypass to non-existent agent "${initialAgent}", falling back to normal workflow`
@@ -866,22 +796,21 @@ export class WorkflowController {
         `WorkflowController[Exec:${this.executionId}]: Determined initial agent: ${initialAgent}`
       );
 
-      // Initialiser les métadonnées supplémentaires du config
+      // Initialize additional config metadata
       const initialMetadata: Record<string, any> = {
         threadId,
         ...config,
       };
-      // Ne pas inclure startNode dans les métadonnées pour éviter la confusion
+      // Don't include startNode in metadata to avoid confusion
       if (initialMetadata.startNode) {
         delete initialMetadata.startNode;
       }
 
-      // Définir l'agent Snak sélectionné si spécifié
+      // Set selected Snak agent if specified
       if (config?.selectedSnakAgent) {
         initialMetadata.selectedSnakAgent = config.selectedSnakAgent;
       }
 
-      // Only bypass if the target agent actually exists
       const canBypass =
         shouldBypassSupervisor &&
         this.agents[config?.startNode || ''] &&
@@ -896,13 +825,11 @@ export class WorkflowController {
           `WorkflowController[Exec:${this.executionId}]: Bypassing supervisor, starting directly with agent: ${initialAgent}`
         );
 
-        // Execute the target agent directly
         const targetAgent = this.agents[initialAgent];
         if (!targetAgent) {
           throw new Error(`Target agent "${initialAgent}" not found`);
         }
 
-        // Prepare the execution config for the target agent
         const agentConfig = {
           ...initialMetadata,
           originalUserQuery:
@@ -916,7 +843,6 @@ export class WorkflowController {
         try {
           const result = await targetAgent.execute([message], agentConfig);
 
-          // Format the result to match workflow output format
           let finalResult;
           if (result && typeof result === 'object' && 'messages' in result) {
             finalResult = result;
@@ -1047,14 +973,11 @@ export class WorkflowController {
     );
     try {
       if (this.checkpointer && this.checkpointEnabled) {
-        // Re-instantiating MemorySaver effectively clears its state for in-memory.
-        // For persistent checkpointers, a more specific reset might be needed.
         this.checkpointer = new MemorySaver();
         logger.debug(
           `WorkflowController[Exec:${this.executionId || 'unknown'}]: Checkpointer reset.`
         );
       }
-      // Reset any other stateful properties of the controller if necessary
       this.executionId = null;
       logger.debug(
         `WorkflowController[Exec:${this.executionId || 'unknown'}]: Reset finished`
@@ -1070,6 +993,7 @@ export class WorkflowController {
   /**
    * Disposes of resources used by the WorkflowController.
    * Clears any active timeouts and resets the initialized flag.
+   * @returns Promise that resolves when disposal is complete.
    */
   public async dispose(): Promise<void> {
     logger.debug(
@@ -1080,7 +1004,6 @@ export class WorkflowController {
       this.timeoutId = null;
     }
     this.initialized = false;
-    // Any other cleanup logic for WorkflowController can be added here.
     logger.debug(
       `WorkflowController[Exec:${this.executionId || 'unknown'}]: Dispose complete.`
     );
