@@ -844,10 +844,21 @@ export class WorkflowController {
 
       // Permettre de spécifier un nœud de départ
       let initialAgent = config?.startNode || this.entryPoint;
+
+      // Check if we should bypass the supervisor and start directly with a specific agent
+      const shouldBypassSupervisor =
+        config?.startNode && config.startNode !== this.entryPoint;
+
       if (!this.agents[initialAgent]) {
         logger.warn(
           `WorkflowController[Exec:${this.executionId}]: Specified start node "${initialAgent}" not found, using default entry point "${this.entryPoint}"`
         );
+        // If bypass was intended but agent not found, don't bypass
+        if (shouldBypassSupervisor) {
+          logger.warn(
+            `WorkflowController[Exec:${this.executionId}]: Cannot bypass to non-existent agent "${initialAgent}", falling back to normal workflow`
+          );
+        }
         initialAgent = this.entryPoint;
       }
 
@@ -868,6 +879,77 @@ export class WorkflowController {
       // Définir l'agent Snak sélectionné si spécifié
       if (config?.selectedSnakAgent) {
         initialMetadata.selectedSnakAgent = config.selectedSnakAgent;
+      }
+
+      // Only bypass if the target agent actually exists
+      const canBypass =
+        shouldBypassSupervisor &&
+        this.agents[config?.startNode || ''] &&
+        initialAgent !== this.entryPoint;
+
+      logger.debug(
+        `WorkflowController[Exec:${this.executionId}]: Bypass check - startNode: "${config?.startNode}", entryPoint: "${this.entryPoint}", canBypass: ${canBypass}`
+      );
+
+      if (canBypass) {
+        logger.debug(
+          `WorkflowController[Exec:${this.executionId}]: Bypassing supervisor, starting directly with agent: ${initialAgent}`
+        );
+
+        // Execute the target agent directly
+        const targetAgent = this.agents[initialAgent];
+        if (!targetAgent) {
+          throw new Error(`Target agent "${initialAgent}" not found`);
+        }
+
+        // Prepare the execution config for the target agent
+        const agentConfig = {
+          ...initialMetadata,
+          originalUserQuery:
+            originalUserQuery ||
+            (typeof message.content === 'string'
+              ? message.content
+              : JSON.stringify(message.content)),
+          isWorkflowNodeCall: true,
+        };
+
+        try {
+          const result = await targetAgent.execute([message], agentConfig);
+
+          // Format the result to match workflow output format
+          let finalResult;
+          if (result && typeof result === 'object' && 'messages' in result) {
+            finalResult = result;
+          } else if (result instanceof BaseMessage) {
+            finalResult = {
+              messages: [result],
+              metadata: initialMetadata,
+            };
+          } else {
+            finalResult = {
+              messages: [
+                new AIMessage({
+                  content:
+                    typeof result === 'string'
+                      ? result
+                      : JSON.stringify(result),
+                  additional_kwargs: { from: initialAgent, final: true },
+                }),
+              ],
+              metadata: initialMetadata,
+            };
+          }
+
+          logger.debug(
+            `WorkflowController[Exec:${this.executionId}]: Direct agent execution completed`
+          );
+          return finalResult;
+        } catch (error) {
+          logger.error(
+            `WorkflowController[Exec:${this.executionId}]: Direct agent execution failed: ${error}`
+          );
+          throw error;
+        }
       }
 
       const timeoutPromise = new Promise((_, reject) => {

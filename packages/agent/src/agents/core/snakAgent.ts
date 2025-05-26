@@ -13,7 +13,7 @@ import { createHybridAgent } from '../modes/hybrid.js';
 import { Command } from '@langchain/langgraph';
 
 /**
- * Configuration for SnakAgent
+ * Configuration interface for SnakAgent initialization
  */
 export interface SnakAgentConfig {
   provider: RpcProvider;
@@ -27,6 +27,7 @@ export interface SnakAgentConfig {
 
 /**
  * Main agent for interacting with the Starknet blockchain
+ * Supports multiple execution modes: interactive, autonomous, and hybrid
  */
 export class SnakAgent extends BaseAgent implements IModelAgent {
   private readonly provider: RpcProvider;
@@ -44,7 +45,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   constructor(config: SnakAgentConfig) {
     super('snak', AgentType.SNAK);
 
-    // Initialize properties
     this.provider = config.provider;
     this.accountPrivateKey = config.accountPrivateKey;
     this.accountPublicKey = config.accountPublicKey;
@@ -57,7 +57,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
     this.memory = config.memory || {};
     this.modelSelector = config.modelSelector || null;
 
-    // Check for required configurations
     if (!config.accountPrivateKey) {
       throw new Error('STARKNET_PRIVATE_KEY is required');
     }
@@ -71,7 +70,8 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Initialize the Snak Agent
+   * Initialize the SnakAgent and create the appropriate executor
+   * @throws {Error} If initialization fails
    */
   public async init(): Promise<void> {
     try {
@@ -83,14 +83,12 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         );
       }
 
-      // Ensure agentConfig and its plugins property are initialized
       if (this.agentConfig) {
         this.agentConfig.plugins = this.agentConfig.plugins || [];
       } else {
         logger.warn('SnakAgent: No agent configuration available.');
       }
 
-      // Set default mode to hybrid if configuration allows
       if (
         this.agentConfig?.mode === AgentMode.HYBRID ||
         (this.agentMode === AGENT_MODES[AgentMode.AUTONOMOUS] &&
@@ -124,6 +122,8 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
 
   /**
    * Create agent executor based on current mode
+   * @private
+   * @throws {Error} If executor creation fails
    */
   private async createAgentReactExecutor(): Promise<void> {
     try {
@@ -131,23 +131,27 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         `SnakAgent: Creating agent executor for mode: ${this.currentMode}`
       );
 
-      if (this.currentMode === AGENT_MODES[AgentMode.AUTONOMOUS]) {
-        this.agentReactExecutor = await createAutonomousAgent(
-          this,
-          this.modelSelector
-        );
-      } else if (this.currentMode === AGENT_MODES[AgentMode.INTERACTIVE]) {
-        this.agentReactExecutor = await createInteractiveAgent(
-          this,
-          this.modelSelector
-        );
-      } else if (this.currentMode === AGENT_MODES[AgentMode.HYBRID]) {
-        this.agentReactExecutor = await createHybridAgent(
-          this,
-          this.modelSelector
-        );
-      } else {
-        throw new Error(`Invalid mode: ${this.currentMode}`);
+      switch (this.currentMode) {
+        case AGENT_MODES[AgentMode.AUTONOMOUS]:
+          this.agentReactExecutor = await createAutonomousAgent(
+            this,
+            this.modelSelector
+          );
+          break;
+        case AGENT_MODES[AgentMode.INTERACTIVE]:
+          this.agentReactExecutor = await createInteractiveAgent(
+            this,
+            this.modelSelector
+          );
+          break;
+        case AGENT_MODES[AgentMode.HYBRID]:
+          this.agentReactExecutor = await createHybridAgent(
+            this,
+            this.modelSelector
+          );
+          break;
+        default:
+          throw new Error(`Invalid mode: ${this.currentMode}`);
       }
 
       if (!this.agentReactExecutor) {
@@ -168,6 +172,10 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
 
   /**
    * Get appropriate model for a task based on messages
+   * @param messages - Array of messages to analyze
+   * @param forceModelType - Optional model type to force
+   * @returns Promise resolving to the selected chat model
+   * @throws {Error} If ModelSelector is not available
    */
   public async getModelForTask(
     messages: BaseMessage[],
@@ -176,12 +184,15 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
     if (!this.modelSelector) {
       throw new Error('ModelSelector not available');
     }
-
     return this.modelSelector.getModelForTask(messages, forceModelType);
   }
 
   /**
    * Invoke model with appropriate selection logic
+   * @param messages - Array of messages to process
+   * @param forceModelType - Optional model type to force
+   * @returns Promise resolving to the model response
+   * @throws {Error} If ModelSelector is not available
    */
   public async invokeModel(
     messages: BaseMessage[],
@@ -190,13 +201,12 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
     if (!this.modelSelector) {
       throw new Error('ModelSelector not available');
     }
-
     return this.modelSelector.invokeModel(messages, forceModelType);
   }
 
   /**
-   * Get Starknet account credentials.
-   * @returns An object containing the account's private and public keys.
+   * Get Starknet account credentials
+   * @returns Object containing the account's private and public keys
    */
   public getAccountCredentials() {
     return {
@@ -206,16 +216,16 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Get database credentials.
-   * @returns The database credentials object.
+   * Get database credentials
+   * @returns The database credentials object
    */
   public getDatabaseCredentials() {
     return this.db_credentials;
   }
 
   /**
-   * Get agent signature.
-   * @returns An object containing the agent's signature.
+   * Get agent signature
+   * @returns Object containing the agent's signature
    */
   public getSignature() {
     return {
@@ -224,8 +234,8 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Get current agent mode.
-   * @returns An object containing the current agent mode string.
+   * Get current agent mode
+   * @returns Object containing the current agent mode string
    */
   public getAgent() {
     return {
@@ -234,49 +244,43 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Get agent configuration.
-   * @returns The agent configuration object, or undefined if not set.
+   * Get agent configuration
+   * @returns The agent configuration object
    */
   public getAgentConfig(): AgentConfig {
     return this.agentConfig;
   }
 
   /**
-   * Get original agent mode from initialization.
-   * @returns The agent mode string set during construction.
+   * Get original agent mode from initialization
+   * @returns The agent mode string set during construction
    */
   public getAgentMode(): string {
     return this.agentMode;
   }
 
   /**
-   * Get Starknet RPC provider.
-   * @returns The RpcProvider instance.
+   * Get Starknet RPC provider
+   * @returns The RpcProvider instance
    */
   public getProvider(): RpcProvider {
     return this.provider;
   }
 
   /**
-   * Validates the user request before execution.
-   * Currently checks if the request is not empty.
-   * @param request The user's request string.
-   * @returns A promise that resolves to true if the request is valid, false otherwise.
+   * Validates the user request before execution
+   * @param request - The user's request string
+   * @returns Promise resolving to true if the request is valid, false otherwise
    */
   public async validateRequest(request: string): Promise<boolean> {
-    // Basic validation - check if request is not empty
-    if (!request || request.trim() === '') {
-      return false;
-    }
-
-    return true;
+    return !(!request || request.trim() === '');
   }
 
   /**
    * Execute the agent with the given input
-   * @param input The input message or string
-   * @param config Optional configuration for execution, can include `agentMode` to temporarily change mode
-   * @returns The agent response
+   * @param input - The input message or string
+   * @param config - Optional configuration for execution
+   * @returns Promise resolving to the agent response
    */
   public async execute(
     input: BaseMessage[] | any,
@@ -294,7 +298,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
           logger.error(
             'SnakAgent: Failed to recreate agent executor. Cannot proceed.'
           );
-          // Try to form a single message for fallback
           const fallbackInput =
             Array.isArray(input) && input.length > 0
               ? input[input.length - 1]
@@ -328,12 +331,13 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         logger.warn(
           'SnakAgent: Received empty message array for execution. Initializing with a placeholder.'
         );
-        messagesForGraph = [new HumanMessage('Starting interaction...')]; // Ensure graph has at least one message
+        messagesForGraph = [new HumanMessage('Starting interaction...')];
       }
     } else {
       logger.warn(
         `SnakAgent: Unexpected input type for 'messages'. Expected BaseMessage[], received ${typeof input}. Attempting to convert.`
       );
+
       if (input instanceof BaseMessage) {
         messagesForGraph = [input];
       } else if (typeof input === 'string') {
@@ -350,7 +354,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
           'SnakAgent: Could not convert input to BaseMessage[]. Using simple fallback.'
         );
         let fallbackContent = 'Unprocessable input for agent execution';
-        // Attempt to extract some string content for the fallback message
+
         try {
           if (typeof input === 'string') fallbackContent = input;
           else if (
@@ -365,13 +369,13 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
           )
             fallbackContent = input.toString();
           else if (input && input.content && typeof input.content === 'string')
-            fallbackContent = input.content; // Common structure
+            fallbackContent = input.content;
         } catch {}
+
         return this.executeSimpleFallback(new HumanMessage(fallbackContent));
       }
     }
 
-    // Handle original user query from config
     const originalUserQuery = config?.originalUserQuery;
     let currentMessages = messagesForGraph;
 
@@ -388,23 +392,21 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
 
     const graphState = {
       messages: currentMessages,
-      // memories: config?.memories || '' // if memories need to be explicitly passed to the graph state
     };
 
-    // Prepare runnableConfig for LangGraph invoke, especially for thread_id
     const runnableConfig: Record<string, any> = {};
     const threadId = config?.threadId || config?.metadata?.threadId;
+
     if (threadId) {
       runnableConfig.configurable = { thread_id: threadId };
     }
-    // Pass other relevant parts of config if needed by the graph directly (e.g., recursionLimit)
+
     if (config?.recursionLimit) {
       runnableConfig.recursionLimit = config.recursionLimit;
     }
+
     if (config?.originalUserQuery) {
       if (!runnableConfig.configurable) runnableConfig.configurable = {};
-      // Pass originalUserQuery via configurable if graph needs it this way.
-      // Otherwise, ensure it's the first message in messagesForGraph if that's the convention.
       runnableConfig.configurable.originalUserQuery = config.originalUserQuery;
     }
 
@@ -415,10 +417,8 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
     try {
       let responseContent: string | any;
 
-      // Optional streaming support - can be enabled based on config
       if (config?.enableStreaming) {
         try {
-          // Handle both cases: direct app or object with app property
           const app = this.agentReactExecutor;
           const stream = await app.stream(graphState, runnableConfig);
           const chunks = [];
@@ -428,16 +428,11 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
           }
         } catch (streamError) {
           logger.error(`Streaming error: ${streamError}`);
-          // Continue with regular invoke if streaming fails
         }
       }
 
-      // Handle both cases: direct app or object with app property
       const app = this.agentReactExecutor;
-      const result = await app.invoke(
-        graphState, // This is the state object for the graph
-        runnableConfig // This is the config for the invoke call itself
-      );
+      const result = await app.invoke(graphState, runnableConfig);
 
       if (result?.messages?.length > 0) {
         for (let i = result.messages.length - 1; i >= 0; i--) {
@@ -477,14 +472,15 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       logger.error(
         `SnakAgent: Catastrophic error in execute, using fallback: ${agentExecError}`
       );
-      return this.executeSimpleFallback(input as string | BaseMessage); // Using fallback for execution errors too
+      return this.executeSimpleFallback(input as string | BaseMessage);
     }
   }
 
   /**
-   * Simple fallback execution mode when main executor fails.
-   * @param input The original input received by the execute method.
-   * @returns A simple AIMessage indicating fallback mode.
+   * Simple fallback execution mode when main executor fails
+   * @private
+   * @param input - The original input received by the execute method
+   * @returns AIMessage indicating fallback mode
    */
   private async executeSimpleFallback(
     input: string | BaseMessage
@@ -501,7 +497,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       ) {
         queryContent = input.content;
       } else if (input && typeof input.toString === 'function') {
-        queryContent = input.toString(); // Fallback to toString()
+        queryContent = input.toString();
       }
     } catch (e) {
       logger.error(`Error extracting content in fallback mode: ${e}`);
@@ -523,6 +519,9 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
 
   /**
    * Check if an error is token-related
+   * @private
+   * @param error - The error to check
+   * @returns True if the error is token-related
    */
   private isTokenRelatedError(error: any): boolean {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -536,10 +535,10 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Executes a call data request in agent mode, typically for signature requests.
-   * Requires the agent to be in interactive mode.
-   * @param input The input string for the call data execution.
-   * @returns A promise that resolves to the parsed JSON response or an error object.
+   * Executes a call data request in agent mode, typically for signature requests
+   * Requires the agent to be in interactive mode
+   * @param input - The input string for the call data execution
+   * @returns Promise resolving to the parsed JSON response or an error object
    */
   public async execute_call_data(input: string): Promise<unknown> {
     try {
@@ -589,7 +588,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       }
 
       logger.debug('execute_call_data: Invoking agent with input message.');
-      // Handle both cases: direct app or object with app property
       const app = this.agentReactExecutor;
       const result = await app.invoke(
         {
@@ -637,9 +635,9 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Executes the agent in autonomous mode.
-   * This mode allows the agent to operate continuously based on an initial goal or prompt.
-   * @returns A promise that resolves to the result of the autonomous execution, typically an AIMessage.
+   * Executes the agent in autonomous mode
+   * This mode allows the agent to operate continuously based on an initial goal or prompt
+   * @returns Promise resolving to the result of the autonomous execution
    */
   public async execute_autonomous(): Promise<unknown> {
     let responseContent: string | any;
@@ -766,7 +764,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
 
       const app = this.agentReactExecutor.app;
       const agentJsonConfig = this.agentReactExecutor.json_config;
-      const maxGraphIterations = this.agentReactExecutor.maxIterations; // Renamed for clarity
+      const maxGraphIterations = this.agentReactExecutor.maxIterations;
 
       const initialHumanMessage = new HumanMessage({
         content:
@@ -896,10 +894,10 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Executes the agent in hybrid mode.
-   * Hybrid mode typically involves an initial autonomous phase followed by interactive steps.
-   * @param initialInput The initial input string to start the hybrid execution.
-   * @returns A promise that resolves to an object containing the execution state and thread ID.
+   * Executes the agent in hybrid mode
+   * Hybrid mode typically involves an initial autonomous phase followed by interactive steps
+   * @param initialInput - The initial input string to start the hybrid execution
+   * @returns Promise resolving to an object containing the execution state and thread ID
    */
   public async execute_hybrid(initialInput: string): Promise<unknown> {
     let errorCount = 0;
@@ -915,7 +913,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
 
       if (
         !this.agentReactExecutor ||
-        this.agentConfig?.mode !== AgentMode.HYBRID // Assuming re-creation if config implies hybrid but executor isn't set for it
+        this.agentConfig?.mode !== AgentMode.HYBRID
       ) {
         logger.debug(
           'SnakAgent: Creating or re-creating hybrid agent executor.'
@@ -929,14 +927,12 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
             throw new Error('Agent configuration is required for hybrid mode.');
           }
 
-          // Validate essential agent configuration properties for hybrid mode
           if (!agentConfig.name) {
             logger.warn(
               'SnakAgent (hybrid): Agent name is missing in configuration.'
             );
           }
           if (!(agentConfig as any).description) {
-            // Consider defining a more specific type for agentConfig
             logger.warn(
               'SnakAgent (hybrid): Agent description is missing in configuration.'
             );
@@ -950,7 +946,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
             );
           }
 
-          agentConfig.plugins = agentConfig.plugins || []; // Ensure plugins array exists
+          agentConfig.plugins = agentConfig.plugins || [];
 
           this.agentReactExecutor = await createHybridAgent(
             this,
@@ -975,8 +971,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
               'Hybrid execution initialization failed'
             );
           } else {
-            // Allow another attempt or different flow if init fails but not maxed out
-            // For now, we throw to be caught by the main try-catch for hybrid
             throw initError;
           }
         }
@@ -1067,12 +1061,11 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Resumes a paused hybrid execution with new human input.
-   *
-   * @param input The human input to provide to the paused execution.
-   * @param threadId The thread ID of the hybrid execution to resume.
-   * @returns A promise that resolves to an object containing the updated execution state and thread ID.
-   * @throws Will throw an error if the hybrid agent is not initialized or if an error occurs during resumption.
+   * Resumes a paused hybrid execution with new human input
+   * @param input - The human input to provide to the paused execution
+   * @param threadId - The thread ID of the hybrid execution to resume
+   * @returns Promise resolving to an object containing the updated execution state and thread ID
+   * @throws {Error} If the hybrid agent is not initialized or if an error occurs during resumption
    */
   public async resume_hybrid(
     input: string,
@@ -1093,7 +1086,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         recursionLimit: this.agentReactExecutor.maxIterations,
       };
 
-      // Resume execution with the Command containing human input
       const state = await app.invoke(
         new Command({ resume: input }),
         threadConfig
@@ -1106,7 +1098,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       };
     } catch (error) {
       logger.error(`Error resuming hybrid execution: ${error}`);
-      throw error; // Re-throw the error to be handled by the caller
+      throw error;
     }
   }
 }

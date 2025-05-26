@@ -430,6 +430,9 @@ export class SupervisorService implements OnModuleInit {
     }
 
     try {
+      this.logger.debug(
+        `SupervisorService: Executing request with config: ${JSON.stringify(config)}`
+      );
       return await this.supervisor.execute(input, config);
     } catch (error) {
       this.logger.error('Error executing request through supervisor:', error);

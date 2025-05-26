@@ -580,6 +580,10 @@ export class SupervisorAgent extends BaseAgent {
 
       let targetAgentFromExternalCall = config?.agentId || null;
       if (targetAgentFromExternalCall) {
+        logger.debug(
+          `${depthIndent}SupervisorAgent (${callPath}): Received agentId in config: "${targetAgentFromExternalCall}"`
+        );
+
         const isValidAgent =
           targetAgentFromExternalCall in this.snakAgents ||
           targetAgentFromExternalCall === 'snak' ||
@@ -611,7 +615,19 @@ export class SupervisorAgent extends BaseAgent {
             `${depthIndent}SupervisorAgent (${callPath}): External config requests startNode: \"${targetNodeName}\"`
           );
           workflowConfig.startNode = targetNodeName;
+
+          // Set selectedSnakAgent to bypass supervisor's agent selection logic
+          if (targetAgentFromExternalCall in this.snakAgents) {
+            workflowConfig.selectedSnakAgent = targetAgentFromExternalCall;
+            logger.debug(
+              `${depthIndent}SupervisorAgent (${callPath}): Setting selectedSnakAgent to bypass agent selector: "${targetAgentFromExternalCall}"`
+            );
+          }
         }
+      } else {
+        logger.debug(
+          `${depthIndent}SupervisorAgent (${callPath}): No agentId provided in config, using default workflow`
+        );
       }
 
       const finalTargetNodeForSnak = workflowConfig.startNode;
@@ -625,11 +641,16 @@ export class SupervisorAgent extends BaseAgent {
             this.workflowController['agents'][finalTargetNodeForSnak].type ===
               AgentType.SNAK));
 
+      // Check if a specific agent was requested via agentId (bypass MemoryAgent)
+      const isSpecificAgentRequested =
+        config?.agentId && targetAgentFromExternalCall;
+
       if (
         this.memoryAgent &&
         finalTargetNodeForSnak &&
         isSnakAgent &&
-        workflowConfig.startNode !== this.memoryAgent.id
+        workflowConfig.startNode !== this.memoryAgent.id &&
+        !isSpecificAgentRequested // Don't route via MemoryAgent if specific agent requested
       ) {
         // Convert node name back to agent ID for selectedSnakAgent
         const originalAgentId =
@@ -641,7 +662,11 @@ export class SupervisorAgent extends BaseAgent {
         );
         workflowConfig.selectedSnakAgent = originalAgentId;
         workflowConfig.startNode = this.memoryAgent.id;
-      } else if (finalTargetNodeForSnak && isSnakAgent) {
+      } else if (
+        finalTargetNodeForSnak &&
+        isSnakAgent &&
+        !workflowConfig.selectedSnakAgent
+      ) {
         // Convert node name back to agent ID for selectedSnakAgent
         const originalAgentId =
           this.nodeNameToAgentId.get(finalTargetNodeForSnak) ||
@@ -651,6 +676,16 @@ export class SupervisorAgent extends BaseAgent {
           `${depthIndent}SupervisorAgent (${callPath}): Snak agent \"${finalTargetNodeForSnak}\" targeted. Setting selectedSnakAgent to bypass agent selector.`
         );
         workflowConfig.selectedSnakAgent = originalAgentId;
+      }
+
+      if (isSpecificAgentRequested && finalTargetNodeForSnak && isSnakAgent) {
+        // When specific agent is requested, bypass MemoryAgent and go directly to target
+        logger.debug(
+          `${depthIndent}SupervisorAgent (${callPath}): Specific agent requested via agentId. Bypassing MemoryAgent and routing directly to \"${finalTargetNodeForSnak}\".`
+        );
+        // Ensure we don't override the startNode with MemoryAgent
+        workflowConfig.startNode = finalTargetNodeForSnak;
+        // selectedSnakAgent should already be set above
       }
 
       try {
