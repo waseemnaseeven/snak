@@ -71,7 +71,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Initialize the Starknet agent
+   * Initialize the Snak Agent
    */
   public async init(): Promise<void> {
     try {
@@ -418,10 +418,9 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       // Optional streaming support - can be enabled based on config
       if (config?.enableStreaming) {
         try {
-          const stream = await this.agentReactExecutor.stream(
-            graphState,
-            runnableConfig
-          );
+          // Handle both cases: direct app or object with app property
+          const app = this.agentReactExecutor;
+          const stream = await app.stream(graphState, runnableConfig);
           const chunks = [];
           for await (const chunk of stream) {
             chunks.push(chunk);
@@ -433,7 +432,9 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         }
       }
 
-      const result = await this.agentReactExecutor.invoke(
+      // Handle both cases: direct app or object with app property
+      const app = this.agentReactExecutor;
+      const result = await app.invoke(
         graphState, // This is the state object for the graph
         runnableConfig // This is the config for the invoke call itself
       );
@@ -588,7 +589,9 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       }
 
       logger.debug('execute_call_data: Invoking agent with input message.');
-      const result = await this.agentReactExecutor.invoke(
+      // Handle both cases: direct app or object with app property
+      const app = this.agentReactExecutor;
+      const result = await app.invoke(
         {
           messages: [new HumanMessage({ content: input })],
         },
@@ -932,10 +935,10 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
               'SnakAgent (hybrid): Agent name is missing in configuration.'
             );
           }
-          if (!(agentConfig as any).bio) {
+          if (!(agentConfig as any).description) {
             // Consider defining a more specific type for agentConfig
             logger.warn(
-              'SnakAgent (hybrid): Agent bio is missing in configuration.'
+              'SnakAgent (hybrid): Agent description is missing in configuration.'
             );
           }
           if (

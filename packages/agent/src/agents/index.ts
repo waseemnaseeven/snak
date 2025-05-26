@@ -79,7 +79,7 @@ export class AgentSystem {
 
   constructor(config: AgentSystemConfig) {
     this.config = config;
-    logger.info('Initializing Agent System');
+    logger.info('Initializing Agent System\n');
   }
 
   /**
@@ -175,13 +175,12 @@ export class AgentSystem {
 
       // Register the SnakAgent with the SupervisorAgent
       if (this.supervisorAgent) {
-        // Ensure the agent ID starts with 'snak-' for WorkflowController validation
-        const baseId = this.agentConfig.id || 'main-agent';
-        const agentId = baseId.startsWith('snak-') ? baseId : `snak-${baseId}`;
+        // Use the agent ID as provided, no need to enforce 'snak-' prefix
+        const agentId = this.agentConfig.id || 'main-agent';
         const metadata = {
           name: this.agentConfig.name || 'Main SnakAgent',
-          description: `Main Starknet agent for ${this.agentConfig.name || 'the system'}`,
-          group: this.agentConfig.group || 'starknet',
+          description: `Main Snak agent for ${this.agentConfig.name || 'the system'}`,
+          group: this.agentConfig.group || 'snak',
         };
 
         this.supervisorAgent.registerSnakAgent(
@@ -290,8 +289,8 @@ export class AgentSystem {
   }
 
   /**
-   * Retrieves the Starknet agent (main agent).
-   * @returns The Starknet agent instance.
+   * Retrieves the Snak agent (main agent).
+   * @returns The Snak agent instance.
    * @throws Will throw an error if the agent system is not initialized.
    */
   public getSnakAgent(): any {

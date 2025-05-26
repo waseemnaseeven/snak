@@ -46,9 +46,11 @@ export enum AgentMode {
  */
 export interface RawAgentConfig {
   name: string;
-  bio?: string;
-  objectives?: string[];
-  knowledge?: string[];
+  group: string;
+  description: string;
+  lore: string[];
+  objectives: string[];
+  knowledge: string[];
   interval: number;
   plugins: string[];
   memory: MemoryConfig;
@@ -67,8 +69,7 @@ export interface AgentConfig {
   id: string;
   name: string;
   group: string;
-  description?: string;
-  prompt: SystemMessage;
+  description: string;
   interval: number;
   chatId: string;
   plugins: string[];
@@ -76,6 +77,7 @@ export interface AgentConfig {
   mcpServers?: Record<string, any>;
   mode: AgentMode;
   maxIterations: number;
+  prompt: SystemMessage;
 }
 
 export interface DatabaseCredentials {

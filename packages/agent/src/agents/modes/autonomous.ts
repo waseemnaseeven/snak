@@ -160,9 +160,7 @@ export const createAutonomousAgent = async (
       state: typeof GraphState.State
     ): Promise<{ messages: BaseMessage[] }> {
       if (!agent_config || !modelSelector) {
-        throw new Error(
-          'Agent configuration and ModelSelector are required.'
-        );
+        throw new Error('Agent configuration and ModelSelector are required.');
       }
 
       const lastMessage = state.messages[state.messages.length - 1];

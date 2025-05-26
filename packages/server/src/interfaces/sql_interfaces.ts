@@ -1,3 +1,5 @@
+import { AgentMode } from '@snakagent/core';
+
 export interface ConversationSQL {
   conversation_id: number;
   conversation_name: string;
@@ -13,19 +15,23 @@ export interface MessageSQL {
   created_at: Date;
 }
 
-export interface AgentPromptSQL {
-  bio: string;
-  lore: string[];
-  objectives: string[];
-  knowledge: string[];
+export interface AgentMemorySQL {
+  enabled: boolean;
+  short_term_memory_size: number;
 }
 
 export interface AgentConfigSQL {
   id: string;
   name: string;
   group: string;
-  prompt: any;
+  description: string;
+  lore: string[];
+  objectives: string[];
+  knowledge: string[];
+  system_prompt?: string; // Prompt pré-construit
   interval: number;
   plugins: string[];
-  memory: any;
+  memory: AgentMemorySQL;
+  mode: AgentMode;
+  max_iterations: number;
 }

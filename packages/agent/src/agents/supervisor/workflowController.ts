@@ -628,7 +628,7 @@ export class WorkflowController {
         return nextAgent;
       } else {
         logger.warn(
-          `WorkflowController[Exec:${execId}]: Router - Requested next agent "${nextAgent}" does not exist. Ending workflow.`
+          `WorkflowController[Exec:${execId}]: Router - Requested next agent "${nextAgent}" does not exist. Available agents: ${Object.keys(this.agents).join(', ')}. Ending workflow.`
         );
         return END;
       }
@@ -644,7 +644,7 @@ export class WorkflowController {
         return nextAgent;
       } else {
         logger.warn(
-          `WorkflowController[Exec:${execId}]: Router - Requested nextAgent "${nextAgent}" from additional_kwargs does not exist. Ending workflow.`
+          `WorkflowController[Exec:${execId}]: Router - Requested nextAgent "${nextAgent}" from additional_kwargs does not exist. Available agents: ${Object.keys(this.agents).join(', ')}. Ending workflow.`
         );
         return END;
       }
@@ -676,32 +676,31 @@ export class WorkflowController {
         return selectedAgent;
       }
 
-      // After supervisor, check if we have a specific Starknet agent to route to
-      const starknetAgents = Object.keys(this.agents).filter(
-        (id) =>
-          id.startsWith('starknet-') || this.agents[id].type === AgentType.SNAK
+      // After supervisor, check if we have any Snak agents to route to
+      const snakAgents = Object.keys(this.agents).filter(
+        (id) => this.agents[id].type === AgentType.SNAK
       );
 
-      if (starknetAgents.length > 0) {
+      if (snakAgents.length > 0) {
         // If we have multiple agents, prefer the agent-selector
-        if (starknetAgents.length > 1 && this.agents['agent-selector']) {
+        if (snakAgents.length > 1 && this.agents['agent-selector']) {
           logger.debug(
-            `WorkflowController[Exec:${execId}]: Router - From supervisor, multiple Starknet agents available, routing to "agent-selector"`
+            `WorkflowController[Exec:${execId}]: Router - From supervisor, multiple Snak agents available, routing to "agent-selector"`
           );
           return 'agent-selector';
         }
 
-        // Otherwise use the first available Starknet agent
+        // Otherwise use the first available Snak agent
         logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - From supervisor, routing to Starknet agent "${starknetAgents[0]}"`
+          `WorkflowController[Exec:${execId}]: Router - From supervisor, routing to Snak agent "${snakAgents[0]}"`
         );
-        return starknetAgents[0];
+        return snakAgents[0];
       }
 
-      // If no Starknet agent, try agent-selector
+      // If no Snak agent, try agent-selector
       if (this.agents['agent-selector']) {
         logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - From supervisor, no Starknet agent, routing to "agent-selector"`
+          `WorkflowController[Exec:${execId}]: Router - From supervisor, no Snak agent, routing to "agent-selector"`
         );
         return 'agent-selector';
       }
@@ -712,25 +711,24 @@ export class WorkflowController {
       return END;
     } else if (messageSource === 'agent-selector') {
       // agent-selector should have provided nextAgent, but if not, try to find a suitable agent
-      const starknetAgents = Object.keys(this.agents).filter(
-        (id) =>
-          id.startsWith('starknet-') || this.agents[id].type === AgentType.SNAK
+      const snakAgents = Object.keys(this.agents).filter(
+        (id) => this.agents[id].type === AgentType.SNAK
       );
 
-      if (starknetAgents.length > 0) {
+      if (snakAgents.length > 0) {
         logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - From agent-selector with no nextAgent, using first available Starknet agent "${starknetAgents[0]}"`
+          `WorkflowController[Exec:${execId}]: Router - From agent-selector with no nextAgent, using first available Snak agent "${snakAgents[0]}"`
         );
-        return starknetAgents[0];
+        return snakAgents[0];
       }
 
       logger.warn(
-        `WorkflowController[Exec:${execId}]: Router - From agent-selector with no nextAgent, no suitable agent found. Ending workflow.`
+        `WorkflowController[Exec:${execId}]: Router - From agent-selector with no nextAgent, no suitable Snak agent found. Ending workflow.`
       );
       return END;
     } else if (messageSource === 'tools') {
       // After tools, usually back to the agent that called the tools (often 'snak' or a specialized agent).
-      // This needs context. Assuming 'snak' as a general fallback.
+      // This needs context. Assuming 'snak-main' as a general fallback.
       const previousAgent = state.metadata?.lastActiveAgent || 'snak-main';
 
       if (this.agents[previousAgent]) {
@@ -740,17 +738,16 @@ export class WorkflowController {
         return previousAgent;
       }
 
-      // Fallback to any available Starknet agent
-      const starknetAgents = Object.keys(this.agents).filter(
-        (id) =>
-          id.startsWith('starknet-') || this.agents[id].type === AgentType.SNAK
+      // Fallback to any available Snak agent
+      const snakAgents = Object.keys(this.agents).filter(
+        (id) => this.agents[id].type === AgentType.SNAK
       );
 
-      if (starknetAgents.length > 0) {
+      if (snakAgents.length > 0) {
         logger.debug(
-          `WorkflowController[Exec:${execId}]: Router - From tools, previous agent not found, routing to available Starknet agent "${starknetAgents[0]}"`
+          `WorkflowController[Exec:${execId}]: Router - From tools, previous agent not found, routing to available Snak agent "${snakAgents[0]}"`
         );
-        return starknetAgents[0];
+        return snakAgents[0];
       }
 
       logger.warn(

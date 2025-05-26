@@ -12,7 +12,6 @@ import {
 import { Postgres } from '@snakagent/database';
 import { AgentConfig, ModelsConfig, ModelLevelConfig } from '@snakagent/core';
 import { AgentConfigSQL } from '../interfaces/sql_interfaces.js';
-import { createContextFromJson } from '@snakagent/agents';
 import { SystemMessage } from '@langchain/core/messages';
 
 @Injectable()
@@ -170,11 +169,6 @@ export class SupervisorService implements OnModuleInit {
 
       for (const agentConfig of existingAgents) {
         try {
-          // Parse agent prompt if it's a string
-          if (typeof agentConfig.prompt === 'string') {
-            agentConfig.prompt = this.parseAgentPrompt(agentConfig.prompt);
-          }
-
           // Create SnakAgent for this configuration
           const snakAgent = await this.createSnakAgentFromConfig(agentConfig);
 
@@ -182,7 +176,7 @@ export class SupervisorService implements OnModuleInit {
           if (this.supervisor && snakAgent) {
             const metadata = {
               name: agentConfig.name,
-              description: `Agent from group: ${agentConfig.group}`,
+              description: agentConfig.description,
               group: agentConfig.group,
             };
 
@@ -216,22 +210,6 @@ export class SupervisorService implements OnModuleInit {
     }
   }
 
-  private parseAgentPrompt(agent_prompt: any): any {
-    const str_without_double_quote: string = agent_prompt.replace(/"/g, '');
-    const agent_prompt_split: string[] = str_without_double_quote.split('{');
-
-    for (let i = 0; i < agent_prompt_split.length; i++) {
-      agent_prompt_split[i] = agent_prompt_split[i].replace(/}/g, '');
-    }
-
-    return {
-      bio: agent_prompt_split[0],
-      lore: agent_prompt_split[1].split(','),
-      objectives: agent_prompt_split[2].split(','),
-      knowledge: agent_prompt_split[3].split(','),
-    };
-  }
-
   private async createSnakAgentFromConfig(
     agentConfig: AgentConfigSQL
   ): Promise<any> {
@@ -244,14 +222,24 @@ export class SupervisorService implements OnModuleInit {
         port: parseInt(process.env.POSTGRES_PORT as string),
       };
 
-      const systemMessage = new SystemMessage(
-        createContextFromJson(agentConfig.prompt)
-      );
+      // Utiliser directement le system prompt pré-construit ou le construire si nécessaire
+      const systemPrompt =
+        agentConfig.system_prompt ||
+        this.buildSystemPromptFromConfig({
+          name: agentConfig.name,
+          description: agentConfig.description,
+          lore: agentConfig.lore || [],
+          objectives: agentConfig.objectives || [],
+          knowledge: agentConfig.knowledge || [],
+        });
+
+      const systemMessage = new SystemMessage(systemPrompt);
 
       const jsonConfig: AgentConfig = {
         id: agentConfig.id,
         name: agentConfig.name,
         group: agentConfig.group,
+        description: agentConfig.description,
         prompt: systemMessage,
         plugins: agentConfig.plugins,
         interval: agentConfig.interval,
@@ -260,8 +248,8 @@ export class SupervisorService implements OnModuleInit {
           shortTermMemorySize: agentConfig.memory.short_term_memory_size,
         },
         chatId: `agent_${agentConfig.id}`,
-        maxIterations: 15,
-        mode: AgentMode.INTERACTIVE,
+        maxIterations: agentConfig.max_iterations || 15,
+        mode: agentConfig.mode || AgentMode.INTERACTIVE,
       };
 
       // Get the ModelSelector from the existing supervisor
@@ -296,6 +284,57 @@ export class SupervisorService implements OnModuleInit {
   }
 
   /**
+   * Helper method to build system prompt from config components
+   */
+  private buildSystemPromptFromConfig(promptComponents: {
+    name?: string;
+    description?: string;
+    lore: string[];
+    objectives: string[];
+    knowledge: string[];
+  }): string {
+    const contextParts: string[] = [];
+
+    // Identity Section
+    if (promptComponents.name) {
+      contextParts.push(`Your name : [${promptComponents.name}]`);
+    }
+    if (promptComponents.description) {
+      contextParts.push(`Your Description : [${promptComponents.description}]`);
+    }
+
+    // Lore Section
+    if (
+      Array.isArray(promptComponents.lore) &&
+      promptComponents.lore.length > 0
+    ) {
+      contextParts.push(`Your lore : [${promptComponents.lore.join(']\n[')}]`);
+    }
+
+    // Objectives Section
+    if (
+      Array.isArray(promptComponents.objectives) &&
+      promptComponents.objectives.length > 0
+    ) {
+      contextParts.push(
+        `Your objectives : [${promptComponents.objectives.join(']\n[')}]`
+      );
+    }
+
+    // Knowledge Section
+    if (
+      Array.isArray(promptComponents.knowledge) &&
+      promptComponents.knowledge.length > 0
+    ) {
+      contextParts.push(
+        `Your knowledge : [${promptComponents.knowledge.join(']\n[')}]`
+      );
+    }
+
+    return contextParts.join('\n');
+  }
+
+  /**
    * Register a new agent with the supervisor
    */
   async registerAgentWithSupervisor(
@@ -323,7 +362,7 @@ export class SupervisorService implements OnModuleInit {
       // Check if it's an AgentSystem or a SnakAgent
       if (agent instanceof AgentSystem) {
         // Extract the SnakAgent from the AgentSystem
-        const extractedAgent = agent.getSupervisor()?.getSnakAgent();
+        const extractedAgent = agent.getSnakAgent();
 
         if (!extractedAgent) {
           throw new Error('Failed to extract SnakAgent from AgentSystem');

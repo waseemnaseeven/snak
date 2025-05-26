@@ -1,16 +1,8 @@
-
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-CREATE TYPE agent_prompt AS (
-    bio TEXT,
-    lore TEXT[] ,
-    objectives TEXT[],
-    knowledge TEXT[]
-);
-          
 CREATE TYPE memory AS (
-    memory BOOLEAN,
-    shortTermMemorySize INTEGER
+    enabled BOOLEAN,
+    short_term_memory_size INTEGER
 );
 
 CREATE TYPE model AS (
@@ -23,10 +15,16 @@ CREATE TABLE IF NOT EXISTS agents (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     "group" VARCHAR(255) NOT NULL DEFAULT 'default_group',
-    prompt agent_prompt NOT NULL,
+    description TEXT NOT NULL,
+    lore TEXT[] NOT NULL DEFAULT '{}',
+    objectives TEXT[] NOT NULL DEFAULT '{}',
+    knowledge TEXT[] NOT NULL DEFAULT '{}',
+    system_prompt TEXT, -- Prompt pré-construit
     interval INTEGER NOT NULL DEFAULT 5,
     plugins TEXT[] NOT NULL DEFAULT '{}',
-    memory memory NOT NULL DEFAULT ROW(false, 5)::memory
+    memory memory NOT NULL DEFAULT ROW(false, 5)::memory,
+    mode VARCHAR(50) NOT NULL DEFAULT 'interactive',
+    max_iterations INTEGER NOT NULL DEFAULT 15
 );
 
 CREATE TABLE IF NOT EXISTS agent_iterations (

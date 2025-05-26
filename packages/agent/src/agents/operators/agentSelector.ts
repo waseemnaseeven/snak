@@ -1,6 +1,11 @@
 import { BaseAgent, AgentType, IAgent } from '../core/baseAgent.js';
 import { logger } from '@snakagent/core';
-import { BaseMessage, AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import {
+  BaseMessage,
+  AIMessage,
+  HumanMessage,
+  SystemMessage,
+} from '@langchain/core/messages';
 import { ModelSelector } from './modelSelector.js';
 import {
   agentSelectionPrompt,
@@ -9,15 +14,14 @@ import {
   defaultClarificationMessage,
   errorFallbackMessage,
   noValidAgentMessage,
-  AgentSelectionPromptParams
 } from '../../prompt/agentSelectorPrompts.js';
 
 export interface AgentInfo {
   id: string;
   type: AgentType;
+  name: string;
+  group: string;
   description: string;
-  name?: string;
-  group?: string;
   metadata?: Record<string, any>;
 }
 
@@ -27,6 +31,10 @@ export interface AgentSelectionConfig {
   debug?: boolean;
 }
 
+/**
+ * AgentSelector is responsible for analyzing user queries and determining
+ * which specialized agent should handle each request.
+ */
 export class AgentSelector extends BaseAgent {
   private availableAgents: Record<string, IAgent>;
   private agentInfo: Record<string, AgentInfo> = {};
@@ -39,7 +47,6 @@ export class AgentSelector extends BaseAgent {
     this.modelSelector = config.modelSelector;
     this.debug = config.debug || false;
 
-    // Initialiser les informations sur les agents
     this.updateAgentInfo();
   }
 
@@ -52,9 +59,7 @@ export class AgentSelector extends BaseAgent {
     }
 
     if (Object.keys(this.availableAgents).length === 0) {
-      logger.warn(
-        'AgentSelector: No available agents provided for selection'
-      );
+      logger.warn('AgentSelector: No available agents provided for selection');
     } else {
       logger.debug(
         `AgentSelector: Initialized with ${Object.keys(this.availableAgents).length} available agents`
@@ -63,7 +68,8 @@ export class AgentSelector extends BaseAgent {
   }
 
   /**
-   * Met à jour la liste des agents disponibles
+   * Updates the list of available agents
+   * @param agents - The new set of available agents
    */
   public setAvailableAgents(agents: Record<string, IAgent>): void {
     this.availableAgents = agents;
@@ -71,24 +77,24 @@ export class AgentSelector extends BaseAgent {
   }
 
   /**
-   * Met à jour les informations descriptives sur chaque agent
+   * Updates descriptive information for each agent
+   * @private
    */
   private updateAgentInfo(): void {
     this.agentInfo = {};
 
     Object.entries(this.availableAgents).forEach(([id, agent]) => {
-      let description = this.getAgentDescription(id, agent.type);
       let name: string | undefined = undefined;
       let group: string | undefined = undefined;
+      let description: string | undefined = undefined;
 
-      // Try to get more specific info from agent.getAgentConfig() if available
       if (typeof (agent as any).getAgentConfig === 'function') {
         try {
           const agentConfig = (agent as any).getAgentConfig();
           if (agentConfig) {
-            description = agentConfig.description || description;
             name = agentConfig.name || name;
             group = agentConfig.group || group;
+            description = agentConfig.description || description;
           }
         } catch (e) {
           logger.debug(`Could not retrieve agent config for ${id}: ${e}`);
@@ -98,12 +104,11 @@ export class AgentSelector extends BaseAgent {
       const info: AgentInfo = {
         id,
         type: agent.type,
-        description,
-        name,
-        group,
+        name: name || '',
+        group: group || '',
+        description: description || '',
       };
 
-      // Extraire les métadonnées (name, group, description, etc.)
       // Metadata can override info from getAgentConfig if present
       if ((agent as any).metadata) {
         const metadata = (agent as any).metadata;
@@ -111,7 +116,6 @@ export class AgentSelector extends BaseAgent {
         if (metadata.group) info.group = metadata.group;
         if (metadata.description) info.description = metadata.description;
 
-        // Stocker toutes les métadonnées pour une utilisation ultérieure
         info.metadata = { ...metadata };
       }
 
@@ -122,7 +126,6 @@ export class AgentSelector extends BaseAgent {
       logger.debug(
         `AgentSelector: Updated info for ${Object.keys(this.agentInfo).length} agents`
       );
-      // Log détaillé des agents disponibles en mode debug
       Object.values(this.agentInfo).forEach((agent) => {
         logger.debug(
           `Agent ${agent.id}: ${agent.name || 'unnamed'} (${agent.group || 'no group'}) - ${agent.description?.substring(0, 50)}...`
@@ -131,42 +134,17 @@ export class AgentSelector extends BaseAgent {
     }
   }
 
+  /**
+   * Executes agent selection based on the input query
+   * @param input - The user query as string or BaseMessage
+   * @param _config - Optional configuration (unused)
+   * @returns AIMessage with the selected agent or clarification request
+   */
   public async execute(
     input: string | BaseMessage,
     _config?: Record<string, any>
   ): Promise<AIMessage> {
-    let queryString: string;
-    if (typeof input === 'string') {
-      queryString = input;
-    } else if (input instanceof BaseMessage) {
-      if (typeof input.content === 'string') {
-        queryString = input.content;
-      } else if (Array.isArray(input.content)) {
-        // Handle MessageContentComplex[] by joining or serializing
-        queryString = input.content
-          .map((part) => {
-            if (typeof part === 'string') {
-              return part;
-            }
-            switch (part.type) {
-              case 'text':
-                return part.text || '';
-              case 'image_url':
-                // Represent image with a placeholder or serialize URL
-                return '[Image]'; // Or: typeof part.image_url === 'string' ? part.image_url : JSON.stringify(part.image_url)
-              default:
-                return '';
-            }
-          })
-          .join(' ');
-      } else {
-        // Fallback for other MessageContent types if necessary, or if input.content is a non-array object
-        queryString = JSON.stringify(input.content);
-      }
-    } else {
-      // This path should ideally not be hit due to type signature
-      queryString = JSON.stringify(input);
-    }
+    const queryString = this.extractQueryString(input);
 
     if (this.debug) {
       logger.debug(
@@ -174,7 +152,7 @@ export class AgentSelector extends BaseAgent {
       );
     }
 
-    // Vérifie d'abord s'il y a une mention explicite d'un agent
+    // Check for explicit agent mention first
     const explicitAgent = this.checkForExplicitAgentMention(queryString);
     if (explicitAgent) {
       if (this.debug) {
@@ -185,12 +163,51 @@ export class AgentSelector extends BaseAgent {
       return this.createSelectionResponse(explicitAgent.id, queryString);
     }
 
-    // Sinon, utiliser le modèle pour analyser la requête et déterminer l'agent approprié
+    // Otherwise, use model to analyze query and determine appropriate agent
     return await this.analyzeQueryWithModel(queryString);
   }
 
+  /**
+   * Extracts query string from various input types
+   * @private
+   */
+  private extractQueryString(input: string | BaseMessage): string {
+    if (typeof input === 'string') {
+      return input;
+    }
+
+    if (input instanceof BaseMessage) {
+      if (typeof input.content === 'string') {
+        return input.content;
+      } else if (Array.isArray(input.content)) {
+        return input.content
+          .map((part) => {
+            if (typeof part === 'string') {
+              return part;
+            }
+            switch (part.type) {
+              case 'text':
+                return part.text || '';
+              case 'image_url':
+                return '[Image]';
+              default:
+                return '';
+            }
+          })
+          .join(' ');
+      } else {
+        return JSON.stringify(input.content);
+      }
+    }
+
+    return JSON.stringify(input);
+  }
+
+  /**
+   * Checks for explicit agent mentions in the query using various patterns
+   * @private
+   */
   private checkForExplicitAgentMention(query: string): AgentInfo | null {
-    // Patterns de détection
     const idPattern = /agent(?:\s+id)?\s+(\d+|[a-zA-Z_-]+)/i;
     const namePattern = /agent (?:named|called) ["']?([a-zA-Z_-]+)["']?/i;
     const groupPattern =
@@ -198,13 +215,13 @@ export class AgentSelector extends BaseAgent {
     const groupNamePattern =
       /(?:use|with|from) (?:the|a)? ["']?([a-zA-Z_-]+)["']? ["']?([a-zA-Z_-]+)["']?/i;
 
-    // Chercher les combinaisons groupe+nom
+    // Look for group+name combinations
     const groupNameMatch = query.match(groupNamePattern);
     if (groupNameMatch && groupNameMatch[1] && groupNameMatch[2]) {
       const potentialGroup = groupNameMatch[1].toLowerCase();
       const potentialName = groupNameMatch[2].toLowerCase();
 
-      // Cherche un agent avec ce groupe et ce nom exacts
+      // Look for exact group and name match
       for (const agent of Object.values(this.agentInfo)) {
         if (
           agent.group?.toLowerCase() === potentialGroup &&
@@ -214,7 +231,7 @@ export class AgentSelector extends BaseAgent {
         }
       }
 
-      // Si pas trouvé, cherche avec groupe exact et nom partiel
+      // If not found, look for exact group and partial name match
       for (const agent of Object.values(this.agentInfo)) {
         if (
           agent.group?.toLowerCase() === potentialGroup &&
@@ -225,7 +242,7 @@ export class AgentSelector extends BaseAgent {
       }
     }
 
-    // Vérifier la mention par ID
+    // Check for ID mention
     const idMatch = query.match(idPattern);
     if (idMatch && idMatch[1]) {
       const agentId = idMatch[1];
@@ -236,7 +253,7 @@ export class AgentSelector extends BaseAgent {
       }
     }
 
-    // Vérifier la mention par nom
+    // Check for name mention
     const nameMatch = query.match(namePattern);
     if (nameMatch && nameMatch[1]) {
       const agentName = nameMatch[1].toLowerCase();
@@ -252,7 +269,7 @@ export class AgentSelector extends BaseAgent {
       }
     }
 
-    // Vérifier la mention par groupe
+    // Check for group mention
     const groupMatch = query.match(groupPattern);
     if (groupMatch && groupMatch[1]) {
       const groupName = groupMatch[1].toLowerCase();
@@ -268,6 +285,10 @@ export class AgentSelector extends BaseAgent {
     return null;
   }
 
+  /**
+   * Analyzes the query using the model to determine the appropriate agent
+   * @private
+   */
   private async analyzeQueryWithModel(query: string): Promise<AIMessage> {
     if (!this.modelSelector) {
       logger.warn(
@@ -277,17 +298,19 @@ export class AgentSelector extends BaseAgent {
     }
 
     try {
-      // Créer une description complète des agents disponibles avec tous leurs attributs
       const agentDescriptions = Object.entries(this.agentInfo)
         .map(([id, info]) => {
           const name = info.name || id;
-          const group = info.group ? ` [Group: ${info.group}]` : '';
+          const group = info.group || 'No group';
           const description = info.description || 'No description available';
-
-          // Format simplifié : nom + groupe + description
-          return `- ${name}${group}: ${description}`;
+          return `  {
+    "id": "${id}",
+    "name": "${name}",
+    "group": "${group}",
+    "description": "${description}"
+  }`;
         })
-        .join('\n');
+        .join(',\n');
 
       if (this.debug) {
         logger.debug(
@@ -295,16 +318,11 @@ export class AgentSelector extends BaseAgent {
         );
       }
 
-      const promptParams: AgentSelectionPromptParams = {
-        query,
-        agentDescriptions
-      };
-
       const systemPrompt = new SystemMessage({
-        content: agentSelectionSystemPrompt()
+        content: agentSelectionSystemPrompt(agentDescriptions),
       });
       const humanPrompt = new HumanMessage({
-        content: agentSelectionPrompt(promptParams)
+        content: agentSelectionPrompt(query),
       });
 
       const model = await this.modelSelector.getModelForTask([], 'fast');
@@ -318,34 +336,9 @@ export class AgentSelector extends BaseAgent {
         logger.debug(`AgentSelector: Model raw response: "${content}"`);
       }
 
-      // Traiter les cas de clarification
+      // Handle clarification cases
       if (content.startsWith('NEED_CLARIFICATION')) {
-        try {
-          const jsonStartIndex = content.indexOf('{');
-          const jsonEndIndex = content.lastIndexOf('}') + 1;
-          if (jsonStartIndex > 0 && jsonEndIndex > jsonStartIndex) {
-            const jsonContent = content.substring(jsonStartIndex, jsonEndIndex);
-            const clarificationData = JSON.parse(jsonContent);
-
-            return this.createClarificationResponse(
-              clarificationData.possibleAgents || [],
-              clarificationData.missingInfo || 'more specific information',
-              clarificationData.clarificationQuestion ||
-                defaultClarificationMessage()
-            );
-          }
-        } catch (jsonError) {
-          logger.error(
-            `AgentSelector: Error parsing clarification JSON: ${jsonError}`
-          );
-        }
-
-        // Fallback si le parsing JSON échoue
-        return this.createClarificationResponse(
-          [],
-          'agent selection criteria',
-          defaultClarificationMessage()
-        );
+        return this.handleClarificationResponse(content);
       }
 
       if (content.startsWith('NO_MATCHING_AGENT')) {
@@ -356,81 +349,9 @@ export class AgentSelector extends BaseAgent {
         );
       }
 
-      // Extraire l'ID de l'agent - prendre le premier mot/ligne qui correspond à un agent existant
-      const lines = content.split(/[\n\r]+/);
-      let agentId = '';
-
-      // Essayer d'abord la première ligne complète comme ID
-      const firstLine = lines[0].trim();
-      if (this.availableAgents[firstLine]) {
-        agentId = firstLine;
-      } else {
-        // Sinon, diviser en tokens et chercher un ID valide
-        const tokens = content.split(/[\s,;:]+/);
-        for (const token of tokens) {
-          const cleanToken = token.trim().replace(/[^\w-]/g, '');
-          if (cleanToken && this.availableAgents[cleanToken]) {
-            agentId = cleanToken;
-            break;
-          }
-        }
-      }
-
-      if (agentId && this.availableAgents[agentId]) {
-        logger.debug(
-          `AgentSelector: Selected agent "${agentId}" for query "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`
-        );
-        return this.createSelectionResponse(agentId, query);
-      } else {
-        // Vérifier si un agent pourrait correspondre partiellement
-        const possibleAgents = Object.keys(this.availableAgents).filter(
-          (id) =>
-            content.toLowerCase().includes(id.toLowerCase()) ||
-            (this.agentInfo[id]?.name &&
-              content
-                .toLowerCase()
-                .includes(this.agentInfo[id].name!.toLowerCase()))
-        );
-
-        if (possibleAgents.length === 1) {
-          // Si un seul agent correspond partiellement, l'utiliser
-          logger.debug(
-            `AgentSelector: Found partial match with agent "${possibleAgents[0]}"`
-          );
-          return this.createSelectionResponse(possibleAgents[0], query);
-        }
-
-        if (possibleAgents.length > 1) {
-          // Si plusieurs agents correspondent partiellement, demander une clarification
-          return this.createClarificationResponse(
-            possibleAgents,
-            'specific agent selection',
-            "I found multiple agents that could handle this request. Could you specify which one you'd like to use?"
-          );
-        }
-
-        // Si aucun agent ne correspond, essayer de rediriger vers l'agent par défaut
-        if (this.availableAgents['snak']) {
-          logger.warn(
-            `AgentSelector: No matching agent found for "${content}", defaulting to "snak"`
-          );
-          return this.createSelectionResponse('snak', query);
-        }
-
-        // En dernier recours, demander une clarification
-        logger.warn(
-          `AgentSelector: Unable to identify any agent from model response: "${content}"`
-        );
-        return this.createClarificationResponse(
-          [],
-          'valid agent identifier',
-          noValidAgentMessage()
-        );
-      }
+      return this.extractAgentFromResponse(content, query);
     } catch (error) {
-      logger.error(
-        `AgentSelector: Error during model analysis: ${error}`
-      );
+      logger.error(`AgentSelector: Error during model analysis: ${error}`);
       return this.createClarificationResponse(
         [],
         'clear request intent',
@@ -439,23 +360,125 @@ export class AgentSelector extends BaseAgent {
     }
   }
 
-  private getAgentDescription(id: string, type: AgentType): string {
-    if (id === 'supervisor') {
-      return 'The main coordinator agent that orchestrates system operations';
-    } else if (id === 'model-selector') {
-      return 'Responsible for selecting the appropriate AI model for each task';
-    } else if (id === 'memory') {
-      return 'Manages persisting and retrieving memories across conversations';
-    } else if (id === 'tools') {
-      return 'Handles executing various tools and external integrations';
-    } else if (id.startsWith('snak')) {
-      return 'A general-purpose agent created by the user to handle various tasks';
-    } else if (type === AgentType.OPERATOR) {
-      return 'An operator agent that performs specific system functions';
+  /**
+   * Handles clarification responses from the model
+   * @private
+   */
+  private handleClarificationResponse(content: string): AIMessage {
+    try {
+      const jsonStartIndex = content.indexOf('{');
+      const jsonEndIndex = content.lastIndexOf('}') + 1;
+      if (jsonStartIndex > 0 && jsonEndIndex > jsonStartIndex) {
+        const jsonContent = content.substring(jsonStartIndex, jsonEndIndex);
+        const clarificationData = JSON.parse(jsonContent);
+
+        return this.createClarificationResponse(
+          clarificationData.possibleAgents || [],
+          clarificationData.missingInfo || 'more specific information',
+          clarificationData.clarificationQuestion ||
+            defaultClarificationMessage()
+        );
+      }
+    } catch (jsonError) {
+      logger.error(
+        `AgentSelector: Error parsing clarification JSON: ${jsonError}`
+      );
     }
-    return 'An agent in the system';
+
+    return this.createClarificationResponse(
+      [],
+      'agent selection criteria',
+      defaultClarificationMessage()
+    );
   }
 
+  /**
+   * Extracts agent ID from model response
+   * @private
+   */
+  private extractAgentFromResponse(content: string, query: string): AIMessage {
+    const lines = content.split(/[\n\r]+/);
+    let agentId = '';
+
+    // Try first line as complete ID
+    const firstLine = lines[0].trim();
+    if (this.availableAgents[firstLine]) {
+      agentId = firstLine;
+    } else {
+      // Otherwise, split into tokens and look for valid ID
+      const tokens = content.split(/[\s,;:]+/);
+      for (const token of tokens) {
+        const cleanToken = token.trim().replace(/[^\w-]/g, '');
+        if (cleanToken && this.availableAgents[cleanToken]) {
+          agentId = cleanToken;
+          break;
+        }
+      }
+    }
+
+    if (agentId && this.availableAgents[agentId]) {
+      logger.debug(
+        `AgentSelector: Selected agent "${agentId}" for query "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`
+      );
+      return this.createSelectionResponse(agentId, query);
+    }
+
+    return this.handlePartialMatches(content, query);
+  }
+
+  /**
+   * Handles cases where no exact match is found but there might be partial matches
+   * @private
+   */
+  private handlePartialMatches(content: string, query: string): AIMessage {
+    // Check if an agent could match partially
+    const possibleAgents = Object.keys(this.availableAgents).filter(
+      (id) =>
+        content.toLowerCase().includes(id.toLowerCase()) ||
+        (this.agentInfo[id]?.name &&
+          content
+            .toLowerCase()
+            .includes(this.agentInfo[id].name!.toLowerCase()))
+    );
+
+    if (possibleAgents.length === 1) {
+      logger.debug(
+        `AgentSelector: Found partial match with agent "${possibleAgents[0]}"`
+      );
+      return this.createSelectionResponse(possibleAgents[0], query);
+    }
+
+    if (possibleAgents.length > 1) {
+      return this.createClarificationResponse(
+        possibleAgents,
+        'specific agent selection',
+        "I found multiple agents that could handle this request. Could you specify which one you'd like to use?"
+      );
+    }
+
+    // If no agent matches, try to redirect to default agent
+    if (this.availableAgents['snak']) {
+      logger.warn(
+        `AgentSelector: No matching agent found, defaulting to "snak"`
+      );
+      return this.createSelectionResponse('snak', query);
+    }
+
+    // Last resort, ask for clarification
+    logger.warn(
+      `AgentSelector: Unable to identify any agent from model response`
+    );
+    return this.createClarificationResponse(
+      [],
+      'valid agent identifier',
+      noValidAgentMessage()
+    );
+  }
+
+  /**
+   * Creates a successful agent selection response
+   * @private
+   */
   private createSelectionResponse(
     agentId: string,
     originalQuery: string
@@ -470,6 +493,10 @@ export class AgentSelector extends BaseAgent {
     });
   }
 
+  /**
+   * Creates a clarification request response when agent selection is ambiguous
+   * @private
+   */
   private createClarificationResponse(
     possibleAgents: string[],
     missingInfo: string,
@@ -480,18 +507,28 @@ export class AgentSelector extends BaseAgent {
       const agentsList = possibleAgents
         .map((id) => {
           const agent = this.agentInfo[id];
-          if (!agent) return id;
+          if (!agent)
+            return `  {
+    "id": "${id}",
+    "name": "${id}",
+    "group": "Unknown",
+    "description": "No description available"
+  }`;
 
           const name = agent.name || id;
-          const group = agent.group ? ` [Group: ${agent.group}]` : '';
+          const group = agent.group || 'No group';
           const description = agent.description || 'No description available';
 
-          // Format simplifié : nom + groupe + description
-          return `- ${name}${group}: ${description}`;
+          return `  {
+    "id": "${id}",
+    "name": "${name}",
+    "group": "${group}",
+    "description": "${description}"
+  }`;
         })
-        .join('\n');
+        .join(',\n');
 
-      agentOptions = `\n\nThese agents might be able to help:\n${agentsList}`;
+      agentOptions = `\n\nThese agents might be able to help:\n[\n${agentsList}\n]`;
     }
 
     return new AIMessage({

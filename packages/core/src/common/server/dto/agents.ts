@@ -1,21 +1,28 @@
 import { IsNotEmpty } from 'class-validator';
+import { AgentMode } from '../../agent.js';
 
 // TODO Create a common interfaces for the DTO of SNAK and SNAK-AP
 
-interface AgentPrompt {
-  bio: string;
+// Interface unifiée pour la mémoire
+export interface AgentMemory {
+  enabled: boolean;
+  short_term_memory_size: number;
+}
+
+// Configuration d'agent pour la base de données - Interface unifiée
+export interface AgentConfigDatabase {
+  name: string;
+  group: string;
+  description: string;
   lore: string[];
   objectives: string[];
   knowledge: string[];
-}
-
-// TODO Need to change to the real agent config
-export interface AgentConfigDatabase {
-  name: string;
-  prompt: AgentPrompt;
-  group: string;
+  system_prompt?: string; // Prompt pré-construit (optionnel pour la création)
   interval: number;
   plugins: string[];
+  memory: AgentMemory;
+  mode: AgentMode;
+  max_iterations: number;
 }
 
 export class AddAgentRequestDTO {
@@ -36,25 +43,19 @@ export interface MessageRequest {
   user_request: string;
 }
 
-interface AgentMemory {
-  enabled: boolean;
-  short_term_memory_size: number;
-}
-
-interface AgentPrompt {
-  bio: string;
+export class AgentInitializationDTO {
+  name: string;
+  group: string;
+  description: string;
   lore: string[];
   objectives: string[];
   knowledge: string[];
-}
-
-export class AgentInitializationDTO {
-  name: string;
-  prompt: AgentPrompt;
-  group: string;
+  system_prompt?: string;
   interval: number;
   plugins: string[];
   memory: AgentMemory;
+  mode: AgentMode;
+  max_iterations: number;
 }
 
 export class InitializesRequestDTO {

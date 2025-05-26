@@ -39,7 +39,6 @@ interface AgentMemory {
 }
 
 interface AgentPrompt {
-  bio: string;
   lore: string[];
   objectives: string[];
   knowledge: string[];
@@ -48,6 +47,7 @@ interface AgentPrompt {
 export class AgentInitializationDTO {
   name: string;
   group: string;
+  description: string;
   prompt: AgentPrompt;
   interval: number;
   plugins: string[];

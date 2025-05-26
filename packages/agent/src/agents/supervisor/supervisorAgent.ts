@@ -53,6 +53,8 @@ export class SupervisorAgent extends BaseAgent {
   private checkpointEnabled: boolean = false;
   private agentSelector: AgentSelector | null = null;
   private snakAgents: Record<string, SnakAgent> = {};
+  private nodeNameToAgentId: Map<string, string> = new Map();
+  private agentIdToNodeName: Map<string, string> = new Map();
 
   private static instance: SupervisorAgent | null = null;
 
@@ -91,7 +93,7 @@ export class SupervisorAgent extends BaseAgent {
   /**
    * Initializes the supervisor and all agents under its control.
    * This method sets up the model selection agent, memory agent (if enabled),
-   * the main Starknet agent, the tools orchestrator, and the workflow controller.
+   * the main Snak agent, the tools orchestrator, and the workflow controller.
    * It also initializes metrics.
    * @throws Will throw an error if initialization of any critical component fails.
    */
@@ -169,8 +171,8 @@ export class SupervisorAgent extends BaseAgent {
 
   /**
    * Initializes the WorkflowController with all available agents.
-   * @param allowNoSnakAgents If true, allows initialization even if there are no Starknet agents
-   * @throws Will throw an error if essential agents like the Starknet agent are missing.
+   * @param allowNoSnakAgents If true, allows initialization even if there are no Snak execution agents
+   * @throws Will throw an error if essential agents like the Snak agent are missing.
    */
   private async initializeWorkflowController(
     allowNoSnakAgents: boolean = false
@@ -181,8 +183,21 @@ export class SupervisorAgent extends BaseAgent {
         supervisor: this,
       };
 
+      // Add SnakAgents using their node names instead of original IDs
       Object.entries(this.snakAgents).forEach(([id, agent]) => {
-        allAgents[id] = agent;
+        const nodeName = this.agentIdToNodeName.get(id);
+        if (nodeName) {
+          allAgents[nodeName] = agent;
+          logger.debug(
+            `SupervisorAgent: Added SnakAgent "${id}" to workflow with node name "${nodeName}"`
+          );
+        } else {
+          // Fallback to original ID if no node name mapping exists (for backward compatibility)
+          allAgents[id] = agent;
+          logger.warn(
+            `SupervisorAgent: No node name mapping found for agent "${id}", using original ID`
+          );
+        }
       });
 
       if (
@@ -202,22 +217,20 @@ export class SupervisorAgent extends BaseAgent {
       });
 
       const snakAgentsCount = Object.keys(allAgents).filter(
-        (id) =>
-          id.startsWith('snak-') ||
-          (allAgents[id] && allAgents[id].type === AgentType.SNAK)
+        (id) => allAgents[id] && allAgents[id].type === AgentType.SNAK
       ).length;
 
       if (snakAgentsCount === 0 && !allowNoSnakAgents) {
         throw new Error(
-          'WorkflowController requires at least one Starknet execution agent.'
+          'WorkflowController requires at least one Snak execution agent.'
         );
       } else if (snakAgentsCount === 0) {
         logger.warn(
-          'WorkflowController: No Starknet agents available yet, but proceeding with initialization anyway'
+          'WorkflowController: No Snak agents available yet, but proceeding with initialization anyway'
         );
       } else {
         logger.info(
-          `WorkflowController: Found ${snakAgentsCount} Starknet execution agents available`
+          `WorkflowController: Found ${snakAgentsCount} Snak execution agents available`
         );
       }
 
@@ -336,7 +349,7 @@ export class SupervisorAgent extends BaseAgent {
         this.executionDepth--;
         return new AIMessage({
           content:
-            'Error: Supervisor critical depth reached. StarknetAgent not available for direct execution. Please try a simpler query.',
+            'Error: Supervisor critical depth reached. SnakAgent not available for direct execution. Please try a simpler query.',
           additional_kwargs: { from: 'supervisor', final: true },
         });
       } catch (error) {
@@ -424,8 +437,13 @@ export class SupervisorAgent extends BaseAgent {
         logger.debug(
           `${depthIndent}SupervisorAgent (${callPath}): Pre-selected agent "${preSelectedAgent}" found, bypassing AgentSelector entirely.`
         );
-        responseContent = `Supervisor: Routing directly to pre-selected agent "${preSelectedAgent}".`;
-        nextAgent = preSelectedAgent;
+
+        // Convert agent ID to node name for routing
+        const nodeName = this.agentIdToNodeName.get(preSelectedAgent);
+        const routingTarget = nodeName || preSelectedAgent; // Fallback to original ID if no mapping
+
+        responseContent = `Supervisor: Routing directly to pre-selected agent "${preSelectedAgent}" (node: ${routingTarget}).`;
+        nextAgent = routingTarget;
 
         this.executionDepth--;
         const directiveMessage = new AIMessage({
@@ -468,8 +486,8 @@ export class SupervisorAgent extends BaseAgent {
             logger.debug(
               `${depthIndent}SupervisorAgent (${callPath}): AgentSelector needs clarification from user. Ending workflow.`
             );
-          } else if (selectionOutcome.additional_kwargs?.next_agent) {
-            nextAgent = selectionOutcome.additional_kwargs.next_agent as string;
+          } else if (selectionOutcome.additional_kwargs?.nextAgent) {
+            nextAgent = selectionOutcome.additional_kwargs.nextAgent as string;
           }
 
           if (
@@ -575,18 +593,37 @@ export class SupervisorAgent extends BaseAgent {
           );
           targetAgentFromExternalCall = null;
         } else {
+          // Convert agent ID to node name if it's a SnakAgent
+          let targetNodeName = targetAgentFromExternalCall;
+          if (targetAgentFromExternalCall in this.snakAgents) {
+            const nodeName = this.agentIdToNodeName.get(
+              targetAgentFromExternalCall
+            );
+            if (nodeName) {
+              targetNodeName = nodeName;
+              logger.debug(
+                `${depthIndent}SupervisorAgent (${callPath}): Converting agent ID "${targetAgentFromExternalCall}" to node name "${targetNodeName}"`
+              );
+            }
+          }
+
           logger.debug(
-            `${depthIndent}SupervisorAgent (${callPath}): External config requests startNode: \"${targetAgentFromExternalCall}\"`
+            `${depthIndent}SupervisorAgent (${callPath}): External config requests startNode: \"${targetNodeName}\"`
           );
-          workflowConfig.startNode = targetAgentFromExternalCall;
+          workflowConfig.startNode = targetNodeName;
         }
       }
 
       const finalTargetNodeForSnak = workflowConfig.startNode;
       const isSnakAgent =
         finalTargetNodeForSnak &&
-        (this.snakAgents[finalTargetNodeForSnak] ||
-          finalTargetNodeForSnak.startsWith('snak-'));
+        (this.nodeNameToAgentId.has(finalTargetNodeForSnak) ||
+          this.snakAgents[finalTargetNodeForSnak] ||
+          (this.workflowController &&
+            this.workflowController['agents'] &&
+            this.workflowController['agents'][finalTargetNodeForSnak] &&
+            this.workflowController['agents'][finalTargetNodeForSnak].type ===
+              AgentType.SNAK));
 
       if (
         this.memoryAgent &&
@@ -594,16 +631,26 @@ export class SupervisorAgent extends BaseAgent {
         isSnakAgent &&
         workflowConfig.startNode !== this.memoryAgent.id
       ) {
+        // Convert node name back to agent ID for selectedSnakAgent
+        const originalAgentId =
+          this.nodeNameToAgentId.get(finalTargetNodeForSnak) ||
+          finalTargetNodeForSnak;
+
         logger.debug(
           `${depthIndent}SupervisorAgent (${callPath}): Snak agent \"${finalTargetNodeForSnak}\" targeted. Routing via MemoryAgent (${this.memoryAgent.id}) first.`
         );
-        workflowConfig.selectedSnakAgent = finalTargetNodeForSnak;
+        workflowConfig.selectedSnakAgent = originalAgentId;
         workflowConfig.startNode = this.memoryAgent.id;
       } else if (finalTargetNodeForSnak && isSnakAgent) {
+        // Convert node name back to agent ID for selectedSnakAgent
+        const originalAgentId =
+          this.nodeNameToAgentId.get(finalTargetNodeForSnak) ||
+          finalTargetNodeForSnak;
+
         logger.debug(
           `${depthIndent}SupervisorAgent (${callPath}): Snak agent \"${finalTargetNodeForSnak}\" targeted. Setting selectedSnakAgent to bypass agent selector.`
         );
-        workflowConfig.selectedSnakAgent = finalTargetNodeForSnak;
+        workflowConfig.selectedSnakAgent = originalAgentId;
       }
 
       try {
@@ -887,11 +934,13 @@ export class SupervisorAgent extends BaseAgent {
     this.workflowController = null;
     this.operators.clear();
     this.snakAgents = {};
+    this.nodeNameToAgentId.clear();
+    this.agentIdToNodeName.clear();
 
     SupervisorAgent.instance = null;
 
     logger.debug(
-      'SupervisorAgent: Cleared agent references and operator map. Dispose complete.'
+      'SupervisorAgent: Cleared agent references, operator map, and node name mappings. Dispose complete.'
     );
   }
 
@@ -1113,18 +1162,56 @@ export class SupervisorAgent extends BaseAgent {
       metadata = {};
     }
 
-    (agent as any).metadata = {
+    const agentMetadata = {
       name: metadata.name || id,
-      description: metadata.description || 'A Starknet interaction agent',
-      group: metadata.group || 'starknet',
+      description: metadata.description || 'A Snak interaction agent',
+      group: metadata.group || 'snak',
     };
 
+    (agent as any).metadata = agentMetadata;
+
+    // Generate node name in "name-group" format
+    const nodeName = this.generateNodeName(
+      agentMetadata.name,
+      agentMetadata.group
+    );
+
+    // Store the agent with original ID
     this.snakAgents[id] = agent;
+
+    // Maintain mappings between node names and agent IDs
+    this.nodeNameToAgentId.set(nodeName, id);
+    this.agentIdToNodeName.set(id, nodeName);
+
     logger.debug(
-      `SupervisorAgent: Registered Snak agent "${id}" with metadata: ${JSON.stringify((agent as any).metadata)}`
+      `SupervisorAgent: Registered Snak agent "${id}" with node name "${nodeName}" and metadata: ${JSON.stringify(agentMetadata)}`
     );
 
     this.updateAgentSelectorRegistry();
+  }
+
+  /**
+   * Generates a node name in "name-group" format, ensuring uniqueness
+   * @param name The agent name
+   * @param group The agent group
+   * @returns A unique node name in "name-group" format
+   */
+  private generateNodeName(name: string, group: string): string {
+    // Sanitize name and group to be valid node names
+    const sanitizedName = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const sanitizedGroup = group.toLowerCase().replace(/[^a-z0-9]/g, '-');
+
+    let baseName = `${sanitizedName}-${sanitizedGroup}`;
+    let nodeName = baseName;
+    let counter = 1;
+
+    // Ensure uniqueness by adding a counter if needed
+    while (this.nodeNameToAgentId.has(nodeName)) {
+      nodeName = `${baseName}-${counter}`;
+      counter++;
+    }
+
+    return nodeName;
   }
 
   /**
@@ -1139,8 +1226,15 @@ export class SupervisorAgent extends BaseAgent {
       ...registry.getAllAgents(),
     };
 
+    // Add SnakAgents using their node names instead of original IDs
     Object.entries(this.snakAgents).forEach(([id, agent]) => {
-      availableAgents[id] = agent;
+      const nodeName = this.agentIdToNodeName.get(id);
+      if (nodeName) {
+        availableAgents[nodeName] = agent;
+      } else {
+        // Fallback to original ID if no node name mapping exists (for backward compatibility)
+        availableAgents[id] = agent;
+      }
     });
 
     if (
@@ -1186,6 +1280,16 @@ export class SupervisorAgent extends BaseAgent {
         } catch (error) {
           logger.error(`Error disposing agent ${id}:`, error);
         }
+      }
+
+      // Clean up node name mappings
+      const nodeName = this.agentIdToNodeName.get(id);
+      if (nodeName) {
+        this.nodeNameToAgentId.delete(nodeName);
+        this.agentIdToNodeName.delete(id);
+        logger.debug(
+          `SupervisorAgent: Cleaned up node name mapping for "${id}" -> "${nodeName}"`
+        );
       }
 
       delete this.snakAgents[id];
@@ -1267,7 +1371,12 @@ export class SupervisorAgent extends BaseAgent {
     );
     try {
       await this.workflowController.reset();
-      await this.initializeWorkflowController(false);
+
+      // Allow no SnakAgents if none are currently registered
+      // This prevents startup errors when no agents are initially available
+      const allowNoSnakAgents = Object.keys(this.snakAgents).length === 0;
+
+      await this.initializeWorkflowController(allowNoSnakAgents);
       logger.info('SupervisorAgent: WorkflowController successfully refreshed');
     } catch (error) {
       logger.error(
@@ -1275,5 +1384,44 @@ export class SupervisorAgent extends BaseAgent {
       );
       throw new Error(`Failed to refresh WorkflowController: ${error}`);
     }
+  }
+
+  /**
+   * Gets the node name for a given agent ID.
+   * @param agentId The agent ID
+   * @returns The node name or null if not found
+   */
+  public getNodeNameForAgent(agentId: string): string | null {
+    return this.agentIdToNodeName.get(agentId) || null;
+  }
+
+  /**
+   * Gets the agent ID for a given node name.
+   * @param nodeName The node name
+   * @returns The agent ID or null if not found
+   */
+  public getAgentIdForNodeName(nodeName: string): string | null {
+    return this.nodeNameToAgentId.get(nodeName) || null;
+  }
+
+  /**
+   * Gets a SnakAgent by its node name.
+   * @param nodeName The node name
+   * @returns The SnakAgent or null if not found
+   */
+  public getSnakAgentByNodeName(nodeName: string): SnakAgent | null {
+    const agentId = this.nodeNameToAgentId.get(nodeName);
+    if (agentId && this.snakAgents[agentId]) {
+      return this.snakAgents[agentId];
+    }
+    return null;
+  }
+
+  /**
+   * Gets all node names for registered SnakAgents.
+   * @returns An array of node names
+   */
+  public getRegisteredNodeNames(): string[] {
+    return Array.from(this.nodeNameToAgentId.keys());
   }
 }

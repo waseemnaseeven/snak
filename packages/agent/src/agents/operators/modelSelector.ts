@@ -1,12 +1,17 @@
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { BaseMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
+import {
+  BaseMessage,
+  HumanMessage,
+  AIMessage,
+  SystemMessage,
+} from '@langchain/core/messages';
 import { logger } from '@snakagent/core';
 import { BaseAgent, AgentType, IModelAgent } from '../core/baseAgent.js';
 import { ModelsConfig, ApiKeys } from '@snakagent/core';
 import { ChatOpenAI } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { modelSelectorRules } from '../../prompt/prompts.js';
+import { modelSelectorSystemPrompt } from '../../prompt/prompts.js';
 import { TokenTracker } from '../../token/tokenTracking.js';
 
 /**
@@ -306,9 +311,10 @@ export class ModelSelector extends BaseAgent implements IModelAgent {
         analysisContent = `Next planned actions: ${nextStepsSection}\n\nContext: ${truncatedContext}`;
       }
 
-      const prompt = new HumanMessage(
-        modelSelectorRules(nextStepsSection, analysisContent)
+      const systemPrompt = new SystemMessage(
+        modelSelectorSystemPrompt(nextStepsSection)
       );
+      const humanMessage = new HumanMessage(analysisContent);
 
       if (this.debugMode) {
         logger.debug(`Invoking "fast" model for meta-selection analysis.`);
@@ -317,7 +323,10 @@ export class ModelSelector extends BaseAgent implements IModelAgent {
         );
       }
 
-      const response = await this.models.fast.invoke([prompt]);
+      const response = await this.models.fast.invoke([
+        systemPrompt,
+        humanMessage,
+      ]);
       const modelChoice = response.content
         .toString()
         .toLowerCase()

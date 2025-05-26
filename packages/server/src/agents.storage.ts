@@ -15,26 +15,14 @@ import {
   ModelsConfig,
   ModelProviders,
   ModelLevelConfig,
+  RawAgentConfig,
 } from '@snakagent/core';
-import { AgentConfigSQL, AgentPromptSQL } from './interfaces/sql_interfaces.js';
+import { AgentConfigSQL, AgentMemorySQL } from './interfaces/sql_interfaces.js';
 import { AgentSystemConfig, AgentSystem, AgentMode } from '@snakagent/agents';
-import { createContextFromJson } from '@snakagent/agents';
 import { SystemMessage } from '@langchain/core/messages';
 import DatabaseStorage from '../common/database/database.js';
 
 const logger = new Logger('AgentStorage');
-
-export interface AgentConfigJson {
-  name: string;
-  group: string;
-  prompt: AgentPromptSQL;
-  interval: number;
-  plugins: string[];
-  memory: {
-    enabled: boolean;
-    short_term_memory_size: number;
-  };
-}
 
 @Injectable()
 export class AgentStorage implements OnModuleInit {
@@ -166,37 +154,19 @@ export class AgentStorage implements OnModuleInit {
     }
   }
 
-  // After being return by the database the agent prompt is a string
-  private parseAgentPrompt(agent_prompt: any): AgentPromptSQL {
-    const str_without_double_quote: string = agent_prompt.replace(/"/g, '');
-    const agent_prompt_split: string[] = str_without_double_quote.split('{');
-    for (let i = 0; i < agent_prompt_split.length; i++) {
-      agent_prompt_split[i] = agent_prompt_split[i].replace(/}/g, '');
-    }
-    const AgentPrompt: AgentPromptSQL = {
-      bio: agent_prompt_split[0],
-      lore: agent_prompt_split[1].split(','),
-      objectives: agent_prompt_split[2].split(','),
-      knowledge: agent_prompt_split[3].split(','),
-    };
-    return AgentPrompt;
-  }
-
   private async init_agents_config() {
     try {
       logger.debug('Initializing agents configuration');
       const q = new Postgres.Query(`SELECT * FROM agents`);
-      const q_res = await Postgres.query<AgentConfigSQL>(q);
+      const q_res = await Postgres.query<any>(q);
       this.agentConfigs = [...q_res];
-      q_res.forEach((agent: AgentConfigSQL) => {
-        agent.prompt = this.parseAgentPrompt(agent.prompt);
-      });
+
+      // Plus besoin de parsing complexe, les prompts sont déjà construits
       logger.debug(
         `Agents configuration loaded: ${JSON.stringify(this.agentConfigs)}`
       );
 
       // Create agent instances but don't register with supervisor yet
-      // (SupervisorService will handle this during its initialization)
       for (const agentConfig of this.agentConfigs) {
         await this.createAgentInstance(agentConfig);
         logger.debug(`Agent instance created: ${JSON.stringify(agentConfig)}`);
@@ -233,7 +203,7 @@ export class AgentStorage implements OnModuleInit {
   }
 
   private async createAgentInstance(
-    agent_config: AgentConfigSQL
+    agent_config: any // Utiliser any temporairement
   ): Promise<AgentSystem> {
     try {
       const database = {
@@ -247,24 +217,38 @@ export class AgentStorage implements OnModuleInit {
       logger.debug(
         `Creating agent instance with config: ${JSON.stringify(agent_config)}`
       );
-      const systemMessagefromjson = new SystemMessage(
-        createContextFromJson(agent_config.prompt)
-      );
+
+      // Utiliser directement le system prompt pré-construit ou le construire si nécessaire
+      const systemPrompt =
+        agent_config.system_prompt ||
+        this.buildSystemPromptFromConfig({
+          name: agent_config.name,
+          description: agent_config.description,
+          lore: agent_config.lore || [],
+          objectives: agent_config.objectives || [],
+          knowledge: agent_config.knowledge || [],
+          mode: agent_config.mode,
+        });
+
+      const systemMessage = new SystemMessage(systemPrompt);
+
       const json_config: AgentConfig = {
         id: agent_config.id,
         name: agent_config.name,
         group: agent_config.group,
-        prompt: systemMessagefromjson,
+        description: agent_config.description,
         plugins: agent_config.plugins,
         interval: agent_config.interval,
         memory: {
-          enabled: agent_config.memory.enabled,
-          shortTermMemorySize: agent_config.memory.short_term_memory_size,
+          enabled: agent_config.memory?.enabled || false,
+          shortTermMemorySize: agent_config.memory?.short_term_memory_size || 5,
         },
         chatId: `agent_${agent_config.id}`,
-        maxIterations: 15,
-        mode: AgentMode.INTERACTIVE,
+        maxIterations: agent_config.max_iterations || 15,
+        mode: agent_config.mode || AgentMode.INTERACTIVE,
+        prompt: systemMessage,
       };
+
       const modelsConfig = await this.get_models_config();
       logger.warn(modelsConfig);
       const config: AgentSystemConfig = {
@@ -311,7 +295,7 @@ export class AgentStorage implements OnModuleInit {
       if (this.supervisorService.isInitialized()) {
         const metadata = {
           name: agent_config.name,
-          description: `Agent from group: ${agent_config.group}`,
+          description: agent_config.description,
           group: agent_config.group,
         };
 
@@ -335,7 +319,7 @@ export class AgentStorage implements OnModuleInit {
     }
   }
 
-  public async addAgent(agent_config: AgentConfigJson): Promise<void> {
+  public async addAgent(agent_config: RawAgentConfig): Promise<void> {
     logger.debug(`Adding agent with config: ${JSON.stringify(agent_config)}`);
     if (!this.initialized) {
       await this.initialize();
@@ -375,20 +359,34 @@ export class AgentStorage implements OnModuleInit {
       }
     }
 
+    // Construire le system prompt avant de stocker
+    const systemPrompt = this.buildSystemPromptFromConfig({
+      name: finalName,
+      description: agent_config.description,
+      lore: agent_config.lore,
+      objectives: agent_config.objectives,
+      knowledge: agent_config.knowledge,
+      mode: agent_config.mode,
+    });
+
+    console.log(agent_config);
     const q = new Postgres.Query(
-      `INSERT INTO agents (name, "group", prompt, interval, plugins, memory) 
-        VALUES ($1, $2, ROW($3, $4, $5, $6), $7, $8, ROW($9, $10)) RETURNING *`,
+      `INSERT INTO agents (name, "group", description, lore, objectives, knowledge, system_prompt, interval, plugins, memory, mode, max_iterations) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, ROW($10, $11), $12, $13) RETURNING *`,
       [
         finalName,
         group,
-        agent_config.prompt.bio,
-        agent_config.prompt.lore,
-        agent_config.prompt.objectives,
-        agent_config.prompt.knowledge,
+        agent_config.description,
+        agent_config.lore,
+        agent_config.objectives,
+        agent_config.knowledge,
+        systemPrompt, // Stocker le prompt pré-construit
         agent_config.interval,
         agent_config.plugins,
-        agent_config.memory.enabled,
-        agent_config.memory.short_term_memory_size,
+        agent_config.memory.enabled || false,
+        agent_config.memory.shortTermMemorySize || 5,
+        agent_config.mode,
+        15, // Valeur par défaut pour max_iterations
       ]
     );
     const q_res = await Postgres.query<AgentConfigSQL>(q);
@@ -396,10 +394,9 @@ export class AgentStorage implements OnModuleInit {
 
     if (q_res.length > 0) {
       const newAgentDbRecord = q_res[0];
-      const agentToCreate: AgentConfigSQL = {
-        ...newAgentDbRecord,
-        prompt: this.parseAgentPrompt(newAgentDbRecord.prompt as any),
-      };
+
+      // Plus besoin de parsing, utiliser directement les données
+      const agentToCreate: AgentConfigSQL = newAgentDbRecord;
 
       // Create agent and register with supervisor
       await this.createAgent(agentToCreate);
@@ -411,6 +408,58 @@ export class AgentStorage implements OnModuleInit {
       logger.error('Failed to add agent to database, no record returned.');
       throw new Error('Failed to add agent to database.');
     }
+  }
+
+  /**
+   * Helper method to build system prompt from config components
+   */
+  private buildSystemPromptFromConfig(promptComponents: {
+    name?: string;
+    description?: string;
+    lore: string[];
+    objectives: string[];
+    knowledge: string[];
+    mode?: AgentMode;
+  }): string {
+    const contextParts: string[] = [];
+
+    // Identity Section
+    if (promptComponents.name) {
+      contextParts.push(`Your name : [${promptComponents.name}]`);
+    }
+    if (promptComponents.description) {
+      contextParts.push(`Your Description : [${promptComponents.description}]`);
+    }
+
+    // Lore Section
+    if (
+      Array.isArray(promptComponents.lore) &&
+      promptComponents.lore.length > 0
+    ) {
+      contextParts.push(`Your lore : [${promptComponents.lore.join(']\n[')}]`);
+    }
+
+    // Objectives Section
+    if (
+      Array.isArray(promptComponents.objectives) &&
+      promptComponents.objectives.length > 0
+    ) {
+      contextParts.push(
+        `Your objectives : [${promptComponents.objectives.join(']\n[')}]`
+      );
+    }
+
+    // Knowledge Section
+    if (
+      Array.isArray(promptComponents.knowledge) &&
+      promptComponents.knowledge.length > 0
+    ) {
+      contextParts.push(
+        `Your knowledge : [${promptComponents.knowledge.join(']\n[')}]`
+      );
+    }
+
+    return contextParts.join('\n');
   }
 
   public getAgent(id: string): AgentSystem | undefined {

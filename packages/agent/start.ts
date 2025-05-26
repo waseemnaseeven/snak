@@ -438,7 +438,7 @@ const localRun = async (): Promise<void> => {
       const agentMode = agent_config.mode;
       clearScreen();
       console.log(logo);
-      const spinner = createSpinner('Initializing Agent System').start();
+      const spinner = createSpinner('Initializing Agent System\n').start();
 
       // Setup database credentials from environment variables
       const database: DatabaseCredentials = {

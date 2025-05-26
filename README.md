@@ -107,7 +107,7 @@ NODE_ENV="development" # "development" or "production"
 {
   "name": "Your Agent name",
   "group": "Your Agent group",
-  "bio": "Your AI Agent Bio",
+  "description": "Your AI Agent Description",
   "lore": ["Some lore of your AI Agent 1", "Some lore of your AI Agent 1"],
   "objectives": [
     "first objective that your AI Agent need to follow",

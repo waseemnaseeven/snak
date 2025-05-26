@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
-import { logger, AgentConfig } from '@snakagent/core';
+import { logger, AgentConfig, RawAgentConfig } from '@snakagent/core';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,7 +38,7 @@ export const AGENT_MODES = {
 /**
  * Creates a context string from the JSON configuration object
  */
-export const createContextFromJson = (json: any): string => {
+export const createContextFromJson = (json: RawAgentConfig): string => {
   if (!json) {
     throw new Error(
       'Error while trying to parse your context from the config file.'
@@ -53,9 +53,14 @@ export const createContextFromJson = (json: any): string => {
     identityParts.push(`Name: ${json.name}`);
     contextParts.push(`Your name : [${json.name}]`);
   }
-  if (json.bio) {
-    identityParts.push(`Bio: ${json.bio}`);
-    contextParts.push(`Your Bio : [${json.bio}]`);
+  if (json.description) {
+    identityParts.push(`Description: ${json.description}`);
+    contextParts.push(`Your Description : [${json.description}]`);
+  }
+
+  // Lore Section
+  if (Array.isArray(json.lore)) {
+    contextParts.push(`Your lore : [${json.lore.join(']\n[')}]`);
   }
 
   // Objectives Section
@@ -74,6 +79,59 @@ export const createContextFromJson = (json: any): string => {
   // Knowledge Section
   if (Array.isArray(json.knowledge)) {
     contextParts.push(`Your knowledge : [${json.knowledge.join(']\n[')}]`);
+  }
+
+  return contextParts.join('\n');
+};
+
+/**
+ * Creates a system prompt from agent prompt components
+ * This function should be used when storing agents to pre-build the system prompt
+ */
+export const buildSystemPrompt = (promptComponents: {
+  name?: string;
+  description?: string;
+  lore: string[];
+  objectives: string[];
+  knowledge: string[];
+  mode?: AgentMode;
+}): string => {
+  const contextParts: string[] = [];
+
+  // Identity Section
+  if (promptComponents.name) {
+    contextParts.push(`Your name : [${promptComponents.name}]`);
+  }
+  if (promptComponents.description) {
+    contextParts.push(`Your Description : [${promptComponents.description}]`);
+  }
+
+  // Lore Section
+  if (
+    Array.isArray(promptComponents.lore) &&
+    promptComponents.lore.length > 0
+  ) {
+    contextParts.push(`Your lore : [${promptComponents.lore.join(']\n[')}]`);
+  }
+
+  // Objectives Section
+  if (
+    Array.isArray(promptComponents.objectives) &&
+    promptComponents.objectives.length > 0
+  ) {
+    contextParts.push(
+      `Your objectives : [${promptComponents.objectives.join(']\n[')}]`
+    );
+  }
+
+  // Knowledge Section
+  if (
+    Array.isArray(promptComponents.knowledge) &&
+    promptComponents.knowledge.length > 0
+  ) {
+    contextParts.push(
+      `Your knowledge : [${promptComponents.knowledge.join(']\n[')}]`
+    );
   }
 
   return contextParts.join('\n');
@@ -302,8 +360,7 @@ const checkParseJson = async (
       id: uuidv4(),
       name: json.name,
       group: json.group,
-      description: json.bio,
-      prompt: systemMessagefromjson,
+      description: json.description,
       interval: json.interval,
       chatId: json.chatId,
       mode: parseAgentMode(json.mode),
@@ -320,6 +377,7 @@ const checkParseJson = async (
               typeof json.mode.maxIterations === 'number'
             ? json.mode.maxIterations
             : 10,
+      prompt: systemMessagefromjson,
     };
 
     if (agentConfig.plugins.length === 0) {

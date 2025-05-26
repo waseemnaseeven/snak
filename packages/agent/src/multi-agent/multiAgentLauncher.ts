@@ -76,9 +76,7 @@ export function registerAgentsWithSupervisor(supervisor: any): void {
     supervisor.updateAgentSelectorRegistry();
     logger.info('Updated agent selection registry');
   } else {
-    logger.warn(
-      'Supervisor does not have updateAgentSelectorRegistry method'
-    );
+    logger.warn('Supervisor does not have updateAgentSelectorRegistry method');
   }
 }
 
