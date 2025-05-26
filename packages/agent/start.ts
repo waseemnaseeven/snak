@@ -35,17 +35,14 @@ logger.debug(`Environment variables: DEBUG=${DEBUG}`);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Flag to track if cleanup has been initiated
 let isShuttingDown = false;
-
-// Reference to the agent system for cleanup
 let globalAgentSystem: AgentSystem | null = null;
 
 /**
  * Handles graceful shutdown by cleaning up resources
+ * @param signal - The signal that triggered the shutdown
  */
 async function gracefulShutdown(signal: string): Promise<void> {
-  // Prevent multiple cleanup attempts
   if (isShuttingDown) {
     logger.debug(`Already shutting down, ignoring ${signal}`);
     return;
@@ -55,10 +52,8 @@ async function gracefulShutdown(signal: string): Promise<void> {
   logger.info(`Gracefully shutting down from ${signal}`);
 
   try {
-    // Display token usage summary before shutdown
     displayTokenUsageSummary();
 
-    // Clean up agent system
     if (globalAgentSystem) {
       try {
         logger.info('Disposing agent system...');
@@ -70,7 +65,6 @@ async function gracefulShutdown(signal: string): Promise<void> {
       }
     }
 
-    // Shutdown database pool
     try {
       logger.info('Shutting down database connection pool...');
       await Postgres.shutdown();
@@ -80,9 +74,6 @@ async function gracefulShutdown(signal: string): Promise<void> {
     }
 
     logger.info('Graceful shutdown completed');
-
-    // Exit with appropriate code
-    // Use 0 for normal shutdowns, different code for errors
     process.exit(0);
   } catch (error) {
     logger.error('Error during graceful shutdown:', error);
@@ -122,7 +113,6 @@ function displayTokenUsageSummary(): void {
   }
 }
 
-// Set up robust signal handlers
 process.on('SIGINT', () => {
   console.log('\nSIGINT received, shutting down gracefully...');
   gracefulShutdown('SIGINT');
@@ -131,7 +121,6 @@ process.on('SIGINT', () => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGHUP', () => gracefulShutdown('SIGHUP'));
 
-// Handle uncaught exceptions and promise rejections more robustly
 process.on('uncaughtException', (error) => {
   console.error('\nUncaught exception, shutting down gracefully...');
   logger.error('Uncaught exception:', error);
@@ -144,6 +133,12 @@ process.on('unhandledRejection', (reason) => {
   gracefulShutdown('unhandledRejection');
 });
 
+/**
+ * Loads and initializes the multi-agent system with supervisor
+ * @param multiAgentConfigPath - Path to the multi-agent configuration file
+ * @param modelsConfigPath - Path to the models configuration file
+ * @param modelsConfig - The loaded models configuration object
+ */
 async function loadMulti(
   multiAgentConfigPath: string,
   modelsConfigPath: string,
@@ -168,10 +163,8 @@ async function loadMulti(
   const spinner = createSpinner('Initializing Multi-Agent System').start();
 
   try {
-    // Track a mapping of initialized agents for later registration with the supervisor
     const initializedAgents = {};
 
-    // Launch worker agents that will listen for events
     const terminateAgents = await launchMultiAgent(
       multiAgentConfigPath,
       modelsConfig
@@ -180,10 +173,8 @@ async function loadMulti(
       text: 'All worker agents launched and listening for events',
     });
 
-    // Ajouter un petit délai pour s'assurer que tous les agents ont bien démarré
     await new Promise((resolve) => setTimeout(resolve, 500));
 
-    // Vérifier que des agents ont bien été initialisés
     const workerAgentsRegistry = getInitializedAgents();
     logger.info(
       `Detected ${workerAgentsRegistry.size} initialized worker agents`
@@ -194,17 +185,12 @@ async function loadMulti(
       throw new Error('Failed to initialize any worker agents');
     }
 
-    // Now set up a single, standard AgentSystem that will use the built-in
-    // agent selection and supervisor infrastructure
     spinner.update({
       text: 'Initializing main AgentSystem with supervisor...',
     });
 
-    // Utiliser les fonctions existantes pour trouver les fichiers de configuration
-    // On récupère le chemin du config supervisor qui est mandatory pour l'infrastructure
     const supervisorAgentConfigName = 'supervisor.agent.json';
 
-    // Cette fonction recherche la config dans tous les emplacements standards
     const supervisorAgentPath = (() => {
       const possibleBasePaths = [
         process.cwd(),
@@ -239,7 +225,6 @@ async function loadMulti(
       );
     }
 
-    // Setup database credentials from environment variables
     const database: DatabaseCredentials = {
       database: process.env.POSTGRES_DB as string,
       host: process.env.POSTGRES_HOST as string,
@@ -248,7 +233,6 @@ async function loadMulti(
       port: parseInt(process.env.POSTGRES_PORT as string),
     };
 
-    // Initialize Database Connection Pool if not already done
     try {
       await Postgres.connect(database);
       spinner.update({ text: 'Database connection pool initialized' });
@@ -268,11 +252,8 @@ async function loadMulti(
       );
     }
 
-    // Prepare RPC Provider
     const provider = new RpcProvider({ nodeUrl: `${nodeUrl}` });
 
-    // Setup an AgentSystem with the default agent config
-    // This will include the supervisor and agent selection components
     const agentSystemConfig: AgentSystemConfig = {
       starknetProvider: provider,
       accountPrivateKey: process.env.STARKNET_PRIVATE_KEY!,
@@ -284,24 +265,19 @@ async function loadMulti(
       debug: DEBUG,
     };
 
-    // Create and initialize the agent system with the built-in supervisor
     const agentSystem = new AgentSystem(agentSystemConfig);
-    globalAgentSystem = agentSystem; // Store reference for shutdown
+    globalAgentSystem = agentSystem;
 
     await agentSystem.init();
 
-    // Récupérer le supervisor pour enregistrer les agents
     const supervisor = agentSystem.getSupervisor();
     if (!supervisor) {
       throw new Error('SupervisorAgent not initialized properly');
     }
 
-    // Enregistrer les agents workers auprès du superviseur directement
-    // plutôt que via un événement
     logger.info('Registering worker agents with supervisor...');
     registerAgentsWithSupervisor(supervisor);
 
-    // Vérifier que le supervisor a bien des agents maintenant
     const agentSelector = supervisor.getAgentSelector();
     if (agentSelector) {
       logger.debug('Agent selection agent is properly initialized');
@@ -309,7 +285,6 @@ async function loadMulti(
       logger.warn('Agent selection agent is not available in the supervisor');
     }
 
-    // Rafraîchir le WorkflowController pour prendre en compte les nouveaux agents
     logger.info('Refreshing WorkflowController with newly registered agents');
     await supervisor.refreshWorkflowController();
     logger.info('WorkflowController refreshed with the new agents');
@@ -320,7 +295,6 @@ async function loadMulti(
       ),
     });
 
-    // Setup SIGINT handler for graceful shutdown
     process.on('SIGINT', async () => {
       console.log('\nGracefully shutting down from SIGINT (Ctrl+C)');
       if (globalAgentSystem) {
@@ -330,7 +304,6 @@ async function loadMulti(
       process.exit(0);
     });
 
-    // Interactive loop - the supervisor will manage routing to worker agents
     console.log(
       chalk.green(
         '\nEntering interactive mode with Snak Supervisor. Type "exit" to quit.\n'
@@ -361,10 +334,6 @@ async function loadMulti(
       console.log(chalk.yellow('Processing request through Supervisor...'));
 
       try {
-        // The AgentSystem.execute method will:
-        // 1. Route through the supervisor agent
-        // 2. Use agent selection to determine which worker to use
-        // 3. Forward the request to the appropriate worker via the event bus
         await agentSystem.execute(user);
       } catch (error: any) {
         console.error(chalk.red('Error processing request'));
@@ -384,7 +353,9 @@ async function loadMulti(
   }
 }
 
-// Modified localRun to use our askQuestion wrapper
+/**
+ * Main function to run the local agent system
+ */
 const localRun = async (): Promise<void> => {
   clearScreen();
   console.log(logo);
@@ -396,16 +367,12 @@ const localRun = async (): Promise<void> => {
   );
 
   try {
-    // Reset token usage counters at the start of a session
     TokenTracker.resetSessionCounters();
 
-    // Load command line args
     const { agentPath, modelsConfigPath, multi } = await loadCommand();
 
-    // Load environment variables
     loadEnvVars();
 
-    // Verify required environment variables
     const required = [
       'STARKNET_RPC_URL',
       'STARKNET_PRIVATE_KEY',
@@ -418,7 +385,7 @@ const localRun = async (): Promise<void> => {
         `Missing required environment variables: ${missing.join(', ')}`
       );
     }
-    // Load models configuration
+
     const modelData = await fs.promises.readFile(modelsConfigPath, 'utf8');
     const modelsConfig: ModelsConfig = JSON.parse(modelData) as ModelsConfig;
     if (!modelsConfig) {
@@ -430,7 +397,6 @@ const localRun = async (): Promise<void> => {
     if (multi) {
       loadMulti(agentPath, modelsConfigPath, modelsConfig);
     } else {
-      // Load agent configuration
       let agent_config: AgentConfig = await load_json_config(agentPath);
       if (!agent_config) {
         throw new Error(`Failed to load agent configuration from ${agentPath}`);
@@ -440,7 +406,6 @@ const localRun = async (): Promise<void> => {
       console.log(logo);
       const spinner = createSpinner('Initializing Agent System\n').start();
 
-      // Setup database credentials from environment variables
       const database: DatabaseCredentials = {
         database: process.env.POSTGRES_DB as string,
         host: process.env.POSTGRES_HOST as string,
@@ -449,7 +414,6 @@ const localRun = async (): Promise<void> => {
         port: parseInt(process.env.POSTGRES_PORT as string),
       };
 
-      // Initialize Database Connection Pool FIRST
       try {
         await Postgres.connect(database);
         spinner.update({ text: 'Database connection pool initialized' });
@@ -469,24 +433,20 @@ const localRun = async (): Promise<void> => {
         );
       }
 
-      // Prepare RPC Provider
       const provider = new RpcProvider({ nodeUrl: `${nodeUrl}` });
 
-      // Prepare Agent System configuration ACCORDING TO THE DEFINITION IN agents/src/agents/index.ts
       const agentSystemConfig: AgentSystemConfig = {
         starknetProvider: provider,
         accountPrivateKey: process.env.STARKNET_PRIVATE_KEY!,
         accountPublicKey: process.env.STARKNET_PUBLIC_ADDRESS!,
-        modelsConfig: modelsConfig, // Already loaded object
+        modelsConfig: modelsConfig,
         agentMode: agentMode,
         databaseCredentials: database,
-        agentConfigPath: agent_config, // Pass the actual config object
+        agentConfigPath: agent_config,
         debug: DEBUG,
       };
 
-      // Create and initialize the agent system
       const agentSystem = new AgentSystem(agentSystemConfig);
-      // Store reference for shutdown handling
       globalAgentSystem = agentSystem;
 
       await agentSystem.init();
@@ -497,7 +457,6 @@ const localRun = async (): Promise<void> => {
         ),
       });
 
-      // Conserver le mode de l'agent tel que configuré, mais utiliser toujours l'interface interactive
       console.log(
         chalk.dim('\nStarting interactive session with Snak Supervisor...\n')
       );
@@ -511,7 +470,6 @@ const localRun = async (): Promise<void> => {
         chalk.dim(`- Models: ${chalk.bold(path.basename(modelsConfigPath))}\n`)
       );
 
-      // Boucle interactive pour tous les modes d'agent
       while (true) {
         const { user } = await inquirer.prompt([
           {
@@ -535,7 +493,6 @@ const localRun = async (): Promise<void> => {
         console.log(chalk.yellow('Processing request...'));
 
         try {
-          // Exécuter via le supervisor qui routera vers le bon mode d'agent
           await agentSystem.execute(user);
         } catch (error: any) {
           console.error(chalk.red('Error processing request'));
@@ -560,9 +517,7 @@ const localRun = async (): Promise<void> => {
       process.exit(1);
     }
   } finally {
-    // If we're not already shutting down, clean up here
     if (!isShuttingDown) {
-      // Clean up resources
       if (globalAgentSystem) {
         try {
           await globalAgentSystem.dispose();
@@ -572,7 +527,6 @@ const localRun = async (): Promise<void> => {
           logger.error('Error during agent system disposal:', error);
         }
       }
-      // Shutdown database pool
       try {
         await Postgres.shutdown();
         logger.info('Database connection pool shut down.');
@@ -587,11 +541,12 @@ interface CommandOptions {
   agentPath: string;
   modelsConfigPath: string;
   silentLlm: boolean;
-  multi: boolean; // Add the multi flag
+  multi: boolean;
 }
 
 /**
  * Loads command line arguments and resolves configuration paths
+ * @returns Promise resolving to command options
  */
 const loadCommand = async (): Promise<CommandOptions> => {
   const argv = await yargs(hideBin(process.argv))
@@ -627,7 +582,6 @@ const loadCommand = async (): Promise<CommandOptions> => {
   const silentLlm = argv['silent-llm'] as boolean;
   const multi = argv['multi'] as boolean;
 
-  // Now update all environment variables now that we have processed the command line args
   console.log(`Environment variables after parsing: DEBUG=${DEBUG}`);
   process.env.LOG_LEVEL = DEBUG ? 'debug' : 'info';
   process.env.DEBUG_LOGGING = DEBUG ? 'true' : 'false';
@@ -635,9 +589,14 @@ const loadCommand = async (): Promise<CommandOptions> => {
   console.log(
     `Final environment variables: LOG_LEVEL=${process.env.LOG_LEVEL}`
   );
-  // Always disable langchain tracing regardless of debug mode
   process.env.LANGCHAIN_TRACING = 'false';
 
+  /**
+   * Finds configuration file path in standard locations
+   * @param fileName - Name of the configuration file
+   * @param configType - Type of configuration (agents, models, multi-agents)
+   * @returns Path to the configuration file
+   */
   const findConfigPath = (
     fileName: string,
     configType: 'agents' | 'models' | 'multi-agents'
@@ -670,7 +629,6 @@ const loadCommand = async (): Promise<CommandOptions> => {
     throw new Error(`Configuration file ${fileName} not found.`);
   };
 
-  // Determine which config directory to use based on multi flag
   let agentPath;
   if (multi) {
     agentPath = findConfigPath(agentFileName, 'multi-agents');
@@ -692,11 +650,13 @@ const clearScreen = (): void => {
 
 /**
  * Creates a terminal hyperlink
+ * @param text - Display text for the link
+ * @param url - URL to link to
+ * @returns Formatted terminal hyperlink
  */
 const createLink = (text: string, url: string): string =>
   `\u001B]8;;${url}\u0007${text}\u001B]8;;\u0007`;
 
-// Application logo with styling
 const logo = `${chalk.cyan(`
    _____             __
   / ___/____  ____ _/ /__
@@ -708,10 +668,9 @@ ${chalk.dim('v0.0.11 by ')}${createLink('Kasar', 'https://kasar.io')}`)}`;
 
 /**
  * Loads environment variables from the .env file
- * Command line variables take precedence
+ * @returns Parsed environment variables or undefined if file not found
  */
 function loadEnvVars(): Record<string, string> | undefined {
-  // Correctly determine the project root relative to the script
   const projectRoot = path.resolve(__dirname, '..');
   const envPath = path.resolve(projectRoot, '.env');
 
@@ -720,7 +679,7 @@ function loadEnvVars(): Record<string, string> | undefined {
 
   const result = config({
     path: envPath,
-    override: false, // Do not overwrite variables defined on the command line
+    override: false,
   });
 
   if (result.error && !fs.existsSync(envPath)) {
@@ -738,7 +697,6 @@ function loadEnvVars(): Record<string, string> | undefined {
   return result.parsed;
 }
 
-// Run the application
 localRun().catch((error) => {
   console.error(
     createBox(error.message, { title: 'Fatal Error', isError: true })

@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
- * Interface for a token object
+ * Token interface representing a cryptocurrency token with symbol and amount
  */
 export interface Token {
   symbol: string;
@@ -18,7 +18,7 @@ export interface Token {
 }
 
 /**
- * Enum for the mode of operation of the agent
+ * Agent operation modes
  */
 export enum AgentMode {
   INTERACTIVE = 'interactive',
@@ -27,7 +27,7 @@ export enum AgentMode {
 }
 
 /**
- * Maps mode values to their string representations
+ * Maps mode enum values to their string representations
  */
 export const AGENT_MODES = {
   [AgentMode.AUTONOMOUS]: 'autonomous',
@@ -37,6 +37,9 @@ export const AGENT_MODES = {
 
 /**
  * Creates a context string from the JSON configuration object
+ * @param json - Raw agent configuration object
+ * @returns Formatted context string for the agent
+ * @throws Error if json is null or undefined
  */
 export const createContextFromJson = (json: RawAgentConfig): string => {
   if (!json) {
@@ -47,36 +50,21 @@ export const createContextFromJson = (json: RawAgentConfig): string => {
 
   const contextParts: string[] = [];
 
-  // Identity Section
-  const identityParts: string[] = [];
   if (json.name) {
-    identityParts.push(`Name: ${json.name}`);
     contextParts.push(`Your name : [${json.name}]`);
   }
   if (json.description) {
-    identityParts.push(`Description: ${json.description}`);
     contextParts.push(`Your Description : [${json.description}]`);
   }
 
-  // Lore Section
   if (Array.isArray(json.lore)) {
     contextParts.push(`Your lore : [${json.lore.join(']\n[')}]`);
   }
 
-  // Objectives Section
   if (Array.isArray(json.objectives)) {
     contextParts.push(`Your objectives : [${json.objectives.join(']\n[')}]`);
   }
 
-  // Check for autonomous mode
-  if (json.mode) {
-    const mode = parseAgentMode(json.mode);
-    if (mode === AgentMode.AUTONOMOUS || mode === AgentMode.HYBRID) {
-      identityParts.push(`Mode: ${mode}`);
-    }
-  }
-
-  // Knowledge Section
   if (Array.isArray(json.knowledge)) {
     contextParts.push(`Your knowledge : [${json.knowledge.join(']\n[')}]`);
   }
@@ -85,8 +73,9 @@ export const createContextFromJson = (json: RawAgentConfig): string => {
 };
 
 /**
- * Creates a system prompt from agent prompt components
- * This function should be used when storing agents to pre-build the system prompt
+ * Builds a system prompt from agent prompt components
+ * @param promptComponents - Object containing agent prompt components
+ * @returns Formatted system prompt string
  */
 export const buildSystemPrompt = (promptComponents: {
   name?: string;
@@ -98,7 +87,6 @@ export const buildSystemPrompt = (promptComponents: {
 }): string => {
   const contextParts: string[] = [];
 
-  // Identity Section
   if (promptComponents.name) {
     contextParts.push(`Your name : [${promptComponents.name}]`);
   }
@@ -106,7 +94,6 @@ export const buildSystemPrompt = (promptComponents: {
     contextParts.push(`Your Description : [${promptComponents.description}]`);
   }
 
-  // Lore Section
   if (
     Array.isArray(promptComponents.lore) &&
     promptComponents.lore.length > 0
@@ -114,7 +101,6 @@ export const buildSystemPrompt = (promptComponents: {
     contextParts.push(`Your lore : [${promptComponents.lore.join(']\n[')}]`);
   }
 
-  // Objectives Section
   if (
     Array.isArray(promptComponents.objectives) &&
     promptComponents.objectives.length > 0
@@ -124,7 +110,6 @@ export const buildSystemPrompt = (promptComponents: {
     );
   }
 
-  // Knowledge Section
   if (
     Array.isArray(promptComponents.knowledge) &&
     promptComponents.knowledge.length > 0
@@ -137,6 +122,12 @@ export const buildSystemPrompt = (promptComponents: {
   return contextParts.join('\n');
 };
 
+/**
+ * Creates a deep copy of an agent configuration
+ * @param config - Agent configuration to copy
+ * @returns Deep copy of the agent configuration
+ * @throws Error if config is null or undefined
+ */
 export const deepCopyAgentConfig = (config: AgentConfig): AgentConfig => {
   if (!config) {
     throw new Error('Cannot copy null or undefined config');
@@ -171,10 +162,11 @@ export const deepCopyAgentConfig = (config: AgentConfig): AgentConfig => {
 };
 
 /**
- * Helper function to parse agent mode from various formats
+ * Parses agent mode from various input formats
+ * @param modeConfig - Mode configuration (string or object)
+ * @returns Parsed AgentMode enum value
  */
 export const parseAgentMode = (modeConfig: any): AgentMode => {
-  // Handle case where modeConfig is a string
   if (typeof modeConfig === 'string') {
     const mode = modeConfig.toLowerCase();
     if (Object.values(AgentMode).includes(mode as AgentMode)) {
@@ -186,9 +178,7 @@ export const parseAgentMode = (modeConfig: any): AgentMode => {
     return AgentMode.INTERACTIVE;
   }
 
-  // Handle case where modeConfig is an object with mode property
   if (modeConfig && typeof modeConfig === 'object') {
-    // New format
     if (modeConfig.mode && typeof modeConfig.mode === 'string') {
       const mode = modeConfig.mode.toLowerCase();
       if (Object.values(AgentMode).includes(mode as AgentMode)) {
@@ -196,7 +186,6 @@ export const parseAgentMode = (modeConfig: any): AgentMode => {
       }
     }
 
-    // Legacy format with boolean flags
     if (
       'interactive' in modeConfig ||
       'autonomous' in modeConfig ||
@@ -212,7 +201,6 @@ export const parseAgentMode = (modeConfig: any): AgentMode => {
     }
   }
 
-  // Default case
   logger.warn(
     `Could not determine agent mode - defaulting to "${AgentMode.INTERACTIVE}"`
   );
@@ -220,7 +208,9 @@ export const parseAgentMode = (modeConfig: any): AgentMode => {
 };
 
 /**
- * Validates the JSON configuration object
+ * Validates the agent configuration object
+ * @param config - Agent configuration to validate
+ * @throws Error if configuration is invalid
  */
 export const validateConfig = (config: AgentConfig) => {
   const requiredFields = [
@@ -242,21 +232,18 @@ export const validateConfig = (config: AgentConfig) => {
     throw new Error('prompt must be an instance of SystemMessage');
   }
 
-  // Validate mode configuration
   if (!Object.values(AgentMode).includes(config.mode)) {
     throw new Error(
       `Invalid mode "${config.mode}" specified in configuration. Must be one of: ${Object.values(AgentMode).join(', ')}`
     );
   }
 
-  // Ensure recursion limit is valid
   if (typeof config.maxIterations !== 'number' || config.maxIterations < 0) {
     throw new Error(
       'maxIterations must be a positive number in mode configuration'
     );
   }
 
-  // Validate mcpServers if present
   if (config.mcpServers) {
     if (typeof config.mcpServers !== 'object') {
       throw new Error('mcpServers must be an object');
@@ -285,13 +272,15 @@ export const validateConfig = (config: AgentConfig) => {
 };
 
 /**
- * Checks and parses the JSON configuration object
+ * Parses and validates the JSON configuration file
+ * @param agent_config_name - Name of the agent configuration file
+ * @returns Parsed and validated agent configuration
+ * @throws Error if file cannot be found or parsed
  */
 const checkParseJson = async (
   agent_config_name: string
 ): Promise<AgentConfig> => {
   try {
-    // Try multiple possible locations for the config file
     const possiblePaths = [
       path.resolve(process.cwd(), 'config', 'agents', agent_config_name),
       path.resolve(process.cwd(), '..', 'config', 'agents', agent_config_name),
@@ -319,7 +308,6 @@ const checkParseJson = async (
     let configPath: string | null = null;
     let jsonData: string | null = null;
 
-    // Find first accessible config file
     for (const tryPath of possiblePaths) {
       try {
         await fs.access(tryPath);
@@ -339,23 +327,21 @@ const checkParseJson = async (
       );
     }
 
-    const json = JSON.parse(jsonData); // TODO don't use any type for json
+    const json = JSON.parse(jsonData);
     if (!json) {
       throw new Error(`Failed to parse JSON from ${configPath}`);
     }
 
-    // Create system message
     const systemMessagefromjson = new SystemMessage(
       createContextFromJson(json)
     );
 
-    // Handle mode configuration
     if (!json.mode) {
       throw new Error(
         'Mode configuration is mandatory but missing in config file'
       );
     }
-    // Create config object
+
     const agentConfig: AgentConfig = {
       id: uuidv4(),
       name: json.name,
@@ -397,16 +383,16 @@ const checkParseJson = async (
 };
 
 /**
- * Loads the JSON configuration object
+ * Loads and parses the JSON configuration file
+ * @param agent_config_name - Name of the agent configuration file
+ * @returns Parsed agent configuration
+ * @throws Error if configuration cannot be loaded
  */
 export const load_json_config = async (
   agent_config_name: string
 ): Promise<AgentConfig> => {
   try {
     const json = await checkParseJson(agent_config_name);
-    if (!json) {
-      throw new Error('Failed to load JSON config');
-    }
     return json;
   } catch (error) {
     logger.error(error);

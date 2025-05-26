@@ -1,4 +1,3 @@
-// agents/supervisor/supervisorAgent.ts
 import {
   BaseAgent,
   AgentType,
@@ -25,7 +24,8 @@ import { AgentSelector } from '../operators/agentSelector.js';
 import { OperatorRegistry } from '../operators/operatorRegistry.js';
 
 /**
- * Configuration for the SupervisorAgent.
+ * Configuration interface for the SupervisorAgent
+ * @interface SupervisorAgentConfig
  */
 export interface SupervisorAgentConfig {
   modelsConfig: ModelsConfig;
@@ -35,10 +35,8 @@ export interface SupervisorAgentConfig {
 
 /**
  * SupervisorAgent manages the orchestration of all system agents.
- * It acts as a central coordinator, initializing and managing the lifecycle
- * of various operator agents like ModelSelector, SnakAgent,
- * ToolsOrchestrator, and MemoryAgent. It also handles the execution flow
- * through a WorkflowController.
+ * Acts as a central coordinator, initializing and managing the lifecycle
+ * of various operator agents and handling execution flow through WorkflowController.
  */
 export class SupervisorAgent extends BaseAgent {
   private modelSelector: ModelSelector | null = null;
@@ -59,16 +57,16 @@ export class SupervisorAgent extends BaseAgent {
   private static instance: SupervisorAgent | null = null;
 
   /**
-   * Gets the singleton instance of SupervisorAgent.
-   * @returns The SupervisorAgent instance, or null if not initialized.
+   * Gets the singleton instance of SupervisorAgent
+   * @returns The SupervisorAgent instance, or null if not initialized
    */
   public static getInstance(): SupervisorAgent | null {
     return SupervisorAgent.instance;
   }
 
   /**
-   * Constructs a new SupervisorAgent.
-   * @param configObject The configuration for the supervisor agent.
+   * Constructs a new SupervisorAgent
+   * @param configObject - The configuration for the supervisor agent
    */
   constructor(configObject: SupervisorAgentConfig) {
     super('supervisor', AgentType.SUPERVISOR);
@@ -91,75 +89,26 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Initializes the supervisor and all agents under its control.
-   * This method sets up the model selection agent, memory agent (if enabled),
-   * the main Snak agent, the tools orchestrator, and the workflow controller.
-   * It also initializes metrics.
-   * @throws Will throw an error if initialization of any critical component fails.
+   * Initializes the supervisor and all agents under its control
+   * Sets up model selection agent, memory agent, main Snak agent, tools orchestrator, and workflow controller
+   * @throws {Error} Will throw an error if initialization of any critical component fails
    */
   public async init(): Promise<void> {
     const agentConfig = this.config.starknetConfig.agentConfig;
     logger.info('SupervisorAgent: Starting initialization');
 
     try {
-      logger.debug('SupervisorAgent: Initializing ModelSelector...');
-      this.modelSelector = new ModelSelector({
-        debugMode: this.debug,
-        useModelSelector: true,
-        modelsConfig: this.config.modelsConfig,
-      });
-      await this.modelSelector.init();
-      this.operators.set(this.modelSelector.id, this.modelSelector);
-      logger.debug('SupervisorAgent: ModelSelector initialized');
-
-      if (agentConfig?.memory?.enabled !== false) {
-        logger.debug('SupervisorAgent: Initializing MemoryAgent...');
-        this.memoryAgent = new MemoryAgent({
-          shortTermMemorySize: agentConfig?.memory?.shortTermMemorySize || 15,
-          maxIterations: agentConfig?.memory?.maxIterations,
-          embeddingModel: agentConfig?.memory?.embeddingModel,
-        });
-        await this.memoryAgent.init();
-        this.operators.set(this.memoryAgent.id, this.memoryAgent);
-        logger.debug('SupervisorAgent: MemoryAgent initialized');
-      } else {
-        logger.info(
-          'SupervisorAgent: MemoryAgent initialization skipped (disabled in config)'
-        );
-      }
-
-      logger.debug('SupervisorAgent: Initializing ToolsOrchestrator...');
-      this.toolsOrchestrator = new ToolsOrchestrator({
-        snakAgent: null,
-        agentConfig: agentConfig,
-        modelSelector: this.modelSelector,
-      });
-      await this.toolsOrchestrator.init();
-      this.operators.set(this.toolsOrchestrator.id, this.toolsOrchestrator);
-      logger.debug('SupervisorAgent: ToolsOrchestrator initialized');
-
-      logger.debug('SupervisorAgent: Initializing AgentSelector...');
-      this.agentSelector = new AgentSelector({
-        availableAgents: {},
-        modelSelector: this.modelSelector,
-        debug: this.debug,
-      });
-      await this.agentSelector.init();
-      this.operators.set(this.agentSelector.id, this.agentSelector);
-      logger.debug('SupervisorAgent: AgentSelector initialized');
+      await this.initializeModelSelector();
+      await this.initializeMemoryAgent(agentConfig);
+      await this.initializeToolsOrchestrator(agentConfig);
+      await this.initializeAgentSelector();
 
       this.updateAgentSelectorRegistry();
 
-      logger.debug('SupervisorAgent: Initializing WorkflowController...');
       await this.initializeWorkflowController(true);
-      logger.debug('SupervisorAgent: WorkflowController initialized');
 
       if (Object.keys(this.snakAgents).length > 0) {
         this.initializeMetrics(agentConfig);
-      } else {
-        logger.debug(
-          'SupervisorAgent: Metrics initialization skipped (no agents registered)'
-        );
       }
 
       logger.info('SupervisorAgent: All agents initialized successfully');
@@ -170,20 +119,94 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Initializes the WorkflowController with all available agents.
-   * @param allowNoSnakAgents If true, allows initialization even if there are no Snak execution agents
-   * @throws Will throw an error if essential agents like the Snak agent are missing.
+   * Initializes the ModelSelector component
+   * @private
+   */
+  private async initializeModelSelector(): Promise<void> {
+    logger.debug('SupervisorAgent: Initializing ModelSelector...');
+    this.modelSelector = new ModelSelector({
+      debugMode: this.debug,
+      useModelSelector: true,
+      modelsConfig: this.config.modelsConfig,
+    });
+    await this.modelSelector.init();
+    this.operators.set(this.modelSelector.id, this.modelSelector);
+    logger.debug('SupervisorAgent: ModelSelector initialized');
+  }
+
+  /**
+   * Initializes the MemoryAgent component if enabled
+   * @param agentConfig - Agent configuration
+   * @private
+   */
+  private async initializeMemoryAgent(
+    agentConfig: AgentConfig | undefined
+  ): Promise<void> {
+    if (agentConfig?.memory?.enabled !== false) {
+      logger.debug('SupervisorAgent: Initializing MemoryAgent...');
+      this.memoryAgent = new MemoryAgent({
+        shortTermMemorySize: agentConfig?.memory?.shortTermMemorySize || 15,
+        maxIterations: agentConfig?.memory?.maxIterations,
+        embeddingModel: agentConfig?.memory?.embeddingModel,
+      });
+      await this.memoryAgent.init();
+      this.operators.set(this.memoryAgent.id, this.memoryAgent);
+      logger.debug('SupervisorAgent: MemoryAgent initialized');
+    } else {
+      logger.info(
+        'SupervisorAgent: MemoryAgent initialization skipped (disabled in config)'
+      );
+    }
+  }
+
+  /**
+   * Initializes the ToolsOrchestrator component
+   * @param agentConfig - Agent configuration
+   * @private
+   */
+  private async initializeToolsOrchestrator(
+    agentConfig: AgentConfig | undefined
+  ): Promise<void> {
+    logger.debug('SupervisorAgent: Initializing ToolsOrchestrator...');
+    this.toolsOrchestrator = new ToolsOrchestrator({
+      snakAgent: null,
+      agentConfig: agentConfig,
+      modelSelector: this.modelSelector,
+    });
+    await this.toolsOrchestrator.init();
+    this.operators.set(this.toolsOrchestrator.id, this.toolsOrchestrator);
+    logger.debug('SupervisorAgent: ToolsOrchestrator initialized');
+  }
+
+  /**
+   * Initializes the AgentSelector component
+   * @private
+   */
+  private async initializeAgentSelector(): Promise<void> {
+    logger.debug('SupervisorAgent: Initializing AgentSelector...');
+    this.agentSelector = new AgentSelector({
+      availableAgents: {},
+      modelSelector: this.modelSelector,
+      debug: this.debug,
+    });
+    await this.agentSelector.init();
+    this.operators.set(this.agentSelector.id, this.agentSelector);
+    logger.debug('SupervisorAgent: AgentSelector initialized');
+  }
+
+  /**
+   * Initializes the WorkflowController with all available agents
+   * @param allowNoSnakAgents - If true, allows initialization even if there are no Snak execution agents
+   * @throws {Error} Will throw an error if essential agents are missing
+   * @private
    */
   private async initializeWorkflowController(
     allowNoSnakAgents: boolean = false
   ): Promise<void> {
     logger.debug('SupervisorAgent: Initializing WorkflowController components');
     try {
-      const allAgents: Record<string, IAgent> = {
-        supervisor: this,
-      };
+      const allAgents: Record<string, IAgent> = { supervisor: this };
 
-      // Add SnakAgents using their node names instead of original IDs
       Object.entries(this.snakAgents).forEach(([id, agent]) => {
         const nodeName = this.agentIdToNodeName.get(id);
         if (nodeName) {
@@ -192,7 +215,6 @@ export class SupervisorAgent extends BaseAgent {
             `SupervisorAgent: Added SnakAgent "${id}" to workflow with node name "${nodeName}"`
           );
         } else {
-          // Fallback to original ID if no node name mapping exists (for backward compatibility)
           allAgents[id] = agent;
           logger.warn(
             `SupervisorAgent: No node name mapping found for agent "${id}", using original ID`
@@ -236,7 +258,6 @@ export class SupervisorAgent extends BaseAgent {
 
       const maxIterations = 15;
       const workflowTimeout = 60000;
-
       const entryPoint = allAgents['agent-selector']
         ? 'agent-selector'
         : 'supervisor';
@@ -272,8 +293,9 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Initializes metrics collection for the agent.
-   * @param agentConfig The configuration of the agent, used to determine agent name and mode for metrics.
+   * Initializes metrics collection for the agent
+   * @param agentConfig - The agent configuration used to determine agent name and mode for metrics
+   * @private
    */
   private initializeMetrics(agentConfig: AgentConfig): void {
     if (!this.snakAgent) {
@@ -298,14 +320,13 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Executes a task based on the provided input.
-   * This method manages the execution flow, including depth checking to prevent
-   * infinite loops, input processing, memory context enrichment, and invoking
-   * the WorkflowController or returning a directive if called as a workflow node.
-   * @param input The user input, which can be a string, AgentMessage, or BaseMessage or array of BaseMessages.
-   * @param config Optional execution configuration, may include `isWorkflowNodeCall: true` if called by WorkflowController.
-   * @returns The final agent response or a directive message for the workflow.
-   * @throws Will throw an error if the WorkflowController is not initialized when needed.
+   * Executes a task based on the provided input
+   * Manages execution flow including depth checking, input processing, memory context enrichment,
+   * and invoking WorkflowController or returning directive if called as workflow node
+   * @param input - The user input (string, AgentMessage, BaseMessage, or array of BaseMessages)
+   * @param config - Optional execution configuration
+   * @returns The final agent response or directive message for the workflow
+   * @throws {Error} Will throw an error if WorkflowController is not initialized when needed
    */
   public async execute(
     input: string | AgentMessage | BaseMessage | BaseMessage[],
@@ -321,95 +342,16 @@ export class SupervisorAgent extends BaseAgent {
     );
 
     if (this.executionDepth > 5) {
-      logger.warn(
-        `${depthIndent}SupervisorAgent: Critical execution depth (${this.executionDepth}) reached. Attempting fallback.`
-      );
-
-      try {
-        if (this.snakAgent) {
-          const result = await this.snakAgent.execute(
-            typeof input === 'string'
-              ? input
-              : input instanceof BaseMessage
-                ? input
-                : (input as AgentMessage).content,
-            config
-          );
-
-          const finalResult =
-            result instanceof BaseMessage
-              ? result.content
-              : typeof result === 'string'
-                ? result
-                : JSON.stringify(result);
-          this.executionDepth--;
-          return finalResult;
-        }
-
-        this.executionDepth--;
-        return new AIMessage({
-          content:
-            'Error: Supervisor critical depth reached. SnakAgent not available for direct execution. Please try a simpler query.',
-          additional_kwargs: { from: 'supervisor', final: true },
-        });
-      } catch (error) {
-        logger.error(
-          `${depthIndent}SupervisorAgent: Error in direct execution attempt: ${error}`
-        );
-        this.executionDepth--;
-        return new AIMessage({
-          content: `Error during forced direct execution: ${error instanceof Error ? error.message : String(error)}`,
-          additional_kwargs: { from: 'supervisor', final: true },
-        });
-      }
+      return await this.handleCriticalDepth(depthIndent, input, config);
     }
 
-    let currentMessage: BaseMessage;
-    const originalUserQueryFromConfig = config?.originalUserQuery as
-      | string
-      | undefined;
-
-    if (originalUserQueryFromConfig && isNodeCall) {
-      currentMessage = new HumanMessage(originalUserQueryFromConfig);
-      logger.debug(
-        `${depthIndent}SupervisorAgent: Using originalUserQuery from config for ${callPath} processing: \"${originalUserQueryFromConfig}\"`
-      );
-    } else if (Array.isArray(input) && input.length > 0) {
-      const lastMsg = input[input.length - 1];
-      if (lastMsg instanceof BaseMessage) {
-        currentMessage = lastMsg;
-      } else if (lastMsg && typeof (lastMsg as any).content === 'string') {
-        currentMessage = new HumanMessage((lastMsg as any).content);
-      } else if (lastMsg) {
-        currentMessage = new HumanMessage(JSON.stringify(lastMsg));
-      } else {
-        currentMessage = new HumanMessage(
-          'Empty or invalid last message in array'
-        );
-      }
-      logger.debug(
-        `${depthIndent}SupervisorAgent: Processing last message from array for ${callPath}. Content (truncated): \"${String(currentMessage.content).substring(0, 100)}...\"`
-      );
-    } else if (typeof input === 'string') {
-      currentMessage = new HumanMessage(input);
-    } else if (input instanceof BaseMessage) {
-      currentMessage = input;
-    } else if (
-      typeof input === 'object' &&
-      input !== null &&
-      'content' in input
-    ) {
-      currentMessage = new HumanMessage(
-        typeof input.content === 'string'
-          ? input.content
-          : JSON.stringify(input.content)
-      );
-    } else {
-      logger.warn(
-        `${depthIndent}SupervisorAgent: Unrecognized input type for ${callPath}: ${typeof input}. Wrapping as HumanMessage 'Unrecognized input format'.`
-      );
-      currentMessage = new HumanMessage('Unrecognized input format');
-    }
+    const currentMessage = await this.processInput(
+      input,
+      config,
+      isNodeCall,
+      callPath,
+      depthIndent
+    );
 
     if (
       this.config.starknetConfig.agentConfig?.memory?.enabled !== false &&
@@ -418,387 +360,627 @@ export class SupervisorAgent extends BaseAgent {
       logger.debug(
         `${depthIndent}SupervisorAgent: Enriching message with memory context for ${callPath}.`
       );
-      currentMessage = await this.enrichWithMemoryContext(currentMessage);
+      const enrichedMessage =
+        await this.enrichWithMemoryContext(currentMessage);
+      return await this.executeWithMessage(
+        enrichedMessage,
+        config,
+        isNodeCall,
+        callPath,
+        depthIndent
+      );
     }
 
-    if (isNodeCall) {
-      logger.debug(
-        `${depthIndent}SupervisorAgent (${callPath}): Determining next action based on query: \"${String(currentMessage.content).substring(0, 150)}...\"`
-      );
+    return await this.executeWithMessage(
+      currentMessage,
+      config,
+      isNodeCall,
+      callPath,
+      depthIndent
+    );
+  }
 
-      let responseContent = '';
-      let nextAgent: string | undefined = undefined;
-      let isFinal = false;
-      let toolCallsFromSelection: any[] | undefined = undefined;
-      let needsClarification = false;
+  /**
+   * Handles critical execution depth scenarios
+   * @param depthIndent - Indentation string for logging
+   * @param input - Original input
+   * @param config - Execution configuration
+   * @returns Execution result or error message
+   * @private
+   */
+  private async handleCriticalDepth(
+    depthIndent: string,
+    input: string | AgentMessage | BaseMessage | BaseMessage[],
+    config?: Record<string, any>
+  ): Promise<any> {
+    logger.warn(
+      `${depthIndent}SupervisorAgent: Critical execution depth (${this.executionDepth}) reached. Attempting fallback.`
+    );
 
-      const preSelectedAgent = config?.selectedSnakAgent;
-      if (preSelectedAgent && this.snakAgents[preSelectedAgent]) {
-        logger.debug(
-          `${depthIndent}SupervisorAgent (${callPath}): Pre-selected agent "${preSelectedAgent}" found, bypassing AgentSelector entirely.`
+    try {
+      if (this.snakAgent) {
+        const result = await this.snakAgent.execute(
+          typeof input === 'string'
+            ? input
+            : input instanceof BaseMessage
+              ? input
+              : (input as AgentMessage).content,
+          config
         );
 
-        // Convert agent ID to node name for routing
-        const nodeName = this.agentIdToNodeName.get(preSelectedAgent);
-        const routingTarget = nodeName || preSelectedAgent; // Fallback to original ID if no mapping
-
-        responseContent = `Supervisor: Routing directly to pre-selected agent "${preSelectedAgent}" (node: ${routingTarget}).`;
-        nextAgent = routingTarget;
-
+        const finalResult =
+          result instanceof BaseMessage
+            ? result.content
+            : typeof result === 'string'
+              ? result
+              : JSON.stringify(result);
         this.executionDepth--;
-        const directiveMessage = new AIMessage({
-          content: responseContent,
-          additional_kwargs: {
-            from: 'supervisor',
-            next_agent: nextAgent,
-          },
-        });
-        logger.debug(
-          `${depthIndent}SupervisorAgent (${callPath}): Returning direct routing directive: ${JSON.stringify(directiveMessage.toJSON())}`
-        );
-        return directiveMessage;
-      }
-
-      const queryForSelection = (originalUserQueryFromConfig ||
-        (typeof currentMessage.content === 'string'
-          ? currentMessage.content
-          : JSON.stringify(currentMessage.content))) as string;
-
-      if (this.agentSelector) {
-        logger.debug(
-          `${depthIndent}SupervisorAgent (${callPath}): Invoking AgentSelector.`
-        );
-        try {
-          const selectionOutcome = await this.agentSelector.execute(
-            new HumanMessage(queryForSelection),
-            {
-              ...(config || {}),
-              originalUserQuery: queryForSelection,
-              isWorkflowNodeCall: true,
-            }
-          );
-
-          responseContent = String(selectionOutcome.content || '');
-
-          if (selectionOutcome.additional_kwargs?.needsClarification === true) {
-            needsClarification = true;
-            isFinal = true;
-            logger.debug(
-              `${depthIndent}SupervisorAgent (${callPath}): AgentSelector needs clarification from user. Ending workflow.`
-            );
-          } else if (selectionOutcome.additional_kwargs?.nextAgent) {
-            nextAgent = selectionOutcome.additional_kwargs.nextAgent as string;
-          }
-
-          if (
-            selectionOutcome.additional_kwargs?.final !== undefined &&
-            !needsClarification
-          ) {
-            isFinal = selectionOutcome.additional_kwargs.final as boolean;
-          }
-
-          if (
-            selectionOutcome instanceof AIMessage &&
-            selectionOutcome.tool_calls &&
-            selectionOutcome.tool_calls.length > 0
-          ) {
-            toolCallsFromSelection = selectionOutcome.tool_calls;
-            if (!nextAgent && this.toolsOrchestrator) nextAgent = 'tools';
-          } else if (
-            selectionOutcome.additional_kwargs?.tool_calls &&
-            selectionOutcome.additional_kwargs?.tool_calls.length > 0
-          ) {
-            toolCallsFromSelection =
-              selectionOutcome.additional_kwargs.tool_calls;
-            if (!nextAgent && this.toolsOrchestrator) nextAgent = 'tools';
-          }
-
-          logger.debug(
-            `${depthIndent}SupervisorAgent (${callPath}): AgentSelector outcome - Next: ${nextAgent}, Final: ${isFinal}, Clarification: ${needsClarification}, Tools: ${toolCallsFromSelection?.length || 0}`
-          );
-        } catch (e: any) {
-          logger.error(
-            `${depthIndent}SupervisorAgent (${callPath}): Error calling AgentSelector: ${e.message}`
-          );
-          responseContent = 'Error during agent selection by Supervisor.';
-          isFinal = true;
-        }
-      } else {
-        logger.warn(
-          `${depthIndent}SupervisorAgent (${callPath}): AgentSelector not available. Defaulting to 'snak' or ending.`
-        );
-        if (this.snakAgent && queryForSelection) {
-          responseContent = `Supervisor: No AgentSelector. Routing to default Snak agent for query: \"${queryForSelection.substring(0, 100)}...\"`;
-          nextAgent = 'snak';
-        } else {
-          responseContent =
-            'Supervisor: AgentSelector not found, and no default action. Ending task.';
-          isFinal = true;
-        }
+        return finalResult;
       }
 
       this.executionDepth--;
-      const directiveMessage = new AIMessage({
-        content: responseContent,
-        additional_kwargs: {
-          from: 'supervisor',
-          ...(nextAgent && { next_agent: nextAgent }),
-          ...(isFinal && !nextAgent && { final: true }),
-          ...(needsClarification && { needsClarification: true }),
-        },
+      return new AIMessage({
+        content:
+          'Error: Supervisor critical depth reached. SnakAgent not available for direct execution. Please try a simpler query.',
+        additional_kwargs: { from: 'supervisor', final: true },
       });
-
-      if (toolCallsFromSelection && toolCallsFromSelection.length > 0) {
-        directiveMessage.tool_calls = toolCallsFromSelection;
-        directiveMessage.additional_kwargs.tool_calls = toolCallsFromSelection;
-      }
-
-      logger.debug(
-        `${depthIndent}SupervisorAgent (${callPath}): Returning directive: ${JSON.stringify(directiveMessage.toJSON())}`
+    } catch (error) {
+      logger.error(
+        `${depthIndent}SupervisorAgent: Error in direct execution attempt: ${error}`
       );
-      return directiveMessage;
-    } else {
-      logger.debug(
-        `${depthIndent}SupervisorAgent (${callPath}): Initiating workflow with WorkflowController.`
-      );
-
-      if (!this.workflowController) {
-        logger.error(
-          `${depthIndent}SupervisorAgent (${callPath}): WorkflowController not initialized.`
-        );
-        this.executionDepth--;
-        throw new Error('WorkflowController not initialized for execution.');
-      }
-
-      const workflowConfig: Record<string, any> = { ...(config || {}) };
-      if (
-        !workflowConfig.originalUserQuery &&
-        typeof currentMessage.content === 'string'
-      ) {
-        workflowConfig.originalUserQuery = currentMessage.content;
-      }
-
-      let targetAgentFromExternalCall = config?.agentId || null;
-      if (targetAgentFromExternalCall) {
-        logger.debug(
-          `${depthIndent}SupervisorAgent (${callPath}): Received agentId in config: "${targetAgentFromExternalCall}"`
-        );
-
-        const isValidAgent =
-          targetAgentFromExternalCall in this.snakAgents ||
-          targetAgentFromExternalCall === 'snak' ||
-          targetAgentFromExternalCall === 'supervisor' ||
-          this.operators.has(targetAgentFromExternalCall) ||
-          targetAgentFromExternalCall === this.agentSelector?.id ||
-          targetAgentFromExternalCall === this.memoryAgent?.id;
-        if (!isValidAgent) {
-          logger.warn(
-            `${depthIndent}SupervisorAgent (${callPath}): Specified agentId \"${targetAgentFromExternalCall}\" in config is not a recognized agent. Workflow will use default entry point.`
-          );
-          targetAgentFromExternalCall = null;
-        } else {
-          // Convert agent ID to node name if it's a SnakAgent
-          let targetNodeName = targetAgentFromExternalCall;
-          if (targetAgentFromExternalCall in this.snakAgents) {
-            const nodeName = this.agentIdToNodeName.get(
-              targetAgentFromExternalCall
-            );
-            if (nodeName) {
-              targetNodeName = nodeName;
-              logger.debug(
-                `${depthIndent}SupervisorAgent (${callPath}): Converting agent ID "${targetAgentFromExternalCall}" to node name "${targetNodeName}"`
-              );
-            }
-          }
-
-          logger.debug(
-            `${depthIndent}SupervisorAgent (${callPath}): External config requests startNode: \"${targetNodeName}\"`
-          );
-          workflowConfig.startNode = targetNodeName;
-
-          // Set selectedSnakAgent to bypass supervisor's agent selection logic
-          if (targetAgentFromExternalCall in this.snakAgents) {
-            workflowConfig.selectedSnakAgent = targetAgentFromExternalCall;
-            logger.debug(
-              `${depthIndent}SupervisorAgent (${callPath}): Setting selectedSnakAgent to bypass agent selector: "${targetAgentFromExternalCall}"`
-            );
-          }
-        }
-      } else {
-        logger.debug(
-          `${depthIndent}SupervisorAgent (${callPath}): No agentId provided in config, using default workflow`
-        );
-      }
-
-      const finalTargetNodeForSnak = workflowConfig.startNode;
-      const isSnakAgent =
-        finalTargetNodeForSnak &&
-        (this.nodeNameToAgentId.has(finalTargetNodeForSnak) ||
-          this.snakAgents[finalTargetNodeForSnak] ||
-          (this.workflowController &&
-            this.workflowController['agents'] &&
-            this.workflowController['agents'][finalTargetNodeForSnak] &&
-            this.workflowController['agents'][finalTargetNodeForSnak].type ===
-              AgentType.SNAK));
-
-      // Check if a specific agent was requested via agentId (bypass MemoryAgent)
-      const isSpecificAgentRequested =
-        config?.agentId && targetAgentFromExternalCall;
-
-      if (
-        this.memoryAgent &&
-        finalTargetNodeForSnak &&
-        isSnakAgent &&
-        workflowConfig.startNode !== this.memoryAgent.id &&
-        !isSpecificAgentRequested // Don't route via MemoryAgent if specific agent requested
-      ) {
-        // Convert node name back to agent ID for selectedSnakAgent
-        const originalAgentId =
-          this.nodeNameToAgentId.get(finalTargetNodeForSnak) ||
-          finalTargetNodeForSnak;
-
-        logger.debug(
-          `${depthIndent}SupervisorAgent (${callPath}): Snak agent \"${finalTargetNodeForSnak}\" targeted. Routing via MemoryAgent (${this.memoryAgent.id}) first.`
-        );
-        workflowConfig.selectedSnakAgent = originalAgentId;
-        workflowConfig.startNode = this.memoryAgent.id;
-      } else if (
-        finalTargetNodeForSnak &&
-        isSnakAgent &&
-        !workflowConfig.selectedSnakAgent
-      ) {
-        // Convert node name back to agent ID for selectedSnakAgent
-        const originalAgentId =
-          this.nodeNameToAgentId.get(finalTargetNodeForSnak) ||
-          finalTargetNodeForSnak;
-
-        logger.debug(
-          `${depthIndent}SupervisorAgent (${callPath}): Snak agent \"${finalTargetNodeForSnak}\" targeted. Setting selectedSnakAgent to bypass agent selector.`
-        );
-        workflowConfig.selectedSnakAgent = originalAgentId;
-      }
-
-      if (isSpecificAgentRequested && finalTargetNodeForSnak && isSnakAgent) {
-        // When specific agent is requested, bypass MemoryAgent and go directly to target
-        logger.debug(
-          `${depthIndent}SupervisorAgent (${callPath}): Specific agent requested via agentId. Bypassing MemoryAgent and routing directly to \"${finalTargetNodeForSnak}\".`
-        );
-        // Ensure we don't override the startNode with MemoryAgent
-        workflowConfig.startNode = finalTargetNodeForSnak;
-        // selectedSnakAgent should already be set above
-      }
-
-      try {
-        const initialMessagesForWorkflow = [currentMessage];
-        if (
-          workflowConfig.originalUserQuery &&
-          (!currentMessage.additional_kwargs ||
-            !currentMessage.additional_kwargs.originalUserQuery)
-        ) {
-          if (!initialMessagesForWorkflow[0].additional_kwargs)
-            initialMessagesForWorkflow[0].additional_kwargs = {};
-          initialMessagesForWorkflow[0].additional_kwargs.originalUserQuery =
-            workflowConfig.originalUserQuery;
-        }
-
-        const result = await this.workflowController.execute(
-          initialMessagesForWorkflow[0],
-          workflowConfig
-        );
-
-        if (
-          result &&
-          result.metadata &&
-          result.metadata.requiresClarification === true
-        ) {
-          if (result.metadata.clarificationMessage) {
-            logger.debug(
-              `${depthIndent}SupervisorAgent (${callPath}): Agent requires clarification. Ending workflow and returning clarification message directly.`
-            );
-            this.executionDepth--;
-            return result.metadata.clarificationMessage.content;
-          }
-        }
-
-        if (result && result.messages && result.messages.length > 0) {
-          const lastMessage = result.messages[result.messages.length - 1];
-          if (
-            lastMessage instanceof AIMessage &&
-            lastMessage.additional_kwargs?.needsClarification === true
-          ) {
-            logger.debug(
-              `${depthIndent}SupervisorAgent (${callPath}): Found clarification request in final message from ${lastMessage.additional_kwargs?.from || 'unknown agent'}.`
-            );
-            this.executionDepth--;
-            return lastMessage.content;
-          }
-        }
-
-        let finalUserResponse: string = 'Workflow completed.';
-        if (
-          result &&
-          result.messages &&
-          Array.isArray(result.messages) &&
-          result.messages.length > 0
-        ) {
-          const lastWorkflowMessage =
-            result.messages[result.messages.length - 1];
-          if (lastWorkflowMessage) {
-            if (
-              typeof lastWorkflowMessage.content === 'string' &&
-              lastWorkflowMessage.content.trim() !== ''
-            ) {
-              finalUserResponse = lastWorkflowMessage.content;
-            } else if (
-              lastWorkflowMessage.additional_kwargs?.final_answer &&
-              typeof lastWorkflowMessage.additional_kwargs.final_answer ===
-                'string'
-            ) {
-              finalUserResponse =
-                lastWorkflowMessage.additional_kwargs.final_answer;
-            } else if (typeof lastWorkflowMessage.content !== 'string') {
-              finalUserResponse = JSON.stringify(lastWorkflowMessage.content);
-            } else if (
-              lastWorkflowMessage instanceof AIMessage &&
-              lastWorkflowMessage.content.trim() === '' &&
-              lastWorkflowMessage.additional_kwargs?.final
-            ) {
-              finalUserResponse = 'Task completed.';
-            }
-          }
-        } else if (typeof result === 'string') {
-          finalUserResponse = result;
-        } else if (
-          result &&
-          result.content &&
-          typeof result.content === 'string'
-        ) {
-          finalUserResponse = result.content;
-        } else if (result) {
-          finalUserResponse = this.formatResponse(result);
-        }
-
-        logger.debug(
-          `${depthIndent}SupervisorAgent (${callPath}): Workflow finished. Final response (truncated): \"${finalUserResponse.substring(0, 200)}...\"`
-        );
-        this.executionDepth--;
-        return finalUserResponse;
-      } catch (error: any) {
-        logger.error(
-          `${depthIndent}SupervisorAgent (${callPath}): Error during WorkflowController execution: ${error.message || error}`
-        );
-        this.executionDepth--;
-        return `An error occurred while processing your request: ${error.message || String(error)}. Please try again.`;
-      }
+      this.executionDepth--;
+      return new AIMessage({
+        content: `Error during forced direct execution: ${error instanceof Error ? error.message : String(error)}`,
+        additional_kwargs: { from: 'supervisor', final: true },
+      });
     }
   }
 
   /**
-   * Formats a response, primarily for logging and ensuring string output.
-   * If the response is an object with a string `content` property, that content is formatted.
-   * Otherwise, strings are returned as is, and other types are stringified.
-   * @param response The response to format.
-   * @returns The formatted response.
+   * Processes input into a BaseMessage format
+   * @param input - Raw input in various formats
+   * @param config - Execution configuration
+   * @param isNodeCall - Whether this is a node call
+   * @param callPath - Call path for logging
+   * @param depthIndent - Indentation for logging
+   * @returns Processed BaseMessage
+   * @private
+   */
+  private async processInput(
+    input: string | AgentMessage | BaseMessage | BaseMessage[],
+    config: Record<string, any> | undefined,
+    isNodeCall: boolean,
+    callPath: string,
+    depthIndent: string
+  ): Promise<BaseMessage> {
+    const originalUserQueryFromConfig = config?.originalUserQuery as
+      | string
+      | undefined;
+
+    if (originalUserQueryFromConfig && isNodeCall) {
+      logger.debug(
+        `${depthIndent}SupervisorAgent: Using originalUserQuery from config for ${callPath} processing: "${originalUserQueryFromConfig}"`
+      );
+      return new HumanMessage(originalUserQueryFromConfig);
+    }
+
+    if (Array.isArray(input) && input.length > 0) {
+      const lastMsg = input[input.length - 1];
+      const content =
+        lastMsg instanceof BaseMessage
+          ? lastMsg
+          : lastMsg && typeof (lastMsg as any).content === 'string'
+            ? new HumanMessage((lastMsg as any).content)
+            : lastMsg
+              ? new HumanMessage(JSON.stringify(lastMsg))
+              : new HumanMessage('Empty or invalid last message in array');
+
+      logger.debug(
+        `${depthIndent}SupervisorAgent: Processing last message from array for ${callPath}. Content (truncated): "${String(content.content).substring(0, 100)}..."`
+      );
+      return content;
+    }
+
+    if (typeof input === 'string') {
+      return new HumanMessage(input);
+    }
+
+    if (input instanceof BaseMessage) {
+      return input;
+    }
+
+    if (typeof input === 'object' && input !== null && 'content' in input) {
+      return new HumanMessage(
+        typeof input.content === 'string'
+          ? input.content
+          : JSON.stringify(input.content)
+      );
+    }
+
+    logger.warn(
+      `${depthIndent}SupervisorAgent: Unrecognized input type for ${callPath}: ${typeof input}. Wrapping as HumanMessage 'Unrecognized input format'.`
+    );
+    return new HumanMessage('Unrecognized input format');
+  }
+
+  /**
+   * Executes with processed message
+   * @param currentMessage - Processed message
+   * @param config - Execution configuration
+   * @param isNodeCall - Whether this is a node call
+   * @param callPath - Call path for logging
+   * @param depthIndent - Indentation for logging
+   * @returns Execution result
+   * @private
+   */
+  private async executeWithMessage(
+    currentMessage: BaseMessage,
+    config: Record<string, any> | undefined,
+    isNodeCall: boolean,
+    callPath: string,
+    depthIndent: string
+  ): Promise<any> {
+    if (isNodeCall) {
+      return await this.handleNodeCall(
+        currentMessage,
+        config,
+        callPath,
+        depthIndent
+      );
+    } else {
+      return await this.handleExternalCall(
+        currentMessage,
+        config,
+        callPath,
+        depthIndent
+      );
+    }
+  }
+
+  /**
+   * Handles node call execution path
+   * @param currentMessage - Current message to process
+   * @param config - Execution configuration
+   * @param callPath - Call path for logging
+   * @param depthIndent - Indentation for logging
+   * @returns Directive message for workflow
+   * @private
+   */
+  private async handleNodeCall(
+    currentMessage: BaseMessage,
+    config: Record<string, any> | undefined,
+    callPath: string,
+    depthIndent: string
+  ): Promise<AIMessage> {
+    logger.debug(
+      `${depthIndent}SupervisorAgent (${callPath}): Determining next action based on query: "${String(currentMessage.content).substring(0, 150)}..."`
+    );
+
+    let responseContent = '';
+    let nextAgent: string | undefined = undefined;
+    let isFinal = false;
+    let toolCallsFromSelection: any[] | undefined = undefined;
+    let needsClarification = false;
+
+    const preSelectedAgent = config?.selectedSnakAgent;
+    if (preSelectedAgent && this.snakAgents[preSelectedAgent]) {
+      logger.debug(
+        `${depthIndent}SupervisorAgent (${callPath}): Pre-selected agent "${preSelectedAgent}" found, bypassing AgentSelector entirely.`
+      );
+
+      const nodeName = this.agentIdToNodeName.get(preSelectedAgent);
+      const routingTarget = nodeName || preSelectedAgent;
+
+      responseContent = `Supervisor: Routing directly to pre-selected agent "${preSelectedAgent}" (node: ${routingTarget}).`;
+      nextAgent = routingTarget;
+
+      this.executionDepth--;
+      return new AIMessage({
+        content: responseContent,
+        additional_kwargs: { from: 'supervisor', next_agent: nextAgent },
+      });
+    }
+
+    const queryForSelection = (config?.originalUserQuery ||
+      (typeof currentMessage.content === 'string'
+        ? currentMessage.content
+        : JSON.stringify(currentMessage.content))) as string;
+
+    if (this.agentSelector) {
+      try {
+        const selectionOutcome = await this.agentSelector.execute(
+          new HumanMessage(queryForSelection),
+          {
+            ...(config || {}),
+            originalUserQuery: queryForSelection,
+            isWorkflowNodeCall: true,
+          }
+        );
+
+        responseContent = String(selectionOutcome.content || '');
+
+        if (selectionOutcome.additional_kwargs?.needsClarification === true) {
+          needsClarification = true;
+          isFinal = true;
+          logger.debug(
+            `${depthIndent}SupervisorAgent (${callPath}): AgentSelector needs clarification from user. Ending workflow.`
+          );
+        } else if (selectionOutcome.additional_kwargs?.nextAgent) {
+          nextAgent = selectionOutcome.additional_kwargs.nextAgent as string;
+        }
+
+        if (
+          selectionOutcome.additional_kwargs?.final !== undefined &&
+          !needsClarification
+        ) {
+          isFinal = selectionOutcome.additional_kwargs.final as boolean;
+        }
+
+        if (
+          selectionOutcome instanceof AIMessage &&
+          selectionOutcome.tool_calls?.length > 0
+        ) {
+          toolCallsFromSelection = selectionOutcome.tool_calls;
+          if (!nextAgent && this.toolsOrchestrator) nextAgent = 'tools';
+        } else if (selectionOutcome.additional_kwargs?.tool_calls?.length > 0) {
+          toolCallsFromSelection =
+            selectionOutcome.additional_kwargs.tool_calls;
+          if (!nextAgent && this.toolsOrchestrator) nextAgent = 'tools';
+        }
+
+        logger.debug(
+          `${depthIndent}SupervisorAgent (${callPath}): AgentSelector outcome - Next: ${nextAgent}, Final: ${isFinal}, Clarification: ${needsClarification}, Tools: ${toolCallsFromSelection?.length || 0}`
+        );
+      } catch (e: any) {
+        logger.error(
+          `${depthIndent}SupervisorAgent (${callPath}): Error calling AgentSelector: ${e.message}`
+        );
+        responseContent = 'Error during agent selection by Supervisor.';
+        isFinal = true;
+      }
+    } else {
+      logger.warn(
+        `${depthIndent}SupervisorAgent (${callPath}): AgentSelector not available. Defaulting to 'snak' or ending.`
+      );
+      if (this.snakAgent && queryForSelection) {
+        responseContent = `Supervisor: No AgentSelector. Routing to default Snak agent for query: "${queryForSelection.substring(0, 100)}..."`;
+        nextAgent = 'snak';
+      } else {
+        responseContent =
+          'Supervisor: AgentSelector not found, and no default action. Ending task.';
+        isFinal = true;
+      }
+    }
+
+    this.executionDepth--;
+    const directiveMessage = new AIMessage({
+      content: responseContent,
+      additional_kwargs: {
+        from: 'supervisor',
+        ...(nextAgent && { next_agent: nextAgent }),
+        ...(isFinal && !nextAgent && { final: true }),
+        ...(needsClarification && { needsClarification: true }),
+      },
+    });
+
+    if (toolCallsFromSelection?.length > 0) {
+      directiveMessage.tool_calls = toolCallsFromSelection;
+      directiveMessage.additional_kwargs.tool_calls = toolCallsFromSelection;
+    }
+
+    logger.debug(
+      `${depthIndent}SupervisorAgent (${callPath}): Returning directive: ${JSON.stringify(directiveMessage.toJSON())}`
+    );
+    return directiveMessage;
+  }
+
+  /**
+   * Handles external call execution path
+   * @param currentMessage - Current message to process
+   * @param config - Execution configuration
+   * @param callPath - Call path for logging
+   * @param depthIndent - Indentation for logging
+   * @returns Final execution result
+   * @private
+   */
+  private async handleExternalCall(
+    currentMessage: BaseMessage,
+    config: Record<string, any> | undefined,
+    callPath: string,
+    depthIndent: string
+  ): Promise<any> {
+    logger.debug(
+      `${depthIndent}SupervisorAgent (${callPath}): Initiating workflow with WorkflowController.`
+    );
+
+    if (!this.workflowController) {
+      logger.error(
+        `${depthIndent}SupervisorAgent (${callPath}): WorkflowController not initialized.`
+      );
+      this.executionDepth--;
+      throw new Error('WorkflowController not initialized for execution.');
+    }
+
+    const workflowConfig = this.prepareWorkflowConfig(
+      currentMessage,
+      config,
+      callPath,
+      depthIndent
+    );
+
+    try {
+      const initialMessagesForWorkflow = [currentMessage];
+      if (
+        workflowConfig.originalUserQuery &&
+        !currentMessage.additional_kwargs?.originalUserQuery
+      ) {
+        if (!initialMessagesForWorkflow[0].additional_kwargs) {
+          initialMessagesForWorkflow[0].additional_kwargs = {};
+        }
+        initialMessagesForWorkflow[0].additional_kwargs.originalUserQuery =
+          workflowConfig.originalUserQuery;
+      }
+
+      const result = await this.workflowController.execute(
+        initialMessagesForWorkflow[0],
+        workflowConfig
+      );
+
+      if (
+        result?.metadata?.requiresClarification === true &&
+        result.metadata.clarificationMessage
+      ) {
+        logger.debug(
+          `${depthIndent}SupervisorAgent (${callPath}): Agent requires clarification. Ending workflow and returning clarification message directly.`
+        );
+        this.executionDepth--;
+        return result.metadata.clarificationMessage.content;
+      }
+
+      if (result?.messages?.length > 0) {
+        const lastMessage = result.messages[result.messages.length - 1];
+        if (
+          lastMessage instanceof AIMessage &&
+          lastMessage.additional_kwargs?.needsClarification === true
+        ) {
+          logger.debug(
+            `${depthIndent}SupervisorAgent (${callPath}): Found clarification request in final message from ${lastMessage.additional_kwargs?.from || 'unknown agent'}.`
+          );
+          this.executionDepth--;
+          return lastMessage.content;
+        }
+      }
+
+      const finalUserResponse = this.extractFinalResponse(result);
+      logger.debug(
+        `${depthIndent}SupervisorAgent (${callPath}): Workflow finished. Final response (truncated): "${finalUserResponse.substring(0, 200)}..."`
+      );
+      this.executionDepth--;
+      return finalUserResponse;
+    } catch (error: any) {
+      logger.error(
+        `${depthIndent}SupervisorAgent (${callPath}): Error during WorkflowController execution: ${error.message || error}`
+      );
+      this.executionDepth--;
+      return `An error occurred while processing your request: ${error.message || String(error)}. Please try again.`;
+    }
+  }
+
+  /**
+   * Prepares workflow configuration for execution
+   * @param currentMessage - Current message
+   * @param config - Original configuration
+   * @param callPath - Call path for logging
+   * @param depthIndent - Indentation for logging
+   * @returns Prepared workflow configuration
+   * @private
+   */
+  private prepareWorkflowConfig(
+    currentMessage: BaseMessage,
+    config: Record<string, any> | undefined,
+    callPath: string,
+    depthIndent: string
+  ): Record<string, any> {
+    const workflowConfig: Record<string, any> = { ...(config || {}) };
+
+    if (
+      !workflowConfig.originalUserQuery &&
+      typeof currentMessage.content === 'string'
+    ) {
+      workflowConfig.originalUserQuery = currentMessage.content;
+    }
+
+    let targetAgentFromExternalCall = config?.agentId || null;
+    if (targetAgentFromExternalCall) {
+      logger.debug(
+        `${depthIndent}SupervisorAgent (${callPath}): Received agentId in config: "${targetAgentFromExternalCall}"`
+      );
+
+      const isValidAgent = this.isValidAgent(targetAgentFromExternalCall);
+      if (!isValidAgent) {
+        logger.warn(
+          `${depthIndent}SupervisorAgent (${callPath}): Specified agentId "${targetAgentFromExternalCall}" in config is not a recognized agent. Workflow will use default entry point.`
+        );
+        targetAgentFromExternalCall = null;
+      } else {
+        let targetNodeName = targetAgentFromExternalCall;
+        if (targetAgentFromExternalCall in this.snakAgents) {
+          const nodeName = this.agentIdToNodeName.get(
+            targetAgentFromExternalCall
+          );
+          if (nodeName) {
+            targetNodeName = nodeName;
+            logger.debug(
+              `${depthIndent}SupervisorAgent (${callPath}): Converting agent ID "${targetAgentFromExternalCall}" to node name "${targetNodeName}"`
+            );
+          }
+        }
+
+        logger.debug(
+          `${depthIndent}SupervisorAgent (${callPath}): External config requests startNode: "${targetNodeName}"`
+        );
+        workflowConfig.startNode = targetNodeName;
+
+        if (targetAgentFromExternalCall in this.snakAgents) {
+          workflowConfig.selectedSnakAgent = targetAgentFromExternalCall;
+          logger.debug(
+            `${depthIndent}SupervisorAgent (${callPath}): Setting selectedSnakAgent to bypass agent selector: "${targetAgentFromExternalCall}"`
+          );
+        }
+      }
+    } else {
+      logger.debug(
+        `${depthIndent}SupervisorAgent (${callPath}): No agentId provided in config, using default workflow`
+      );
+    }
+
+    this.configureMemoryRouting(workflowConfig, config, callPath, depthIndent);
+    return workflowConfig;
+  }
+
+  /**
+   * Configures memory routing for workflow
+   * @param workflowConfig - Workflow configuration to modify
+   * @param config - Original configuration
+   * @param callPath - Call path for logging
+   * @param depthIndent - Indentation for logging
+   * @private
+   */
+  private configureMemoryRouting(
+    workflowConfig: Record<string, any>,
+    config: Record<string, any> | undefined,
+    callPath: string,
+    depthIndent: string
+  ): void {
+    const finalTargetNodeForSnak = workflowConfig.startNode;
+    const isSnakAgent =
+      finalTargetNodeForSnak && this.isSnakAgentNode(finalTargetNodeForSnak);
+    const isSpecificAgentRequested =
+      config?.agentId && workflowConfig.startNode;
+
+    if (
+      this.memoryAgent &&
+      finalTargetNodeForSnak &&
+      isSnakAgent &&
+      workflowConfig.startNode !== this.memoryAgent.id &&
+      !isSpecificAgentRequested
+    ) {
+      const originalAgentId =
+        this.nodeNameToAgentId.get(finalTargetNodeForSnak) ||
+        finalTargetNodeForSnak;
+      logger.debug(
+        `${depthIndent}SupervisorAgent (${callPath}): Snak agent "${finalTargetNodeForSnak}" targeted. Routing via MemoryAgent (${this.memoryAgent.id}) first.`
+      );
+      workflowConfig.selectedSnakAgent = originalAgentId;
+      workflowConfig.startNode = this.memoryAgent.id;
+    } else if (
+      finalTargetNodeForSnak &&
+      isSnakAgent &&
+      !workflowConfig.selectedSnakAgent
+    ) {
+      const originalAgentId =
+        this.nodeNameToAgentId.get(finalTargetNodeForSnak) ||
+        finalTargetNodeForSnak;
+      logger.debug(
+        `${depthIndent}SupervisorAgent (${callPath}): Snak agent "${finalTargetNodeForSnak}" targeted. Setting selectedSnakAgent to bypass agent selector.`
+      );
+      workflowConfig.selectedSnakAgent = originalAgentId;
+    }
+
+    if (isSpecificAgentRequested && finalTargetNodeForSnak && isSnakAgent) {
+      logger.debug(
+        `${depthIndent}SupervisorAgent (${callPath}): Specific agent requested via agentId. Bypassing MemoryAgent and routing directly to "${finalTargetNodeForSnak}".`
+      );
+      workflowConfig.startNode = finalTargetNodeForSnak;
+    }
+  }
+
+  /**
+   * Checks if an agent ID is valid
+   * @param agentId - Agent ID to validate
+   * @returns True if valid, false otherwise
+   * @private
+   */
+  private isValidAgent(agentId: string): boolean {
+    return (
+      agentId in this.snakAgents ||
+      agentId === 'snak' ||
+      agentId === 'supervisor' ||
+      this.operators.has(agentId) ||
+      agentId === this.agentSelector?.id ||
+      agentId === this.memoryAgent?.id
+    );
+  }
+
+  /**
+   * Checks if a node name corresponds to a Snak agent
+   * @param nodeName - Node name to check
+   * @returns True if it's a Snak agent node, false otherwise
+   * @private
+   */
+  private isSnakAgentNode(nodeName: string): boolean {
+    return (
+      this.nodeNameToAgentId.has(nodeName) ||
+      this.snakAgents[nodeName] ||
+      (this.workflowController &&
+        this.workflowController['agents'] &&
+        this.workflowController['agents'][nodeName] &&
+        this.workflowController['agents'][nodeName].type === AgentType.SNAK)
+    );
+  }
+
+  /**
+   * Extracts final response from workflow result
+   * @param result - Workflow execution result
+   * @returns Formatted final response string
+   * @private
+   */
+  private extractFinalResponse(result: any): string {
+    let finalUserResponse = 'Workflow completed.';
+
+    if (
+      result?.messages &&
+      Array.isArray(result.messages) &&
+      result.messages.length > 0
+    ) {
+      const lastWorkflowMessage = result.messages[result.messages.length - 1];
+      if (lastWorkflowMessage) {
+        if (
+          typeof lastWorkflowMessage.content === 'string' &&
+          lastWorkflowMessage.content.trim() !== ''
+        ) {
+          finalUserResponse = lastWorkflowMessage.content;
+        } else if (
+          lastWorkflowMessage.additional_kwargs?.final_answer &&
+          typeof lastWorkflowMessage.additional_kwargs.final_answer === 'string'
+        ) {
+          finalUserResponse =
+            lastWorkflowMessage.additional_kwargs.final_answer;
+        } else if (typeof lastWorkflowMessage.content !== 'string') {
+          finalUserResponse = JSON.stringify(lastWorkflowMessage.content);
+        } else if (
+          lastWorkflowMessage instanceof AIMessage &&
+          lastWorkflowMessage.content.trim() === '' &&
+          lastWorkflowMessage.additional_kwargs?.final
+        ) {
+          finalUserResponse = 'Task completed.';
+        }
+      }
+    } else if (typeof result === 'string') {
+      finalUserResponse = result;
+    } else if (result?.content && typeof result.content === 'string') {
+      finalUserResponse = result.content;
+    } else if (result) {
+      finalUserResponse = this.formatResponse(result);
+    }
+
+    return finalUserResponse;
+  }
+
+  /**
+   * Formats a response for output
+   * @param response - The response to format
+   * @returns The formatted response string
    */
   public formatResponse(response: any): string {
     if (typeof response === 'string') {
@@ -829,9 +1011,9 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Executes a task in autonomous mode using the SnakAgent.
-   * @returns The result of the autonomous execution.
-   * @throws Will throw an error if the SnakAgent is not available.
+   * Executes a task in autonomous mode using the SnakAgent
+   * @returns The result of the autonomous execution
+   * @throws {Error} Will throw an error if the SnakAgent is not available
    */
   public async executeAutonomous(): Promise<any> {
     logger.debug('SupervisorAgent: Entering autonomous execution mode.');
@@ -847,33 +1029,33 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Gets an operator agent by its ID.
-   * @param id The ID of the operator agent.
-   * @returns The agent if found, otherwise undefined.
+   * Gets an operator agent by its ID
+   * @param id - The ID of the operator agent
+   * @returns The agent if found, otherwise undefined
    */
   public getOperator(id: string): IAgent | undefined {
     return this.operators.get(id);
   }
 
   /**
-   * Gets the ToolsOrchestrator instance.
-   * @returns The ToolsOrchestrator instance, or null if not initialized.
+   * Gets the ToolsOrchestrator instance
+   * @returns The ToolsOrchestrator instance, or null if not initialized
    */
   public getToolsOrchestrator(): ToolsOrchestrator | null {
     return this.toolsOrchestrator;
   }
 
   /**
-   * Gets the MemoryAgent instance.
-   * @returns The MemoryAgent instance, or null if not initialized.
+   * Gets the MemoryAgent instance
+   * @returns The MemoryAgent instance, or null if not initialized
    */
   public getMemoryAgent(): MemoryAgent | null {
     return this.memoryAgent;
   }
 
   /**
-   * Gets all available tools from the ToolsOrchestrator and MemoryAgent.
-   * @returns An array of Tool instances.
+   * Gets all available tools from the ToolsOrchestrator and MemoryAgent
+   * @returns An array of Tool instances
    */
   public getAllTools(): Tool[] {
     const tools: Tool[] = [];
@@ -887,8 +1069,8 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Resets the SupervisorAgent and its components.
-   * This includes resetting the WorkflowController and the execution depth counter.
+   * Resets the SupervisorAgent and its components
+   * Includes resetting the WorkflowController and execution depth counter
    */
   public async reset(): Promise<void> {
     logger.debug('SupervisorAgent: Resetting...');
@@ -901,10 +1083,9 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Updates the operational mode of the SupervisorAgent.
-   * This involves updating the agent's configuration and re-initializing
-   * the WorkflowController to reflect the mode change.
-   * @param mode The new AgentMode to set.
+   * Updates the operational mode of the SupervisorAgent
+   * Updates agent configuration and re-initializes WorkflowController to reflect mode change
+   * @param mode - The new AgentMode to set
    */
   public async updateMode(mode: AgentMode): Promise<void> {
     logger.debug(`SupervisorAgent: Updating mode to: ${AGENT_MODES[mode]}`);
@@ -914,7 +1095,7 @@ export class SupervisorAgent extends BaseAgent {
       agentConfig.mode = mode;
     } else {
       logger.warn(
-        `SupervisorAgent: Unable to update mode - agentConfig not found in starknetConfig.`
+        'SupervisorAgent: Unable to update mode - agentConfig not found in starknetConfig.'
       );
     }
 
@@ -936,9 +1117,8 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Releases resources held by the SupervisorAgent and its components.
-   * This involves resetting the WorkflowController and nullifying references
-   * to all operator agents.
+   * Releases resources held by the SupervisorAgent and its components
+   * Resets WorkflowController and nullifies references to all operator agents
    */
   public async dispose(): Promise<void> {
     logger.debug('SupervisorAgent: Disposing agents...');
@@ -948,17 +1128,17 @@ export class SupervisorAgent extends BaseAgent {
       logger.debug('SupervisorAgent: SnakAgent disposed');
     }
 
-    if (this.modelSelector && this.modelSelector.dispose) {
-      await this.modelSelector.dispose();
-    }
-    if (this.memoryAgent && this.memoryAgent.dispose) {
-      await this.memoryAgent.dispose();
-    }
-    if (this.toolsOrchestrator && this.toolsOrchestrator.dispose) {
-      await this.toolsOrchestrator.dispose();
-    }
-    if (this.workflowController && this.workflowController.dispose) {
-      await this.workflowController.dispose();
+    const agentsToDispose = [
+      this.modelSelector,
+      this.memoryAgent,
+      this.toolsOrchestractor,
+      this.workflowController,
+    ];
+
+    for (const agent of agentsToDispose) {
+      if (agent && typeof (agent as any).dispose === 'function') {
+        await (agent as any).dispose();
+      }
     }
 
     this.modelSelector = null;
@@ -980,11 +1160,11 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Enriches a message with relevant memory context if the MemoryAgent is enabled.
-   * It retrieves memories relevant to the message and appends them to the message's
-   * `additional_kwargs.memory_context`.
-   * @param message The BaseMessage to enrich.
-   * @returns The enriched message, or the original message if MemoryAgent is unavailable or no memories are found.
+   * Enriches a message with relevant memory context if MemoryAgent is enabled
+   * Retrieves memories relevant to the message and appends them to additional_kwargs.memory_context
+   * @param message - The BaseMessage to enrich
+   * @returns The enriched message, or original message if MemoryAgent unavailable or no memories found
+   * @private
    */
   private async enrichWithMemoryContext(
     message: BaseMessage
@@ -1035,11 +1215,11 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Starts a hybrid execution flow with an initial input.
-   * This delegates to the SnakAgent's hybrid execution capabilities.
-   * @param initialInput The initial input string to start the hybrid process.
-   * @returns An object containing the initial state and the thread ID for the execution.
-   * @throws Will throw an error if the SnakAgent is not available or if the execution fails to start.
+   * Starts a hybrid execution flow with an initial input
+   * Delegates to the SnakAgent's hybrid execution capabilities
+   * @param initialInput - The initial input string to start the hybrid process
+   * @returns An object containing the initial state and the thread ID for the execution
+   * @throws {Error} Will throw an error if the SnakAgent is not available or if execution fails to start
    */
   public async startHybridExecution(
     initialInput: string
@@ -1078,12 +1258,12 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Provides subsequent input to a paused hybrid execution.
-   * This delegates to the SnakAgent to resume the hybrid flow.
-   * @param input The human input string to provide to the paused execution.
-   * @param threadId The thread ID of the paused hybrid execution.
-   * @returns The updated state after processing the input.
-   * @throws Will throw an error if the SnakAgent is not available.
+   * Provides subsequent input to a paused hybrid execution
+   * Delegates to the SnakAgent to resume the hybrid flow
+   * @param input - The human input string to provide to the paused execution
+   * @param threadId - The thread ID of the paused hybrid execution
+   * @returns The updated state after processing the input
+   * @throws {Error} Will throw an error if the SnakAgent is not available
    */
   public async provideHybridInput(
     input: string,
@@ -1102,11 +1282,10 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Checks if the current state of a hybrid execution is waiting for human input.
-   * It examines the state object, specifically looking for flags or markers in messages
-   * that indicate a waiting state.
-   * @param state The current execution state object.
-   * @returns True if the execution is waiting for input, false otherwise.
+   * Checks if the current state of a hybrid execution is waiting for human input
+   * Examines the state object for flags or markers in messages indicating waiting state
+   * @param state - The current execution state object
+   * @returns True if the execution is waiting for input, false otherwise
    */
   public isWaitingForInput(state: any): boolean {
     if (
@@ -1132,22 +1311,14 @@ export class SupervisorAgent extends BaseAgent {
       return true;
     }
 
-    if (
-      lastMessage.additional_kwargs &&
-      lastMessage.additional_kwargs.wait_for_input === true
-    ) {
-      return true;
-    }
-
-    return false;
+    return lastMessage.additional_kwargs?.wait_for_input === true;
   }
 
   /**
-   * Checks if the current state of a hybrid execution indicates completion.
-   * It examines the state object, looking for markers in messages that signify
-   * the end of the execution.
-   * @param state The current execution state object.
-   * @returns True if the execution is complete, false otherwise.
+   * Checks if the current state of a hybrid execution indicates completion
+   * Examines the state object for markers in messages signifying end of execution
+   * @param state - The current execution state object
+   * @returns True if the execution is complete, false otherwise
    */
   public isExecutionComplete(state: any): boolean {
     if (
@@ -1169,21 +1340,14 @@ export class SupervisorAgent extends BaseAgent {
       return true;
     }
 
-    if (
-      lastMessage.additional_kwargs &&
-      lastMessage.additional_kwargs.final === true
-    ) {
-      return true;
-    }
-
-    return false;
+    return lastMessage.additional_kwargs?.final === true;
   }
 
   /**
-   * Registers a new SnakAgent in the system.
-   * @param id The unique identifier for the agent
-   * @param agent The SnakAgent instance to register
-   * @param metadata Optional metadata for the agent
+   * Registers a new SnakAgent in the system
+   * @param id - The unique identifier for the agent
+   * @param agent - The SnakAgent instance to register
+   * @param metadata - Optional metadata for the agent
    */
   public registerSnakAgent(id: string, agent: SnakAgent, metadata?: any): void {
     if (!id || id.trim() === '') {
@@ -1193,28 +1357,20 @@ export class SupervisorAgent extends BaseAgent {
       id = 'snak-custom';
     }
 
-    if (!metadata) {
-      metadata = {};
-    }
-
     const agentMetadata = {
-      name: metadata.name || id,
-      description: metadata.description || 'A Snak interaction agent',
-      group: metadata.group || 'snak',
+      name: metadata?.name || id,
+      description: metadata?.description || 'A Snak interaction agent',
+      group: metadata?.group || 'snak',
     };
 
     (agent as any).metadata = agentMetadata;
 
-    // Generate node name in "name-group" format
     const nodeName = this.generateNodeName(
       agentMetadata.name,
       agentMetadata.group
     );
 
-    // Store the agent with original ID
     this.snakAgents[id] = agent;
-
-    // Maintain mappings between node names and agent IDs
     this.nodeNameToAgentId.set(nodeName, id);
     this.agentIdToNodeName.set(id, nodeName);
 
@@ -1227,12 +1383,12 @@ export class SupervisorAgent extends BaseAgent {
 
   /**
    * Generates a node name in "name-group" format, ensuring uniqueness
-   * @param name The agent name
-   * @param group The agent group
+   * @param name - The agent name
+   * @param group - The agent group
    * @returns A unique node name in "name-group" format
+   * @private
    */
   private generateNodeName(name: string, group: string): string {
-    // Sanitize name and group to be valid node names
     const sanitizedName = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
     const sanitizedGroup = group.toLowerCase().replace(/[^a-z0-9]/g, '-');
 
@@ -1240,7 +1396,6 @@ export class SupervisorAgent extends BaseAgent {
     let nodeName = baseName;
     let counter = 1;
 
-    // Ensure uniqueness by adding a counter if needed
     while (this.nodeNameToAgentId.has(nodeName)) {
       nodeName = `${baseName}-${counter}`;
       counter++;
@@ -1250,7 +1405,7 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Updates the registry for the agent selector with all available agents.
+   * Updates the registry for the agent selector with all available agents
    */
   public updateAgentSelectorRegistry(): void {
     if (!this.agentSelector) return;
@@ -1261,13 +1416,11 @@ export class SupervisorAgent extends BaseAgent {
       ...registry.getAllAgents(),
     };
 
-    // Add SnakAgents using their node names instead of original IDs
     Object.entries(this.snakAgents).forEach(([id, agent]) => {
       const nodeName = this.agentIdToNodeName.get(id);
       if (nodeName) {
         availableAgents[nodeName] = agent;
       } else {
-        // Fallback to original ID if no node name mapping exists (for backward compatibility)
         availableAgents[id] = agent;
       }
     });
@@ -1303,8 +1456,8 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Unregisters a SnakAgent from the system.
-   * @param id The unique identifier of the agent to unregister
+   * Unregisters a SnakAgent from the system
+   * @param id - The unique identifier of the agent to unregister
    */
   public unregisterSnakAgent(id: string): void {
     if (this.snakAgents[id]) {
@@ -1317,7 +1470,6 @@ export class SupervisorAgent extends BaseAgent {
         }
       }
 
-      // Clean up node name mappings
       const nodeName = this.agentIdToNodeName.get(id);
       if (nodeName) {
         this.nodeNameToAgentId.delete(nodeName);
@@ -1339,7 +1491,7 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Gets the list of registered SnakAgents.
+   * Gets the list of registered SnakAgents
    * @returns A copy of the registered SnakAgents record
    */
   public getRegisteredSnakAgents(): Record<string, SnakAgent> {
@@ -1347,7 +1499,7 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Gets the number of registered SnakAgents.
+   * Gets the number of registered SnakAgents
    * @returns The count of registered agents
    */
   public getRegisteredSnakAgentsCount(): number {
@@ -1355,8 +1507,8 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Checks if a SnakAgent is registered.
-   * @param id The agent ID to check
+   * Checks if a SnakAgent is registered
+   * @param id - The agent ID to check
    * @returns True if the agent is registered, false otherwise
    */
   public isSnakAgentRegistered(id: string): boolean {
@@ -1364,8 +1516,8 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Retrieves a SnakAgent by its ID.
-   * @param id Optional agent ID. If not provided, returns the main SnakAgent
+   * Retrieves a SnakAgent by its ID
+   * @param id - Optional agent ID. If not provided, returns the main SnakAgent
    * @returns The requested SnakAgent or null if not found
    */
   public getSnakAgent(id?: string): SnakAgent | null {
@@ -1381,7 +1533,7 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Gets the agent selector instance.
+   * Gets the agent selector instance
    * @returns The AgentSelector instance or null if not initialized
    */
   public getAgentSelector(): AgentSelector | null {
@@ -1389,9 +1541,9 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Updates the WorkflowController with currently available agents.
-   * This method is useful after registering new agents.
-   * @throws Will throw an error if the refresh fails
+   * Updates the WorkflowController with currently available agents
+   * Useful after registering new agents
+   * @throws {Error} Will throw an error if the refresh fails
    */
   public async refreshWorkflowController(): Promise<void> {
     if (!this.workflowController) {
@@ -1407,10 +1559,7 @@ export class SupervisorAgent extends BaseAgent {
     try {
       await this.workflowController.reset();
 
-      // Allow no SnakAgents if none are currently registered
-      // This prevents startup errors when no agents are initially available
       const allowNoSnakAgents = Object.keys(this.snakAgents).length === 0;
-
       await this.initializeWorkflowController(allowNoSnakAgents);
       logger.info('SupervisorAgent: WorkflowController successfully refreshed');
     } catch (error) {
@@ -1422,8 +1571,8 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Gets the node name for a given agent ID.
-   * @param agentId The agent ID
+   * Gets the node name for a given agent ID
+   * @param agentId - The agent ID
    * @returns The node name or null if not found
    */
   public getNodeNameForAgent(agentId: string): string | null {
@@ -1431,8 +1580,8 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Gets the agent ID for a given node name.
-   * @param nodeName The node name
+   * Gets the agent ID for a given node name
+   * @param nodeName - The node name
    * @returns The agent ID or null if not found
    */
   public getAgentIdForNodeName(nodeName: string): string | null {
@@ -1440,8 +1589,8 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Gets a SnakAgent by its node name.
-   * @param nodeName The node name
+   * Gets a SnakAgent by its node name
+   * @param nodeName - The node name
    * @returns The SnakAgent or null if not found
    */
   public getSnakAgentByNodeName(nodeName: string): SnakAgent | null {
@@ -1453,7 +1602,7 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
-   * Gets all node names for registered SnakAgents.
+   * Gets all node names for registered SnakAgents
    * @returns An array of node names
    */
   public getRegisteredNodeNames(): string[] {

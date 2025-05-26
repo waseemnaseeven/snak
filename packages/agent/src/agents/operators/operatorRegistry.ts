@@ -2,15 +2,13 @@ import { IAgent } from '../core/baseAgent.js';
 import { logger } from '@snakagent/core';
 
 /**
- * Registre pour gérer les agents opérateurs disponibles
+ * Registry for managing available operator agents
  */
 export class OperatorRegistry {
   private static instance: OperatorRegistry;
   private registry: Map<string, IAgent> = new Map();
 
-  private constructor() {
-    // Constructeur privé pour le pattern singleton
-  }
+  private constructor() {}
 
   public static getInstance(): OperatorRegistry {
     if (!OperatorRegistry.instance) {
@@ -20,7 +18,9 @@ export class OperatorRegistry {
   }
 
   /**
-   * Enregistrer un nouvel agent opérateur
+   * Register a new operator agent
+   * @param agentId - Unique identifier for the agent
+   * @param agent - The agent instance to register
    */
   public register(agentId: string, agent: IAgent): void {
     if (this.registry.has(agentId)) {
@@ -33,7 +33,9 @@ export class OperatorRegistry {
   }
 
   /**
-   * Désinscrire un agent opérateur
+   * Unregister an operator agent
+   * @param agentId - Unique identifier of the agent to unregister
+   * @returns True if the agent was successfully unregistered, false otherwise
    */
   public unregister(agentId: string): boolean {
     const result = this.registry.delete(agentId);
@@ -50,14 +52,17 @@ export class OperatorRegistry {
   }
 
   /**
-   * Récupérer un agent opérateur par ID
+   * Get an operator agent by ID
+   * @param agentId - Unique identifier of the agent
+   * @returns The agent instance or undefined if not found
    */
   public getAgent(agentId: string): IAgent | undefined {
     return this.registry.get(agentId);
   }
 
   /**
-   * Récupérer tous les agents opérateurs enregistrés
+   * Get all registered operator agents
+   * @returns Record containing all registered agents with their IDs as keys
    */
   public getAllAgents(): Record<string, IAgent> {
     const agents: Record<string, IAgent> = {};
@@ -68,14 +73,15 @@ export class OperatorRegistry {
   }
 
   /**
-   * Obtenir le nombre d'agents enregistrés
+   * Get the number of registered agents
+   * @returns The count of registered agents
    */
   public size(): number {
     return this.registry.size;
   }
 
   /**
-   * Vider le registre
+   * Clear all registered agents from the registry
    */
   public clear(): void {
     this.registry.clear();
