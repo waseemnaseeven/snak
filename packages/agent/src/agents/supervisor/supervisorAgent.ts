@@ -618,11 +618,15 @@ export class SupervisorAgent extends BaseAgent {
 
         if (
           selectionOutcome instanceof AIMessage &&
-          selectionOutcome.tool_calls?.length > 0
+          selectionOutcome.tool_calls &&
+          selectionOutcome.tool_calls.length > 0
         ) {
           toolCallsFromSelection = selectionOutcome.tool_calls;
           if (!nextAgent && this.toolsOrchestrator) nextAgent = 'tools';
-        } else if (selectionOutcome.additional_kwargs?.tool_calls?.length > 0) {
+        } else if (
+          selectionOutcome.additional_kwargs?.tool_calls &&
+          selectionOutcome.additional_kwargs.tool_calls.length > 0
+        ) {
           toolCallsFromSelection =
             selectionOutcome.additional_kwargs.tool_calls;
           if (!nextAgent && this.toolsOrchestrator) nextAgent = 'tools';
@@ -663,7 +667,7 @@ export class SupervisorAgent extends BaseAgent {
       },
     });
 
-    if (toolCallsFromSelection?.length > 0) {
+    if (toolCallsFromSelection && toolCallsFromSelection.length > 0) {
       directiveMessage.tool_calls = toolCallsFromSelection;
       directiveMessage.additional_kwargs.tool_calls = toolCallsFromSelection;
     }
@@ -921,7 +925,7 @@ export class SupervisorAgent extends BaseAgent {
   private isSnakAgentNode(nodeName: string): boolean {
     return (
       this.nodeNameToAgentId.has(nodeName) ||
-      this.snakAgents[nodeName] ||
+      !!this.snakAgents[nodeName] ||
       (this.workflowController &&
         this.workflowController['agents'] &&
         this.workflowController['agents'][nodeName] &&
@@ -1131,7 +1135,7 @@ export class SupervisorAgent extends BaseAgent {
     const agentsToDispose = [
       this.modelSelector,
       this.memoryAgent,
-      this.toolsOrchestractor,
+      this.toolsOrchestrator,
       this.workflowController,
     ];
 
