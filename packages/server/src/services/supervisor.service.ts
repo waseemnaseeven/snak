@@ -264,13 +264,13 @@ export class SupervisorService implements OnModuleInit {
         mode: AgentMode.INTERACTIVE,
       };
 
-      // Get the ModelSelectionAgent from the existing supervisor
+      // Get the ModelSelector from the existing supervisor
       const modelSelector = this.supervisor?.getOperator(
         'model-selector'
       ) as any;
 
       if (!modelSelector) {
-        throw new Error('ModelSelectionAgent not available in supervisor');
+        throw new Error('ModelSelector not available in supervisor');
       }
 
       // Create SnakAgent configuration

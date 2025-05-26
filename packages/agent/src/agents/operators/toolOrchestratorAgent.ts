@@ -11,7 +11,7 @@ import {
 } from '@langchain/core/tools';
 import { BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
-import { ModelSelectionAgent } from './modelSelectionAgent.js';
+import { ModelSelector } from './modelSelector.js';
 
 /**
  * Configuration for the tools orchestrator
@@ -19,7 +19,7 @@ import { ModelSelectionAgent } from './modelSelectionAgent.js';
 export interface ToolsOrchestratorConfig {
   snakAgent: SnakAgentInterface | null;
   agentConfig: any;
-  modelSelectionAgent: ModelSelectionAgent | null;
+  modelSelector: ModelSelector | null;
 }
 
 /**
@@ -30,13 +30,13 @@ export class ToolsOrchestrator extends BaseAgent {
   private agentConfig: any;
   private tools: (Tool | StructuredTool | DynamicStructuredTool<any>)[] = [];
   private toolNode: ToolNode | null = null;
-  private modelSelectionAgent: ModelSelectionAgent | null = null;
+  private modelSelector: ModelSelector | null = null;
 
   constructor(config: ToolsOrchestratorConfig) {
     super('tools-orchestrator', AgentType.OPERATOR);
     this.snakAgent = config.snakAgent;
     this.agentConfig = config.agentConfig;
-    this.modelSelectionAgent = config.modelSelectionAgent;
+    this.modelSelector = config.modelSelector;
   }
 
   /**
@@ -175,9 +175,9 @@ export class ToolsOrchestrator extends BaseAgent {
 
       // Get the appropriate model if needed
       let modelForToolExecution = null;
-      if (this.modelSelectionAgent) {
+      if (this.modelSelector) {
         const modelType = config?.modelType || 'fast'; // Default to fast for tools
-        modelForToolExecution = await this.modelSelectionAgent.getModelForTask(
+        modelForToolExecution = await this.modelSelector.getModelForTask(
           [],
           modelType
         );

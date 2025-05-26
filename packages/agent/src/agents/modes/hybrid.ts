@@ -18,7 +18,7 @@ import {
   truncateToolResults,
   formatAgentResponse,
 } from '../core/utils.js';
-import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
+import { ModelSelector } from '../operators/modelSelector.js';
 import { hybridRules, finalAnswerRules } from '../../prompt/prompts.js';
 import { TokenTracker } from '../../token/tokenTracking.js';
 
@@ -33,7 +33,7 @@ import { TokenTracker } from '../../token/tokenTracking.js';
  */
 export const createHybridAgent = async (
   snakAgent: SnakAgentInterface,
-  modelSelector: ModelSelectionAgent | null
+  modelSelector: ModelSelector | null
 ) => {
   const agent_config = snakAgent.getAgentConfig();
   if (!agent_config) {

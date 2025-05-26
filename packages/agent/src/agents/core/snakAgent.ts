@@ -1,6 +1,6 @@
 import { BaseAgent, AgentType, IModelAgent } from './baseAgent.js';
 import { RpcProvider } from 'starknet';
-import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
+import { ModelSelector } from '../operators/modelSelector.js';
 import { logger, metrics, AgentConfig } from '@snakagent/core';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { BaseMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
@@ -22,7 +22,7 @@ export interface SnakAgentConfig {
   db_credentials: DatabaseCredentials;
   agentConfig: AgentConfig;
   memory?: MemoryConfig;
-  modelSelector?: ModelSelectionAgent;
+  modelSelector?: ModelSelector;
 }
 
 /**
@@ -39,7 +39,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   private memory: MemoryConfig;
   private currentMode: string;
   private agentReactExecutor: any;
-  private modelSelector: ModelSelectionAgent | null = null;
+  private modelSelector: ModelSelector | null = null;
 
   constructor(config: SnakAgentConfig) {
     super('snak', AgentType.SNAK);
@@ -79,7 +79,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
 
       if (!this.modelSelector) {
         logger.warn(
-          'SnakAgent: No ModelSelectionAgent provided, functionality will be limited.'
+          'SnakAgent: No ModelSelector provided, functionality will be limited.'
         );
       }
 
@@ -174,7 +174,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
     forceModelType?: string
   ): Promise<BaseChatModel> {
     if (!this.modelSelector) {
-      throw new Error('ModelSelectionAgent not available');
+      throw new Error('ModelSelector not available');
     }
 
     return this.modelSelector.getModelForTask(messages, forceModelType);
@@ -188,7 +188,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
     forceModelType?: string
   ): Promise<any> {
     if (!this.modelSelector) {
-      throw new Error('ModelSelectionAgent not available');
+      throw new Error('ModelSelector not available');
     }
 
     return this.modelSelector.invokeModel(messages, forceModelType);

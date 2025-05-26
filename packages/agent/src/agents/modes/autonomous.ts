@@ -20,7 +20,7 @@ import {
   ChatPromptTemplate,
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
-import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
+import { ModelSelector } from '../operators/modelSelector.js';
 import { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { truncateToolResults, formatAgentResponse } from '../core/utils.js';
 import { autonomousRules, finalAnswerRules } from '../../prompt/prompts.js';
@@ -55,14 +55,14 @@ const GraphState = Annotation.Root({
  * This agent can use tools, interact with models, and follow a defined workflow.
  *
  * @param {SnakAgentInterface} snakAgent - The Starknet agent instance, providing configuration and context.
- * @param {ModelSelectionAgent | null} modelSelector - The model selection agent, responsible for choosing the appropriate LLM for tasks.
+ * @param {ModelSelector | null} modelSelector - The model selection agent, responsible for choosing the appropriate LLM for tasks.
  * @returns {Promise<Object>} A promise that resolves to an object containing the compiled LangGraph app,
  *                            agent configuration, and maximum iteration count.
  * @throws {Error} If agent configuration or model selector is missing, or if MCP tool initialization fails critically.
  */
 export const createAutonomousAgent = async (
   snakAgent: SnakAgentInterface,
-  modelSelector: ModelSelectionAgent | null
+  modelSelector: ModelSelector | null
 ) => {
   try {
     const agent_config = snakAgent.getAgentConfig();
@@ -72,9 +72,9 @@ export const createAutonomousAgent = async (
 
     if (!modelSelector) {
       logger.error(
-        'ModelSelectionAgent is required for autonomous mode but was not provided.'
+        'ModelSelector is required for autonomous mode but was not provided.'
       );
-      throw new Error('ModelSelectionAgent is required for autonomous mode.');
+      throw new Error('ModelSelector is required for autonomous mode.');
     }
 
     let toolsList: (
@@ -161,7 +161,7 @@ export const createAutonomousAgent = async (
     ): Promise<{ messages: BaseMessage[] }> {
       if (!agent_config || !modelSelector) {
         throw new Error(
-          'Agent configuration and ModelSelectionAgent are required.'
+          'Agent configuration and ModelSelector are required.'
         );
       }
 

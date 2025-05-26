@@ -13,7 +13,7 @@ import {
   truncateToolResults,
   formatAgentResponse,
 } from '../core/utils.js';
-import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
+import { ModelSelector } from '../operators/modelSelector.js';
 import { SupervisorAgent } from '../supervisor/supervisorAgent.js';
 import { interactiveRules } from '../../prompt/prompts.js';
 import { TokenTracker } from '../../token/tokenTracking.js';
@@ -39,13 +39,13 @@ const getMemoryAgent = async () => {
 /**
  * Creates and configures an interactive agent.
  * @param snakAgent - The SnakAgentInterface instance.
- * @param modelSelector - An optional ModelSelectionAgent instance for dynamic model selection.
+ * @param modelSelector - An optional ModelSelector instance for dynamic model selection.
  * @returns A promise that resolves to the compiled agent application.
  * @throws Will throw an error if agent configuration is missing or invalid.
  */
 export const createInteractiveAgent = async (
   snakAgent: SnakAgentInterface,
-  modelSelector: ModelSelectionAgent | null
+  modelSelector: ModelSelector | null
 ) => {
   try {
     const agent_config: AgentConfig = snakAgent.getAgentConfig();
@@ -199,7 +199,7 @@ export const createInteractiveAgent = async (
           TokenTracker.trackCall(result, selectedModelType);
           return formatAIMessageResult(result);
         } else {
-          const existingModelSelector = ModelSelectionAgent.getInstance();
+          const existingModelSelector = ModelSelector.getInstance();
           if (existingModelSelector) {
             logger.debug('Using existing model selector with smart model');
             const smartModel = await existingModelSelector.getModelForTask(
@@ -215,10 +215,10 @@ export const createInteractiveAgent = async (
             return formatAIMessageResult(result);
           } else {
             logger.warn(
-              'No model selector available, using direct provider selection is not supported without a ModelSelectionAgent.'
+              'No model selector available, using direct provider selection is not supported without a ModelSelector.'
             );
             throw new Error(
-              'Model selection requires a configured ModelSelectionAgent'
+              'Model selection requires a configured ModelSelector'
             );
           }
         }
@@ -238,7 +238,7 @@ export const createInteractiveAgent = async (
               messages: minimalMessages,
             });
 
-            const existingModelSelector = ModelSelectionAgent.getInstance();
+            const existingModelSelector = ModelSelector.getInstance();
             if (existingModelSelector) {
               const emergencyModel =
                 await existingModelSelector.getModelForTask(
@@ -254,7 +254,7 @@ export const createInteractiveAgent = async (
               return formatAIMessageResult(result);
             } else {
               throw new Error(
-                'Model selection requires a configured ModelSelectionAgent for emergency fallback.'
+                'Model selection requires a configured ModelSelector for emergency fallback.'
               );
             }
           } catch (emergencyError) {

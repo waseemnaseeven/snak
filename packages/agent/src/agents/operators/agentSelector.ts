@@ -1,7 +1,16 @@
 import { BaseAgent, AgentType, IAgent } from '../core/baseAgent.js';
 import { logger } from '@snakagent/core';
-import { BaseMessage, AIMessage, HumanMessage } from '@langchain/core/messages';
-import { ModelSelectionAgent } from './modelSelectionAgent.js';
+import { BaseMessage, AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { ModelSelector } from './modelSelector.js';
+import {
+  agentSelectionPrompt,
+  agentSelectionSystemPrompt,
+  noMatchingAgentMessage,
+  defaultClarificationMessage,
+  errorFallbackMessage,
+  noValidAgentMessage,
+  AgentSelectionPromptParams
+} from '../../prompt/agentSelectorPrompts.js';
 
 export interface AgentInfo {
   id: string;
@@ -14,14 +23,14 @@ export interface AgentInfo {
 
 export interface AgentSelectionConfig {
   availableAgents: Record<string, IAgent>;
-  modelSelector: ModelSelectionAgent | null;
+  modelSelector: ModelSelector | null;
   debug?: boolean;
 }
 
 export class AgentSelector extends BaseAgent {
   private availableAgents: Record<string, IAgent>;
   private agentInfo: Record<string, AgentInfo> = {};
-  private modelSelector: ModelSelectionAgent | null;
+  private modelSelector: ModelSelector | null;
   private debug: boolean;
 
   constructor(config: AgentSelectionConfig) {
@@ -38,7 +47,7 @@ export class AgentSelector extends BaseAgent {
     logger.debug('AgentSelector: Initializing');
     if (!this.modelSelector) {
       logger.warn(
-        'AgentSelector: No ModelSelectionAgent provided, selection capabilities will be limited'
+        'AgentSelector: No ModelSelector provided, selection capabilities will be limited'
       );
     }
 
@@ -262,7 +271,7 @@ export class AgentSelector extends BaseAgent {
   private async analyzeQueryWithModel(query: string): Promise<AIMessage> {
     if (!this.modelSelector) {
       logger.warn(
-        'AgentSelector: No ModelSelectionAgent available, defaulting to "snak"'
+        'AgentSelector: No ModelSelector available, defaulting to "snak"'
       );
       return this.createSelectionResponse('snak', query);
     }
@@ -286,32 +295,20 @@ export class AgentSelector extends BaseAgent {
         );
       }
 
-      const prompt = new HumanMessage({
-        content: `Analyze the following user query and determine which agent should handle it:
-    
-USER QUERY: "${query}"
+      const promptParams: AgentSelectionPromptParams = {
+        query,
+        agentDescriptions
+      };
 
-Available agents:
-${agentDescriptions}
-
-First, understand what the user is trying to accomplish and identify key requirements.
-Then determine which agent or type of agent would be most appropriate based on its name, group, and capabilities.
-
-Your response must ONLY contain the ID of the selected agent (the exact string at the beginning of each agent line).
-Do not include any explanations, analysis, or other text.
-
-If multiple agents could handle this query but you need more specific information, respond with "NEED_CLARIFICATION" followed by a JSON object with these fields:
-{
-  "possibleAgents": [list of agent IDs that could handle this],
-  "missingInfo": "what specific information is needed",
-  "clarificationQuestion": "a precise question to ask the user"
-}
-
-If the query doesn\'t match any available agent\'s capabilities, respond with "NO_MATCHING_AGENT".`,
+      const systemPrompt = new SystemMessage({
+        content: agentSelectionSystemPrompt()
+      });
+      const humanPrompt = new HumanMessage({
+        content: agentSelectionPrompt(promptParams)
       });
 
       const model = await this.modelSelector.getModelForTask([], 'fast');
-      const result = await model.invoke([prompt]);
+      const result = await model.invoke([systemPrompt, humanPrompt]);
       const content =
         typeof result.content === 'string'
           ? result.content.trim()
@@ -334,7 +331,7 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
               clarificationData.possibleAgents || [],
               clarificationData.missingInfo || 'more specific information',
               clarificationData.clarificationQuestion ||
-                'Could you please provide more details about what you need?'
+                defaultClarificationMessage()
             );
           }
         } catch (jsonError) {
@@ -347,7 +344,7 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
         return this.createClarificationResponse(
           [],
           'agent selection criteria',
-          'I need more information to select the appropriate agent. Could you provide more details?'
+          defaultClarificationMessage()
         );
       }
 
@@ -355,15 +352,15 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
         return this.createClarificationResponse(
           [],
           'matching agent capabilities',
-          "I don\'t have an agent that can handle this specific request. Could you clarify what you\'re trying to do?"
+          noMatchingAgentMessage()
         );
       }
 
-      // Extraire l\'ID de l\'agent - prendre le premier mot/ligne qui correspond à un agent existant
+      // Extraire l'ID de l'agent - prendre le premier mot/ligne qui correspond à un agent existant
       const lines = content.split(/[\n\r]+/);
       let agentId = '';
 
-      // Essayer d\'abord la première ligne complète comme ID
+      // Essayer d'abord la première ligne complète comme ID
       const firstLine = lines[0].trim();
       if (this.availableAgents[firstLine]) {
         agentId = firstLine;
@@ -396,7 +393,7 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
         );
 
         if (possibleAgents.length === 1) {
-          // Si un seul agent correspond partiellement, l\'utiliser
+          // Si un seul agent correspond partiellement, l'utiliser
           logger.debug(
             `AgentSelector: Found partial match with agent "${possibleAgents[0]}"`
           );
@@ -408,11 +405,11 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
           return this.createClarificationResponse(
             possibleAgents,
             'specific agent selection',
-            "I found multiple agents that could handle this request. Could you specify which one you\'d like to use?"
+            "I found multiple agents that could handle this request. Could you specify which one you'd like to use?"
           );
         }
 
-        // Si aucun agent ne correspond, essayer de rediriger vers l\'agent par défaut
+        // Si aucun agent ne correspond, essayer de rediriger vers l'agent par défaut
         if (this.availableAgents['snak']) {
           logger.warn(
             `AgentSelector: No matching agent found for "${content}", defaulting to "snak"`
@@ -427,7 +424,7 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
         return this.createClarificationResponse(
           [],
           'valid agent identifier',
-          "I couldn\'t identify which agent should handle your request. Could you describe more precisely what you need help with?"
+          noValidAgentMessage()
         );
       }
     } catch (error) {
@@ -437,7 +434,7 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
       return this.createClarificationResponse(
         [],
         'clear request intent',
-        'I encountered an issue understanding your request. Could you rephrase it or provide more details about what you need help with?'
+        errorFallbackMessage()
       );
     }
   }

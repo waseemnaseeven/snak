@@ -7,7 +7,7 @@ import { DatabaseCredentials, logger, ModelsConfig } from '@snakagent/core';
 import { EventEmitter } from 'events';
 import { SnakAgent } from '../index.js';
 import { RpcProvider } from 'starknet';
-import { ModelSelectionAgent } from '../agents/operators/modelSelectionAgent.js';
+import { ModelSelector } from '../agents/operators/modelSelector.js';
 import { deepCopyAgentConfig } from 'config/agentConfig.js';
 
 interface MultiAgentConfig {
@@ -130,11 +130,11 @@ async function launchAgentAsync(
     agentConfigCopy.chatId = `${agentConfigCopy.chatId || agentType}_${agentId}`;
     const agentSpecificEventName = `execute-agent-${agentConfigCopy.chatId}`;
 
-    const modelSelectionAgent = new ModelSelectionAgent({
+    const modelSelector = new ModelSelector({
       useModelSelector: true,
       modelsConfig: modelsConfig,
     });
-    await modelSelectionAgent.init();
+    await modelSelector.init();
 
     const database: DatabaseCredentials = {
       database: process.env.POSTGRES_DB as string,
@@ -150,7 +150,7 @@ async function launchAgentAsync(
       accountPublicKey: process.env.STARKNET_PUBLIC_ADDRESS as string,
       db_credentials: database,
       agentConfig: agentConfigCopy,
-      modelSelector: modelSelectionAgent,
+      modelSelector: modelSelector,
     });
     await agent.init();
 

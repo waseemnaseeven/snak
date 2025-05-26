@@ -1,6 +1,8 @@
 import { MessageContent } from '@langchain/core/messages';
 import { AgentConfig } from '../config/agentConfig.js';
 
+export * from './agentSelectorPrompts.js';
+
 export const baseSystemPrompt = (agent_config: AgentConfig): string => {
   return agent_config.prompt.content.toString();
 };

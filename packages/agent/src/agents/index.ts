@@ -153,7 +153,7 @@ export class AgentSystem {
     try {
       logger.debug('AgentSystem: Creating and registering SnakAgent...');
 
-      // Get the ModelSelectionAgent from the supervisor
+      // Get the ModelSelector from the supervisor
       const modelSelector = this.supervisorAgent?.getOperator(
         'model-selector'
       ) as any;
