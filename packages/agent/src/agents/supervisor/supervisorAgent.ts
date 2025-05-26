@@ -21,7 +21,7 @@ import { HumanMessage, BaseMessage, AIMessage } from '@langchain/core/messages';
 import { Tool } from '@langchain/core/tools';
 import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
 import { RpcProvider } from 'starknet';
-import { AgentSelectionAgent } from '../operators/agentSelectionAgent.js';
+import { AgentSelector } from '../operators/agentSelector.js';
 import { OperatorRegistry } from '../operators/operatorRegistry.js';
 
 /**
@@ -51,7 +51,7 @@ export class SupervisorAgent extends BaseAgent {
   private debug: boolean = false;
   private executionDepth: number = 0;
   private checkpointEnabled: boolean = false; // TODO: This seems unused, consider removing or implementing its functionality.
-  private agentSelectionAgent: AgentSelectionAgent | null = null;
+  private agentSelector: AgentSelector | null = null;
   private snakAgents: Record<string, SnakAgent> = {};
 
   private static instance: SupervisorAgent | null = null;
@@ -137,18 +137,18 @@ export class SupervisorAgent extends BaseAgent {
       this.operators.set(this.toolsOrchestrator.id, this.toolsOrchestrator);
       logger.debug('SupervisorAgent: ToolsOrchestrator initialized');
 
-      logger.debug('SupervisorAgent: Initializing AgentSelectionAgent...');
-      this.agentSelectionAgent = new AgentSelectionAgent({
+      logger.debug('SupervisorAgent: Initializing AgentSelector...');
+      this.agentSelector = new AgentSelector({
         availableAgents: {}, // Sera mis à jour après l'initialisation de tous les agents
         modelSelector: this.modelSelectionAgent,
         debug: this.debug,
       });
-      await this.agentSelectionAgent.init();
-      this.operators.set(this.agentSelectionAgent.id, this.agentSelectionAgent);
-      logger.debug('SupervisorAgent: AgentSelectionAgent initialized');
+      await this.agentSelector.init();
+      this.operators.set(this.agentSelector.id, this.agentSelector);
+      logger.debug('SupervisorAgent: AgentSelector initialized');
 
       // Mettre à jour les agents disponibles pour l'agent de sélection
-      this.updateAgentSelectionAgentRegistry();
+      this.updateAgentSelectorRegistry();
 
       logger.debug('SupervisorAgent: Initializing WorkflowController...');
       // Initialiser le workflow controller même sans agents Starknet, ils seront ajoutés plus tard
@@ -253,8 +253,8 @@ export class SupervisorAgent extends BaseAgent {
       });
 
       // Mettre à jour l'agent de sélection avec la liste complète des agents
-      if (this.agentSelectionAgent) {
-        this.agentSelectionAgent.setAvailableAgents(allAgents);
+      if (this.agentSelector) {
+        this.agentSelector.setAvailableAgents(allAgents);
       }
 
       await this.workflowController.init();
@@ -447,7 +447,7 @@ export class SupervisorAgent extends BaseAgent {
       const preSelectedAgent = config?.selectedSnakAgent;
       if (preSelectedAgent && this.snakAgents[preSelectedAgent]) {
         logger.debug(
-          `${depthIndent}SupervisorAgent (${callPath}): Pre-selected agent "${preSelectedAgent}" found, bypassing AgentSelectionAgent entirely.`
+          `${depthIndent}SupervisorAgent (${callPath}): Pre-selected agent "${preSelectedAgent}" found, bypassing AgentSelector entirely.`
         );
         responseContent = `Supervisor: Routing directly to pre-selected agent "${preSelectedAgent}".`;
         nextAgent = preSelectedAgent;
@@ -472,12 +472,12 @@ export class SupervisorAgent extends BaseAgent {
           ? currentMessage.content
           : JSON.stringify(currentMessage.content))) as string;
 
-      if (this.agentSelectionAgent) {
+      if (this.agentSelector) {
         logger.debug(
-          `${depthIndent}SupervisorAgent (${callPath}): Invoking AgentSelectionAgent.`
+          `${depthIndent}SupervisorAgent (${callPath}): Invoking AgentSelector.`
         );
         try {
-          const selectionOutcome = await this.agentSelectionAgent.execute(
+          const selectionOutcome = await this.agentSelector.execute(
             new HumanMessage(queryForSelection), // Provide a clean query to ASA
             {
               ...(config || {}),
@@ -493,7 +493,7 @@ export class SupervisorAgent extends BaseAgent {
             needsClarification = true;
             isFinal = true; // Mark as final when clarification is needed
             logger.debug(
-              `${depthIndent}SupervisorAgent (${callPath}): AgentSelectionAgent needs clarification from user. Ending workflow.`
+              `${depthIndent}SupervisorAgent (${callPath}): AgentSelector needs clarification from user. Ending workflow.`
             );
           } else if (selectionOutcome.additional_kwargs?.next_agent) {
             nextAgent = selectionOutcome.additional_kwargs.next_agent as string;
@@ -524,25 +524,25 @@ export class SupervisorAgent extends BaseAgent {
           }
 
           logger.debug(
-            `${depthIndent}SupervisorAgent (${callPath}): AgentSelectionAgent outcome - Next: ${nextAgent}, Final: ${isFinal}, Clarification: ${needsClarification}, Tools: ${toolCallsFromSelection?.length || 0}`
+            `${depthIndent}SupervisorAgent (${callPath}): AgentSelector outcome - Next: ${nextAgent}, Final: ${isFinal}, Clarification: ${needsClarification}, Tools: ${toolCallsFromSelection?.length || 0}`
           );
         } catch (e: any) {
           logger.error(
-            `${depthIndent}SupervisorAgent (${callPath}): Error calling AgentSelectionAgent: ${e.message}`
+            `${depthIndent}SupervisorAgent (${callPath}): Error calling AgentSelector: ${e.message}`
           );
           responseContent = 'Error during agent selection by Supervisor.';
           isFinal = true; // End flow on selection error
         }
       } else {
         logger.warn(
-          `${depthIndent}SupervisorAgent (${callPath}): AgentSelectionAgent not available. Defaulting to 'snak' or ending.`
+          `${depthIndent}SupervisorAgent (${callPath}): AgentSelector not available. Defaulting to 'snak' or ending.`
         );
         if (this.snakAgent && queryForSelection) {
           responseContent = `Supervisor: No AgentSelector. Routing to default Snak agent for query: \"${queryForSelection.substring(0, 100)}...\"`;
           nextAgent = 'snak';
         } else {
           responseContent =
-            'Supervisor: AgentSelectionAgent not found, and no default action. Ending task.';
+            'Supervisor: AgentSelector not found, and no default action. Ending task.';
           isFinal = true;
         }
       }
@@ -598,7 +598,7 @@ export class SupervisorAgent extends BaseAgent {
           targetAgentFromExternalCall === 'snak' ||
           targetAgentFromExternalCall === 'supervisor' ||
           this.operators.has(targetAgentFromExternalCall) ||
-          targetAgentFromExternalCall === this.agentSelectionAgent?.id ||
+          targetAgentFromExternalCall === this.agentSelector?.id ||
           targetAgentFromExternalCall === this.memoryAgent?.id;
         if (!isValidAgent) {
           logger.warn(
@@ -940,7 +940,7 @@ export class SupervisorAgent extends BaseAgent {
     this.snakAgent = null;
     this.toolsOrchestrator = null;
     this.memoryAgent = null;
-    this.agentSelectionAgent = null;
+    this.agentSelector = null;
     this.workflowController = null;
     this.operators.clear();
     this.snakAgents = {};
@@ -1189,14 +1189,14 @@ export class SupervisorAgent extends BaseAgent {
     );
 
     // Mettre à jour l'agent de sélection
-    this.updateAgentSelectionAgentRegistry();
+    this.updateAgentSelectorRegistry();
   }
 
   /**
    * Met à jour le registre pour l'agent de sélection
    */
-  public updateAgentSelectionAgentRegistry(): void {
-    if (!this.agentSelectionAgent) return;
+  public updateAgentSelectorRegistry(): void {
+    if (!this.agentSelector) return;
 
     const registry = OperatorRegistry.getInstance();
     const availableAgents: Record<string, IAgent> = {
@@ -1223,11 +1223,11 @@ export class SupervisorAgent extends BaseAgent {
     }
 
     // Mettre à jour l'agent de sélection
-    this.agentSelectionAgent.setAvailableAgents(availableAgents);
+    this.agentSelector.setAvailableAgents(availableAgents);
 
     // Produire un log détaillé des agents disponibles
     logger.debug(
-      `SupervisorAgent: Updated AgentSelectionAgent registry with ${Object.keys(availableAgents).length} agents:`
+      `SupervisorAgent: Updated AgentSelector registry with ${Object.keys(availableAgents).length} agents:`
     );
     Object.entries(availableAgents).forEach(([id, agent]) => {
       const metadata = (agent as any).metadata;
@@ -1263,7 +1263,7 @@ export class SupervisorAgent extends BaseAgent {
       logger.debug(`SupervisorAgent: Unregistered Snak agent "${id}"`);
 
       // Mettre à jour l'agent de sélection
-      this.updateAgentSelectionAgentRegistry();
+      this.updateAgentSelectorRegistry();
     } else {
       logger.warn(
         `SupervisorAgent: Attempted to unregister non-existent agent "${id}"`
@@ -1313,8 +1313,8 @@ export class SupervisorAgent extends BaseAgent {
   /**
    * Récupère l'agent de sélection
    */
-  public getAgentSelectionAgent(): AgentSelectionAgent | null {
-    return this.agentSelectionAgent;
+  public getAgentSelector(): AgentSelector | null {
+    return this.agentSelector;
   }
 
   /**

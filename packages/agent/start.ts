@@ -302,8 +302,8 @@ async function loadMulti(
     registerAgentsWithSupervisor(supervisor);
 
     // Vérifier que le supervisor a bien des agents maintenant
-    const agentSelectionAgent = supervisor.getAgentSelectionAgent();
-    if (agentSelectionAgent) {
+    const agentSelector = supervisor.getAgentSelector();
+    if (agentSelector) {
       logger.debug('Agent selection agent is properly initialized');
     } else {
       logger.warn('Agent selection agent is not available in the supervisor');

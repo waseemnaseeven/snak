@@ -634,7 +634,7 @@ export class WorkflowController {
       }
     }
 
-    // Check for nextAgent in additional_kwargs (used by AgentSelectionAgent)
+    // Check for nextAgent in additional_kwargs (used by AgentSelector)
     if (lastMessage.additional_kwargs?.nextAgent) {
       const nextAgent = lastMessage.additional_kwargs.nextAgent as string;
       if (this.agents[nextAgent]) {

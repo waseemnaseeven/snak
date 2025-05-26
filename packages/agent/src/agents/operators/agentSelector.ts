@@ -18,7 +18,7 @@ export interface AgentSelectionConfig {
   debug?: boolean;
 }
 
-export class AgentSelectionAgent extends BaseAgent {
+export class AgentSelector extends BaseAgent {
   private availableAgents: Record<string, IAgent>;
   private agentInfo: Record<string, AgentInfo> = {};
   private modelSelector: ModelSelectionAgent | null;
@@ -35,20 +35,20 @@ export class AgentSelectionAgent extends BaseAgent {
   }
 
   public async init(): Promise<void> {
-    logger.debug('AgentSelectionAgent: Initializing');
+    logger.debug('AgentSelector: Initializing');
     if (!this.modelSelector) {
       logger.warn(
-        'AgentSelectionAgent: No ModelSelectionAgent provided, selection capabilities will be limited'
+        'AgentSelector: No ModelSelectionAgent provided, selection capabilities will be limited'
       );
     }
 
     if (Object.keys(this.availableAgents).length === 0) {
       logger.warn(
-        'AgentSelectionAgent: No available agents provided for selection'
+        'AgentSelector: No available agents provided for selection'
       );
     } else {
       logger.debug(
-        `AgentSelectionAgent: Initialized with ${Object.keys(this.availableAgents).length} available agents`
+        `AgentSelector: Initialized with ${Object.keys(this.availableAgents).length} available agents`
       );
     }
   }
@@ -111,7 +111,7 @@ export class AgentSelectionAgent extends BaseAgent {
 
     if (this.debug) {
       logger.debug(
-        `AgentSelectionAgent: Updated info for ${Object.keys(this.agentInfo).length} agents`
+        `AgentSelector: Updated info for ${Object.keys(this.agentInfo).length} agents`
       );
       // Log détaillé des agents disponibles en mode debug
       Object.values(this.agentInfo).forEach((agent) => {
@@ -161,7 +161,7 @@ export class AgentSelectionAgent extends BaseAgent {
 
     if (this.debug) {
       logger.debug(
-        `AgentSelectionAgent: Analyzing query: "${queryString.substring(0, 100)}${queryString.length > 100 ? '...' : ''}"`
+        `AgentSelector: Analyzing query: "${queryString.substring(0, 100)}${queryString.length > 100 ? '...' : ''}"`
       );
     }
 
@@ -170,7 +170,7 @@ export class AgentSelectionAgent extends BaseAgent {
     if (explicitAgent) {
       if (this.debug) {
         logger.debug(
-          `AgentSelectionAgent: Detected explicit mention of agent "${explicitAgent.id}"`
+          `AgentSelector: Detected explicit mention of agent "${explicitAgent.id}"`
         );
       }
       return this.createSelectionResponse(explicitAgent.id, queryString);
@@ -262,7 +262,7 @@ export class AgentSelectionAgent extends BaseAgent {
   private async analyzeQueryWithModel(query: string): Promise<AIMessage> {
     if (!this.modelSelector) {
       logger.warn(
-        'AgentSelectionAgent: No ModelSelectionAgent available, defaulting to "snak"'
+        'AgentSelector: No ModelSelectionAgent available, defaulting to "snak"'
       );
       return this.createSelectionResponse('snak', query);
     }
@@ -282,7 +282,7 @@ export class AgentSelectionAgent extends BaseAgent {
 
       if (this.debug) {
         logger.debug(
-          `AgentSelectionAgent: Available agents for selection:\n${agentDescriptions}`
+          `AgentSelector: Available agents for selection:\n${agentDescriptions}`
         );
       }
 
@@ -318,7 +318,7 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
           : JSON.stringify(result.content);
 
       if (this.debug) {
-        logger.debug(`AgentSelectionAgent: Model raw response: "${content}"`);
+        logger.debug(`AgentSelector: Model raw response: "${content}"`);
       }
 
       // Traiter les cas de clarification
@@ -339,7 +339,7 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
           }
         } catch (jsonError) {
           logger.error(
-            `AgentSelectionAgent: Error parsing clarification JSON: ${jsonError}`
+            `AgentSelector: Error parsing clarification JSON: ${jsonError}`
           );
         }
 
@@ -381,7 +381,7 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
 
       if (agentId && this.availableAgents[agentId]) {
         logger.debug(
-          `AgentSelectionAgent: Selected agent "${agentId}" for query "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`
+          `AgentSelector: Selected agent "${agentId}" for query "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`
         );
         return this.createSelectionResponse(agentId, query);
       } else {
@@ -398,7 +398,7 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
         if (possibleAgents.length === 1) {
           // Si un seul agent correspond partiellement, l\'utiliser
           logger.debug(
-            `AgentSelectionAgent: Found partial match with agent "${possibleAgents[0]}"`
+            `AgentSelector: Found partial match with agent "${possibleAgents[0]}"`
           );
           return this.createSelectionResponse(possibleAgents[0], query);
         }
@@ -415,14 +415,14 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
         // Si aucun agent ne correspond, essayer de rediriger vers l\'agent par défaut
         if (this.availableAgents['snak']) {
           logger.warn(
-            `AgentSelectionAgent: No matching agent found for "${content}", defaulting to "snak"`
+            `AgentSelector: No matching agent found for "${content}", defaulting to "snak"`
           );
           return this.createSelectionResponse('snak', query);
         }
 
         // En dernier recours, demander une clarification
         logger.warn(
-          `AgentSelectionAgent: Unable to identify any agent from model response: "${content}"`
+          `AgentSelector: Unable to identify any agent from model response: "${content}"`
         );
         return this.createClarificationResponse(
           [],
@@ -432,7 +432,7 @@ If the query doesn\'t match any available agent\'s capabilities, respond with "N
       }
     } catch (error) {
       logger.error(
-        `AgentSelectionAgent: Error during model analysis: ${error}`
+        `AgentSelector: Error during model analysis: ${error}`
       );
       return this.createClarificationResponse(
         [],

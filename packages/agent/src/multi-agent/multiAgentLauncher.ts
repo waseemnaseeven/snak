@@ -72,12 +72,12 @@ export function registerAgentsWithSupervisor(supervisor: any): void {
   });
 
   // Forcer la mise à jour du registre de l'agent de sélection
-  if (typeof supervisor.updateAgentSelectionAgentRegistry === 'function') {
-    supervisor.updateAgentSelectionAgentRegistry();
+  if (typeof supervisor.updateAgentSelectorRegistry === 'function') {
+    supervisor.updateAgentSelectorRegistry();
     logger.info('Updated agent selection registry');
   } else {
     logger.warn(
-      'Supervisor does not have updateAgentSelectionAgentRegistry method'
+      'Supervisor does not have updateAgentSelectorRegistry method'
     );
   }
 }
