@@ -1,4 +1,3 @@
-// packages/server/src/agents.storage.ts
 import {
   Injectable,
   Inject,
@@ -24,6 +23,9 @@ import DatabaseStorage from '../common/database/database.js';
 
 const logger = new Logger('AgentStorage');
 
+/**
+ * Service responsible for managing agent storage, configuration, and lifecycle
+ */
 @Injectable()
 export class AgentStorage implements OnModuleInit {
   private agentConfigs: AgentConfigSQL[] = [];
@@ -41,7 +43,10 @@ export class AgentStorage implements OnModuleInit {
     await this.initialize();
   }
 
-  // TODO : this function should don't exist when the models_config will be in the configuration form if this app
+  /**
+   * Initialize models configuration with default values if not exists
+   * @private
+   */
   private async init_models_config() {
     try {
       logger.debug('Initializing models configuration');
@@ -49,6 +54,7 @@ export class AgentStorage implements OnModuleInit {
         `SELECT EXISTS(SELECT * FROM models_config)`
       );
       const result = await Postgres.query<{ exists: boolean }>(q);
+
       if (!result[0].exists) {
         logger.debug('Models configuration not found, creating default config');
 
@@ -67,7 +73,7 @@ export class AgentStorage implements OnModuleInit {
           model_name: 'gpt-4o-mini',
           description: 'Good cost-performance balance.',
         };
-        logger.debug('Models configuration not found, creating default config');
+
         const q = new Postgres.Query(
           `INSERT INTO models_config (fast, smart, cheap) VALUES (ROW($1, $2, $3), ROW($4, $5, $6), ROW($7, $8, $9))`,
           [
@@ -87,23 +93,26 @@ export class AgentStorage implements OnModuleInit {
         logger.debug('Models configuration already exists, skipping creation.');
       }
     } catch (error) {
-      logger.error('Error during agents_controller initialisation:', error);
+      logger.error('Error during models configuration initialization:', error);
       throw error;
     }
   }
 
+  /**
+   * Initialize the agent storage service
+   * @private
+   */
   private async initialize() {
     try {
       if (this.initialized) {
         return;
       }
 
-      // Wait for database to be initialized with retry logic
       if (!this.databaseService.isInitialized()) {
         logger.log('Waiting for database initialization...');
         let attempts = 0;
         const maxAttempts = 10;
-        const waitTime = 500; // 500ms
+        const waitTime = 500;
 
         while (
           !this.databaseService.isInitialized() &&
@@ -123,7 +132,6 @@ export class AgentStorage implements OnModuleInit {
         }
       }
 
-      // Add a small delay to ensure database is fully ready
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       await DatabaseStorage.connect();
@@ -131,13 +139,18 @@ export class AgentStorage implements OnModuleInit {
       await this.init_agents_config();
       this.initialized = true;
     } catch (error) {
-      logger.error('Error during agents_controller initialisation:', error);
-      // Mark as not initialized so we can retry
+      logger.error('Error during agent storage initialization:', error);
       this.initialized = false;
       throw error;
     }
   }
 
+  /**
+   * Parse agent configuration from database format
+   * @param config - Raw configuration string from database
+   * @returns Parsed ModelLevelConfig
+   * @private
+   */
   private parseAgentConfig(config: any): ModelLevelConfig {
     try {
       const content = config.trim().slice(1, -1);
@@ -154,6 +167,10 @@ export class AgentStorage implements OnModuleInit {
     }
   }
 
+  /**
+   * Initialize agents configuration from database
+   * @private
+   */
   private async init_agents_config() {
     try {
       logger.debug('Initializing agents configuration');
@@ -161,12 +178,10 @@ export class AgentStorage implements OnModuleInit {
       const q_res = await Postgres.query<any>(q);
       this.agentConfigs = [...q_res];
 
-      // Plus besoin de parsing complexe, les prompts sont déjà construits
       logger.debug(
         `Agents configuration loaded: ${JSON.stringify(this.agentConfigs)}`
       );
 
-      // Create agent instances but don't register with supervisor yet
       for (const agentConfig of this.agentConfigs) {
         await this.createAgentInstance(agentConfig);
         logger.debug(`Agent instance created: ${JSON.stringify(agentConfig)}`);
@@ -174,22 +189,30 @@ export class AgentStorage implements OnModuleInit {
 
       return q_res;
     } catch (error) {
-      logger.error('Error during agents_controller initialisation:', error);
+      logger.error('Error during agents configuration initialization:', error);
       throw error;
     }
   }
 
+  /**
+   * Get models configuration from database
+   * @returns Promise<ModelsConfig> - The models configuration
+   * @private
+   */
   private async get_models_config(): Promise<ModelsConfig> {
     try {
       const q = new Postgres.Query(`SELECT * FROM models_config`);
       logger.debug(`Query to get models config: ${q}`);
       const q_res = await Postgres.query<ModelsConfig>(q);
+
       if (q_res.length === 0) {
         throw new Error('No models configuration found');
       }
+
       const fast = this.parseAgentConfig(q_res[0].fast);
       const smart = this.parseAgentConfig(q_res[0].smart);
       const cheap = this.parseAgentConfig(q_res[0].cheap);
+
       const modelsConfig: ModelsConfig = {
         fast: fast,
         smart: smart,
@@ -197,14 +220,18 @@ export class AgentStorage implements OnModuleInit {
       };
       return modelsConfig;
     } catch (error) {
-      logger.error('Error during agents_controller initialisation:', error);
+      logger.error('Error getting models configuration:', error);
       throw error;
     }
   }
 
-  private async createAgentInstance(
-    agent_config: any // Utiliser any temporairement
-  ): Promise<AgentSystem> {
+  /**
+   * Create an agent instance from configuration
+   * @param agent_config - Agent configuration from database
+   * @returns Promise<AgentSystem> - The created agent instance
+   * @private
+   */
+  private async createAgentInstance(agent_config: any): Promise<AgentSystem> {
     try {
       const database = {
         database: process.env.POSTGRES_DB as string,
@@ -218,7 +245,6 @@ export class AgentStorage implements OnModuleInit {
         `Creating agent instance with config: ${JSON.stringify(agent_config)}`
       );
 
-      // Utiliser directement le system prompt pré-construit ou le construire si nécessaire
       const systemPrompt =
         agent_config.system_prompt ||
         this.buildSystemPromptFromConfig({
@@ -251,6 +277,7 @@ export class AgentStorage implements OnModuleInit {
 
       const modelsConfig = await this.get_models_config();
       logger.warn(modelsConfig);
+
       const config: AgentSystemConfig = {
         starknetProvider: this.config.starknet.provider,
         accountPrivateKey: this.config.starknet.privateKey,
@@ -264,7 +291,6 @@ export class AgentStorage implements OnModuleInit {
       const agent = new AgentSystem(config);
       await agent.init();
 
-      // Store for later reuse
       if (this.agentInstances.has(agent_config.id)) {
         logger.debug(
           `Agent with id ${agent_config.id} already exists, returning existing instance`
@@ -284,14 +310,18 @@ export class AgentStorage implements OnModuleInit {
     }
   }
 
+  /**
+   * Create an agent and register it with the supervisor
+   * @param agent_config - Agent configuration
+   * @returns Promise<AgentSystem> - The created agent
+   * @private
+   */
   private async createAgent(
     agent_config: AgentConfigSQL
   ): Promise<AgentSystem> {
     try {
-      // Create the agent instance
       const agent = await this.createAgentInstance(agent_config);
 
-      // Register with supervisor if available
       if (this.supervisorService.isInitialized()) {
         const metadata = {
           name: agent_config.name,
@@ -319,8 +349,14 @@ export class AgentStorage implements OnModuleInit {
     }
   }
 
+  /**
+   * Add a new agent to the system
+   * @param agent_config - Raw agent configuration
+   * @returns Promise<void>
+   */
   public async addAgent(agent_config: RawAgentConfig): Promise<void> {
     logger.debug(`Adding agent with config: ${JSON.stringify(agent_config)}`);
+
     if (!this.initialized) {
       await this.initialize();
     }
@@ -359,7 +395,6 @@ export class AgentStorage implements OnModuleInit {
       }
     }
 
-    // Construire le system prompt avant de stocker
     const systemPrompt = this.buildSystemPromptFromConfig({
       name: finalName,
       description: agent_config.description,
@@ -380,13 +415,13 @@ export class AgentStorage implements OnModuleInit {
         agent_config.lore,
         agent_config.objectives,
         agent_config.knowledge,
-        systemPrompt, // Stocker le prompt pré-construit
+        systemPrompt,
         agent_config.interval,
         agent_config.plugins,
         agent_config.memory.enabled || false,
         agent_config.memory.shortTermMemorySize || 5,
         agent_config.mode,
-        15, // Valeur par défaut pour max_iterations
+        15,
       ]
     );
     const q_res = await Postgres.query<AgentConfigSQL>(q);
@@ -394,11 +429,8 @@ export class AgentStorage implements OnModuleInit {
 
     if (q_res.length > 0) {
       const newAgentDbRecord = q_res[0];
-
-      // Plus besoin de parsing, utiliser directement les données
       const agentToCreate: AgentConfigSQL = newAgentDbRecord;
 
-      // Create agent and register with supervisor
       await this.createAgent(agentToCreate);
 
       logger.debug(
@@ -411,7 +443,10 @@ export class AgentStorage implements OnModuleInit {
   }
 
   /**
-   * Helper method to build system prompt from config components
+   * Build system prompt from configuration components
+   * @param promptComponents - Components to build the prompt from
+   * @returns string - The built system prompt
+   * @private
    */
   private buildSystemPromptFromConfig(promptComponents: {
     name?: string;
@@ -423,7 +458,6 @@ export class AgentStorage implements OnModuleInit {
   }): string {
     const contextParts: string[] = [];
 
-    // Identity Section
     if (promptComponents.name) {
       contextParts.push(`Your name : [${promptComponents.name}]`);
     }
@@ -431,7 +465,6 @@ export class AgentStorage implements OnModuleInit {
       contextParts.push(`Your Description : [${promptComponents.description}]`);
     }
 
-    // Lore Section
     if (
       Array.isArray(promptComponents.lore) &&
       promptComponents.lore.length > 0
@@ -439,7 +472,6 @@ export class AgentStorage implements OnModuleInit {
       contextParts.push(`Your lore : [${promptComponents.lore.join(']\n[')}]`);
     }
 
-    // Objectives Section
     if (
       Array.isArray(promptComponents.objectives) &&
       promptComponents.objectives.length > 0
@@ -449,7 +481,6 @@ export class AgentStorage implements OnModuleInit {
       );
     }
 
-    // Knowledge Section
     if (
       Array.isArray(promptComponents.knowledge) &&
       promptComponents.knowledge.length > 0
@@ -462,6 +493,11 @@ export class AgentStorage implements OnModuleInit {
     return contextParts.join('\n');
   }
 
+  /**
+   * Get an agent by ID
+   * @param id - Agent ID
+   * @returns AgentSystem | undefined - The agent instance or undefined if not found
+   */
   public getAgent(id: string): AgentSystem | undefined {
     if (!this.initialized) {
       return undefined;
@@ -469,6 +505,10 @@ export class AgentStorage implements OnModuleInit {
     return this.agentInstances.get(id);
   }
 
+  /**
+   * Get all agent instances
+   * @returns AgentSystem[] | undefined - Array of all agent instances or undefined if not initialized
+   */
   public getAllAgents(): AgentSystem[] | undefined {
     if (!this.initialized) {
       return undefined;
@@ -477,13 +517,16 @@ export class AgentStorage implements OnModuleInit {
     return Array.from(this.agentInstances.values());
   }
 
-  // Add ResponseDTO for Error Handling in any public function
+  /**
+   * Delete an agent from the system
+   * @param id - Agent ID to delete
+   * @returns Promise<void>
+   */
   public async deleteAgent(id: string): Promise<void> {
     if (!this.initialized) {
       await this.initialize();
     }
 
-    // Remove from database
     const q = new Postgres.Query(
       `DELETE FROM agents WHERE id = $1 RETURNING *`,
       [id]
@@ -491,11 +534,9 @@ export class AgentStorage implements OnModuleInit {
     const q_res = await Postgres.query<AgentConfigSQL>(q);
     logger.debug(`Agent deleted from database: ${JSON.stringify(q_res)}`);
 
-    // Remove from local instances
     if (this.agentInstances.has(id)) {
       const agent = this.agentInstances.get(id);
 
-      // Dispose of the agent properly
       if (agent) {
         try {
           await agent.dispose();
@@ -507,7 +548,6 @@ export class AgentStorage implements OnModuleInit {
       this.agentInstances.delete(id);
     }
 
-    // Unregister from supervisor
     if (this.supervisorService.isInitialized()) {
       try {
         await this.supervisorService.unregisterAgentFromSupervisor(id);
@@ -520,6 +560,7 @@ export class AgentStorage implements OnModuleInit {
 
   /**
    * Get supervisor service instance
+   * @returns SupervisorService - The supervisor service instance
    */
   public getSupervisorService(): SupervisorService {
     return this.supervisorService;
@@ -527,6 +568,9 @@ export class AgentStorage implements OnModuleInit {
 
   /**
    * Execute a request through the supervisor
+   * @param input - Input string for the request
+   * @param config - Optional configuration for the request
+   * @returns Promise<any> - The result of the request execution
    */
   public async executeRequestThroughSupervisor(
     input: string,

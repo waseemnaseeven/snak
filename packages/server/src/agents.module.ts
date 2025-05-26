@@ -1,4 +1,3 @@
-// packages/server/src/agents.module.ts
 import { Module } from '@nestjs/common';
 import { AgentService } from './services/agent.service.js';
 import { SupervisorService } from './services/supervisor.service.js';

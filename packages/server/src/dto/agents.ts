@@ -1,4 +1,3 @@
-// packages/server/src/dto/agents.ts
 import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export interface Message {

@@ -1,4 +1,3 @@
-// packages/server/src/services/supervisor.service.ts
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigurationService } from '../../config/configuration.js';
 import { DatabaseService } from './database.service.js';
@@ -14,6 +13,9 @@ import { AgentConfig, ModelsConfig, ModelLevelConfig } from '@snakagent/core';
 import { AgentConfigSQL } from '../interfaces/sql_interfaces.js';
 import { SystemMessage } from '@langchain/core/messages';
 
+/**
+ * Service responsible for managing the supervisor agent and coordinating other agents
+ */
 @Injectable()
 export class SupervisorService implements OnModuleInit {
   private readonly logger = new Logger(SupervisorService.name);
@@ -29,6 +31,10 @@ export class SupervisorService implements OnModuleInit {
     await this.initialize();
   }
 
+  /**
+   * Initialize the supervisor service
+   * @private
+   */
   private async initialize(): Promise<void> {
     if (this.initialized) {
       return;
@@ -37,12 +43,11 @@ export class SupervisorService implements OnModuleInit {
     try {
       this.logger.log('Initializing SupervisorService...');
 
-      // Wait for database to be initialized with retry logic
       if (!this.databaseService.isInitialized()) {
         this.logger.log('Waiting for database initialization...');
         let attempts = 0;
         const maxAttempts = 10;
-        const waitTime = 500; // 500ms
+        const waitTime = 500;
 
         while (
           !this.databaseService.isInitialized() &&
@@ -62,31 +67,28 @@ export class SupervisorService implements OnModuleInit {
         }
       }
 
-      // Add a small delay to ensure database is fully ready
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      // Initialize supervisor agent
       await this.initializeSupervisor();
-
-      // Register existing agents from database
       await this.registerExistingAgents();
 
       this.initialized = true;
       this.logger.log('SupervisorService initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize SupervisorService:', error);
-      // Mark as not initialized so we can retry
       this.initialized = false;
       throw error;
     }
   }
 
+  /**
+   * Initialize the supervisor agent
+   * @private
+   */
   private async initializeSupervisor(): Promise<void> {
     try {
-      // Get models configuration
       const modelsConfig = await this.getModelsConfig();
 
-      // Create supervisor configuration
       const supervisorConfig = {
         modelsConfig: modelsConfig,
         starknetConfig: {
@@ -113,7 +115,6 @@ export class SupervisorService implements OnModuleInit {
         debug: process.env.DEBUG === 'true',
       };
 
-      // Create and initialize supervisor
       this.supervisor = new SupervisorAgent(supervisorConfig);
       await this.supervisor.init();
 
@@ -124,6 +125,11 @@ export class SupervisorService implements OnModuleInit {
     }
   }
 
+  /**
+   * Get models configuration from database
+   * @private
+   * @returns {Promise<ModelsConfig>} The models configuration
+   */
   private async getModelsConfig(): Promise<ModelsConfig> {
     try {
       const q = new Postgres.Query(`SELECT * FROM models_config`);
@@ -144,6 +150,12 @@ export class SupervisorService implements OnModuleInit {
     }
   }
 
+  /**
+   * Parse model configuration string
+   * @private
+   * @param {any} config - The configuration string to parse
+   * @returns {ModelLevelConfig} Parsed model configuration
+   */
   private parseModelConfig(config: any): ModelLevelConfig {
     try {
       const content = config.trim().slice(1, -1);
@@ -159,6 +171,10 @@ export class SupervisorService implements OnModuleInit {
     }
   }
 
+  /**
+   * Register existing agents from database with the supervisor
+   * @private
+   */
   private async registerExistingAgents(): Promise<void> {
     try {
       this.logger.log('Registering existing agents from database...');
@@ -169,10 +185,8 @@ export class SupervisorService implements OnModuleInit {
 
       for (const agentConfig of existingAgents) {
         try {
-          // Create SnakAgent for this configuration
           const snakAgent = await this.createSnakAgentFromConfig(agentConfig);
 
-          // Register with supervisor
           if (this.supervisor && snakAgent) {
             const metadata = {
               name: agentConfig.name,
@@ -197,7 +211,6 @@ export class SupervisorService implements OnModuleInit {
         }
       }
 
-      // Refresh workflow controller after registering all agents
       if (this.supervisor) {
         await this.supervisor.refreshWorkflowController();
         this.logger.log(
@@ -210,6 +223,12 @@ export class SupervisorService implements OnModuleInit {
     }
   }
 
+  /**
+   * Create a SnakAgent from database configuration
+   * @private
+   * @param {AgentConfigSQL} agentConfig - The agent configuration from database
+   * @returns {Promise<any>} The created SnakAgent instance
+   */
   private async createSnakAgentFromConfig(
     agentConfig: AgentConfigSQL
   ): Promise<any> {
@@ -222,7 +241,6 @@ export class SupervisorService implements OnModuleInit {
         port: parseInt(process.env.POSTGRES_PORT as string),
       };
 
-      // Utiliser directement le system prompt pré-construit ou le construire si nécessaire
       const systemPrompt =
         agentConfig.system_prompt ||
         this.buildSystemPromptFromConfig({
@@ -252,7 +270,6 @@ export class SupervisorService implements OnModuleInit {
         mode: agentConfig.mode || AgentMode.INTERACTIVE,
       };
 
-      // Get the ModelSelector from the existing supervisor
       const modelSelector = this.supervisor?.getOperator(
         'model-selector'
       ) as any;
@@ -261,7 +278,6 @@ export class SupervisorService implements OnModuleInit {
         throw new Error('ModelSelector not available in supervisor');
       }
 
-      // Create SnakAgent configuration
       const snakAgentConfig: SnakAgentConfig = {
         provider: this.config.starknet.provider,
         accountPrivateKey: this.config.starknet.privateKey,
@@ -272,7 +288,6 @@ export class SupervisorService implements OnModuleInit {
         modelSelector: modelSelector,
       };
 
-      // Create the SnakAgent directly
       const snakAgent = new SnakAgent(snakAgentConfig);
       await snakAgent.init();
 
@@ -284,7 +299,15 @@ export class SupervisorService implements OnModuleInit {
   }
 
   /**
-   * Helper method to build system prompt from config components
+   * Build system prompt from configuration components
+   * @private
+   * @param {Object} promptComponents - The prompt components
+   * @param {string} [promptComponents.name] - Agent name
+   * @param {string} [promptComponents.description] - Agent description
+   * @param {string[]} promptComponents.lore - Agent lore
+   * @param {string[]} promptComponents.objectives - Agent objectives
+   * @param {string[]} promptComponents.knowledge - Agent knowledge
+   * @returns {string} The built system prompt
    */
   private buildSystemPromptFromConfig(promptComponents: {
     name?: string;
@@ -295,7 +318,6 @@ export class SupervisorService implements OnModuleInit {
   }): string {
     const contextParts: string[] = [];
 
-    // Identity Section
     if (promptComponents.name) {
       contextParts.push(`Your name : [${promptComponents.name}]`);
     }
@@ -303,7 +325,6 @@ export class SupervisorService implements OnModuleInit {
       contextParts.push(`Your Description : [${promptComponents.description}]`);
     }
 
-    // Lore Section
     if (
       Array.isArray(promptComponents.lore) &&
       promptComponents.lore.length > 0
@@ -311,7 +332,6 @@ export class SupervisorService implements OnModuleInit {
       contextParts.push(`Your lore : [${promptComponents.lore.join(']\n[')}]`);
     }
 
-    // Objectives Section
     if (
       Array.isArray(promptComponents.objectives) &&
       promptComponents.objectives.length > 0
@@ -321,7 +341,6 @@ export class SupervisorService implements OnModuleInit {
       );
     }
 
-    // Knowledge Section
     if (
       Array.isArray(promptComponents.knowledge) &&
       promptComponents.knowledge.length > 0
@@ -336,6 +355,9 @@ export class SupervisorService implements OnModuleInit {
 
   /**
    * Register a new agent with the supervisor
+   * @param {string} agentId - The agent ID
+   * @param {AgentSystem | SnakAgent} agent - The agent to register
+   * @param {any} [metadata] - Optional metadata for the agent
    */
   async registerAgentWithSupervisor(
     agentId: string,
@@ -359,9 +381,7 @@ export class SupervisorService implements OnModuleInit {
     try {
       let snakAgent: SnakAgent;
 
-      // Check if it's an AgentSystem or a SnakAgent
       if (agent instanceof AgentSystem) {
-        // Extract the SnakAgent from the AgentSystem
         const extractedAgent = agent.getSnakAgent();
 
         if (!extractedAgent) {
@@ -369,14 +389,10 @@ export class SupervisorService implements OnModuleInit {
         }
         snakAgent = extractedAgent;
       } else {
-        // It's already a SnakAgent
         snakAgent = agent;
       }
 
-      // Register with supervisor
       this.supervisor.registerSnakAgent(agentId, snakAgent, metadata);
-
-      // Refresh workflow controller
       await this.supervisor.refreshWorkflowController();
 
       this.logger.log(
@@ -393,6 +409,7 @@ export class SupervisorService implements OnModuleInit {
 
   /**
    * Unregister an agent from the supervisor
+   * @param {string} agentId - The agent ID to unregister
    */
   async unregisterAgentFromSupervisor(agentId: string): Promise<void> {
     if (!this.supervisor) {
@@ -400,10 +417,7 @@ export class SupervisorService implements OnModuleInit {
     }
 
     try {
-      // Remove from supervisor's registry
       this.supervisor.unregisterSnakAgent(agentId);
-
-      // Refresh workflow controller after unregistering
       await this.supervisor.refreshWorkflowController();
 
       this.logger.log(
@@ -420,6 +434,9 @@ export class SupervisorService implements OnModuleInit {
 
   /**
    * Execute a request through the supervisor
+   * @param {string} input - The input request
+   * @param {Record<string, any>} [config] - Optional configuration
+   * @returns {Promise<any>} The execution result
    */
   async executeRequest(
     input: string,
@@ -442,6 +459,7 @@ export class SupervisorService implements OnModuleInit {
 
   /**
    * Get supervisor instance
+   * @returns {SupervisorAgent | null} The supervisor agent instance
    */
   getSupervisor(): SupervisorAgent | null {
     return this.supervisor;
@@ -449,6 +467,7 @@ export class SupervisorService implements OnModuleInit {
 
   /**
    * Check if supervisor is initialized
+   * @returns {boolean} True if initialized, false otherwise
    */
   isInitialized(): boolean {
     return this.initialized && this.supervisor !== null;

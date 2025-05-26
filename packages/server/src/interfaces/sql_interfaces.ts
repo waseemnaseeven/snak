@@ -28,7 +28,7 @@ export interface AgentConfigSQL {
   lore: string[];
   objectives: string[];
   knowledge: string[];
-  system_prompt?: string; // Prompt pré-construit
+  system_prompt?: string;
   interval: number;
   plugins: string[];
   memory: AgentMemorySQL;
