@@ -12,12 +12,14 @@ import {
   StructuredTool,
 } from '@langchain/core/tools';
 
-// Global tracking to prevent duplicate connections
 let databaseConnectionPromise: Promise<void> | null = null;
 let isConnected = false;
 
 /**
- * Initializes the list of tools for the agent
+ * Initializes the list of tools for the agent based on signature type and configuration
+ * @param snakAgent - The agent interface instance
+ * @param agentConfig - Configuration object containing plugins and MCP servers
+ * @returns Promise resolving to array of tools
  */
 export async function initializeToolsList(
   snakAgent: SnakAgentInterface,
@@ -56,11 +58,11 @@ export async function initializeToolsList(
 }
 
 /**
- * Initializes the database connection for the agent
+ * Initializes database connection with singleton pattern to prevent duplicate connections
+ * @param db - Database credentials for connection
  */
 export const initializeDatabase = async (db: DatabaseCredentials) => {
   try {
-    // If already connected, just initialize memory
     if (isConnected) {
       await memory.init();
       logger.debug(
@@ -69,7 +71,6 @@ export const initializeDatabase = async (db: DatabaseCredentials) => {
       return;
     }
 
-    // If connection is in progress, wait for it
     if (databaseConnectionPromise) {
       await databaseConnectionPromise;
       await memory.init();
@@ -79,7 +80,6 @@ export const initializeDatabase = async (db: DatabaseCredentials) => {
       return;
     }
 
-    // Start connection process
     databaseConnectionPromise = Postgres.connect(db);
     await databaseConnectionPromise;
     isConnected = true;
@@ -88,7 +88,6 @@ export const initializeDatabase = async (db: DatabaseCredentials) => {
     logger.debug('Agent memory table successfully created');
   } catch (error) {
     logger.error('Error creating memories table:', error);
-    // Reset connection state on failure
     databaseConnectionPromise = null;
     isConnected = false;
     throw error;
@@ -96,11 +95,10 @@ export const initializeDatabase = async (db: DatabaseCredentials) => {
 };
 
 /**
- * Helper function to truncate a string if its length exceeds maxLength.
- * Logs the truncation action.
- * @param content The string content to truncate.
- * @param maxLength The maximum allowed length for the string.
- * @returns The truncated string (with an ellipsis and a note) or the original string if it's within the limit.
+ * Truncates string content if it exceeds maximum length
+ * @param content - The string content to truncate
+ * @param maxLength - Maximum allowed length
+ * @returns Truncated string with metadata or original string
  */
 const truncateStringContentHelper = (
   content: string,
@@ -120,17 +118,16 @@ const truncateStringContentHelper = (
 };
 
 /**
- * Truncates the content of a tool's response to a specified maximum length.
- * This function handles results that are arrays of messages or objects containing message arrays.
- * @param result The result of the tool invocation.
- * @param maxLength Maximum length for the content (default: 5000 characters).
- * @returns The result with its content strings truncated if necessary.
+ * Truncates tool response content to prevent oversized results
+ * Handles both array and object formats with nested message structures
+ * @param result - Tool invocation result
+ * @param maxLength - Maximum content length (default: 5000)
+ * @returns Result with truncated content strings
  */
 export function truncateToolResults(
   result: any,
   maxLength: number = 5000
 ): any {
-  // Handle case when result is an array (typical in interactive mode)
   if (Array.isArray(result)) {
     for (const msg of result) {
       if (
@@ -143,15 +140,12 @@ export function truncateToolResults(
     }
   }
 
-  // Handle case when result is an object with messages array (hybrid mode structure)
   if (result && typeof result === 'object' && Array.isArray(result.messages)) {
     for (const msg of result.messages) {
-      // Check for tool messages in any format
       if (typeof msg.content === 'string') {
         msg.content = truncateStringContentHelper(msg.content, maxLength);
       }
 
-      // Also check for content in tool_calls_results if it exists
       if (Array.isArray(msg.tool_calls_results)) {
         for (const toolResult of msg.tool_calls_results) {
           if (typeof toolResult.content === 'string') {
@@ -169,24 +163,21 @@ export function truncateToolResults(
 }
 
 /**
- * Format agent response for display by handling various formats including JSON structures
- * @param response The agent response which can be a string, object, or array
+ * Formats agent response for display, handling various data structures including JSON
+ * @param response - Agent response (string, object, or array)
  * @returns Formatted string for display
  */
 export const formatAgentResponse = (response: any): string => {
-  // Handle JSON string (needs parsing)
   if (typeof response === 'string') {
     try {
-      // Try to parse as JSON if it looks like a JSON array or object
       if (
         (response.startsWith('[') && response.endsWith(']')) ||
         (response.startsWith('{') && response.endsWith('}'))
       ) {
         const parsed = JSON.parse(response);
-        return formatAgentResponse(parsed); // Process the parsed object
+        return formatAgentResponse(parsed);
       }
 
-      // Regular string formatting
       return response
         .split('\n')
         .map((line) => {
@@ -197,23 +188,19 @@ export const formatAgentResponse = (response: any): string => {
         })
         .join('\n');
     } catch (e) {
-      // If JSON parsing fails, treat as regular string
       return response;
     }
   }
 
-  // Handle array of objects (like tool response array)
   if (Array.isArray(response)) {
     let result = '';
     for (const item of response) {
       if (typeof item === 'object' && item !== null) {
-        // Handle structured objects from the model
         if (item.type === 'text' && item.text) {
           result += item.text + '\n';
         } else if (item.content) {
           result += item.content + '\n';
         } else {
-          // Generic object
           result += JSON.stringify(item) + '\n';
         }
       } else if (item !== null) {
@@ -223,7 +210,6 @@ export const formatAgentResponse = (response: any): string => {
     return result.trim();
   }
 
-  // Handle single object
   if (typeof response === 'object' && response !== null) {
     if (response.type === 'text' && response.text) {
       return response.text;
@@ -232,12 +218,13 @@ export const formatAgentResponse = (response: any): string => {
     }
   }
 
-  // Fallback: convert to string
   return String(response);
 };
 
 /**
- * Process string content and handle potential JSON strings
+ * Processes string content and attempts to parse JSON structures
+ * @param content - String content to process
+ * @returns Processed content string
  */
 export const processStringContent = (content: string): string => {
   const trimmedContent = content.trim();
@@ -247,30 +234,28 @@ export const processStringContent = (content: string): string => {
   ) {
     try {
       const parsed = JSON.parse(trimmedContent);
-      return processMessageContent(parsed); // Recursively process the parsed object
+      return processMessageContent(parsed);
     } catch (e) {
-      // Parsing failed, return original content
       return content;
     }
   }
-  // Not a string that looks like JSON (after trimming), return original content
   return content;
 };
 
 /**
- * Process array content by iterating through items
+ * Processes array content by extracting text from structured objects
+ * @param content - Array content to process
+ * @returns Concatenated string result
  */
 export const processArrayContent = (content: any[]): string => {
   let result = '';
   for (const item of content) {
     if (typeof item === 'object' && item !== null) {
-      // Handle structured objects with type/text format
       if (item.type === 'text' && item.text) {
         result += item.text + '\n';
       } else if (item.content) {
         result += item.content + '\n';
       } else {
-        // Generic object
         result += JSON.stringify(item) + '\n';
       }
     } else if (item !== null) {
@@ -281,7 +266,9 @@ export const processArrayContent = (content: any[]): string => {
 };
 
 /**
- * Process object content based on its structure
+ * Processes object content based on its structure and known patterns
+ * @param content - Object content to process
+ * @returns Extracted string content
  */
 export const processObjectContent = (content: Record<string, any>): string => {
   if (content.type === 'text' && content.text) {
@@ -289,13 +276,13 @@ export const processObjectContent = (content: Record<string, any>): string => {
   } else if (content.content && typeof content.content === 'string') {
     return content.content;
   }
-  // Fallback - stringify the content
   return JSON.stringify(content);
 };
 
 /**
- * Process structured content before wrapping in AIMessage
- * Helper function for formatAIMessageResult
+ * Main content processor that handles different data types recursively
+ * @param content - Content of any type to process
+ * @returns Processed string content
  */
 export const processMessageContent = (content: any): string => {
   if (typeof content === 'string') {
