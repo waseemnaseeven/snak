@@ -189,6 +189,7 @@ User Memory Context:
               ? modelForThisTask.bindTools(toolsList)
               : modelForThisTask;
 
+          logger.warn("test");
           const result = await boundModel.invoke(currentFormattedPrompt);
 
           TokenTracker.trackCall(result, selectedModelType);
@@ -374,6 +375,9 @@ ${formatAgentResponse(content)}`);
           }
         : {}),
     });
+
+
+    
     return app;
   } catch (error) {
     logger.error('Failed to create an interactive agent:', error);

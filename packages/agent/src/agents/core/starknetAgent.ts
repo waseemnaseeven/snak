@@ -10,7 +10,8 @@ import { MemoryConfig } from '../operators/memoryAgent.js';
 import { createInteractiveAgent } from '../modes/interactive.js';
 import { createAutonomousAgent } from '../modes/autonomous.js';
 import { createHybridAgent } from '../modes/hybrid.js';
-import { Command } from '@langchain/langgraph';
+import { Command, CompiledStateGraph, StateType } from '@langchain/langgraph';
+import { AnyARecord } from 'dns';
 /**
  * Configuration for StarknetAgent
  */
@@ -277,10 +278,10 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
    * @param config Optional configuration for execution, can include `agentMode` to temporarily change mode
    * @returns The agent response
    */
-  public async execute(
+  public async* execute(
     input: string | BaseMessage | any,
     config?: Record<string, any>
-  ): Promise<unknown> {
+  ): AsyncGenerator<string, void, unknown> {
     let responseContent: string | any;
     let errorCount = 0;
     const maxErrors = 3;
@@ -460,53 +461,19 @@ export class StarknetAgent extends BaseAgent implements IModelAgent {
         currentMessages = [new HumanMessage(originalUserQuery)];
       }
 
-      let result: any;
       try {
-        try {
-          const stream = await this.agentReactExecutor.stream(
-            { messages: currentMessages },
-            { configurable: { thread_id: 'default' } }
-          );
-          const chunks = [];
-          for await (const chunk of stream) {
-            chunks.push(chunk);
-            logger.warn(`${chunk.content}|`);
-          }
-        } catch (error) {
-          logger.error(error);
-        }
-
-        result = await this.agentReactExecutor.invoke(
+        for await (const chunk of await this.agentReactExecutor.stream(
           { messages: currentMessages },
-          { configurable: { thread_id: 'default' } }
-        );
-        if (result?.messages?.length > 0) {
-          for (let i = result.messages.length - 1; i >= 0; i--) {
-            const msg = result.messages[i];
-            if (msg instanceof AIMessage && msg.content) {
-              if (
-                typeof msg.content === 'string' &&
-                msg.content.trim() !== ''
-              ) {
-                responseContent = msg.content;
-                break;
-              } else if (Array.isArray(msg.content) && msg.content.length > 0) {
-                responseContent = msg.content;
-                break;
-              }
-            }
+          { configurable: { thread_id: 'default' } },
+          {
+            streamMode: 'values',
           }
-
-          if (!responseContent) {
-            const lastMsg = result.messages[result.messages.length - 1];
-            responseContent =
-              lastMsg?.content ||
-              "I couldn't generate a specific response for this request.";
-          }
-        } else {
-          responseContent =
-            'No response could be generated. Please try again with a different request.';
+        )) {
+          console.log(JSON.stringify(chunk));
+          console.log('\n====\n');
         }
+
+
       } catch (agentExecError: any) {
         logger.error(
           `StarknetAgent: Agent execution failed: ${agentExecError}`
