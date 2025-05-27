@@ -9,7 +9,7 @@ export interface StarknetTool<P = unknown> {
   schema?: Zod.AnyZodObject;
   responseFormat?: string;
   execute: (
-    agent: StarknetAgentInterface,
+    agent: SnakAgentInterface,
     params: P,
     plugins_manager?: any
   ) => Promise<unknown>;
@@ -46,9 +46,11 @@ export enum AgentMode {
  */
 export interface RawAgentConfig {
   name: string;
-  bio?: string;
-  objectives?: string[];
-  knowledge?: string[];
+  group: string;
+  description: string;
+  lore: string[];
+  objectives: string[];
+  knowledge: string[];
   interval: number;
   plugins: string[];
   memory: MemoryConfig;
@@ -67,7 +69,7 @@ export interface AgentConfig {
   id: string;
   name: string;
   group: string;
-  prompt: SystemMessage;
+  description: string;
   interval: number;
   chatId: string;
   plugins: string[];
@@ -75,6 +77,7 @@ export interface AgentConfig {
   mcpServers?: Record<string, any>;
   mode: AgentMode;
   maxIterations: number;
+  prompt: SystemMessage;
 }
 
 export interface DatabaseCredentials {
@@ -86,7 +89,7 @@ export interface DatabaseCredentials {
 }
 
 /**
- * @interface StarknetAgentInterface
+ * @interface SnakAgentInterface
  * @description Interface for the Starknet agent
  * @property {() => { accountPublicKey: string; accountPrivateKey: string; }} getAccountCredentials - Function to get the account credentials
  * @property {() => DatabaseCredentials} getDatabaseCredentials - Function to get the database credentials
@@ -98,7 +101,7 @@ export interface DatabaseCredentials {
  * @property {(database_name: string) => Promise<PostgresAdaptater | undefined>} createDatabase - Function to create a database
  * @property {(name: string) => PostgresAdaptater | undefined} getDatabaseByName - Function to get a database by name
  */
-export interface StarknetAgentInterface {
+export interface SnakAgentInterface {
   getAccountCredentials: () => {
     accountPublicKey: string;
     accountPrivateKey: string;

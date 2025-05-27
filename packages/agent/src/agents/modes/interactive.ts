@@ -1,21 +1,21 @@
 import { StateGraph, MemorySaver, Annotation } from '@langchain/langgraph';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
-import { AIMessage, BaseMessage } from '@langchain/core/messages';
+import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
 import {
   ChatPromptTemplate,
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
 import { logger, AgentConfig } from '@snakagent/core';
-import { StarknetAgentInterface } from '../../tools/tools.js';
+import { SnakAgentInterface } from '../../tools/tools.js';
 import {
   initializeToolsList,
   initializeDatabase,
   truncateToolResults,
   formatAgentResponse,
 } from '../core/utils.js';
-import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
+import { ModelSelector } from '../operators/modelSelector.js';
 import { SupervisorAgent } from '../supervisor/supervisorAgent.js';
-import { baseSystemPrompt, interactiveRules } from '../../prompt/prompts.js';
+import { interactiveRules } from '../../prompt/prompts.js';
 import { TokenTracker } from '../../token/tokenTracking.js';
 
 /**
@@ -38,24 +38,24 @@ const getMemoryAgent = async () => {
 
 /**
  * Creates and configures an interactive agent.
- * @param starknetAgent - The StarknetAgentInterface instance.
- * @param modelSelector - An optional ModelSelectionAgent instance for dynamic model selection.
+ * @param snakAgent - The SnakAgentInterface instance.
+ * @param modelSelector - An optional ModelSelector instance for dynamic model selection.
  * @returns A promise that resolves to the compiled agent application.
  * @throws Will throw an error if agent configuration is missing or invalid.
  */
 export const createInteractiveAgent = async (
-  starknetAgent: StarknetAgentInterface,
-  modelSelector: ModelSelectionAgent | null
+  snakAgent: SnakAgentInterface,
+  modelSelector: ModelSelector | null
 ) => {
   try {
-    const agent_config: AgentConfig = starknetAgent.getAgentConfig();
+    const agent_config: AgentConfig = snakAgent.getAgentConfig();
     if (!agent_config) {
       throw new Error('Agent configuration is required');
     }
 
-    await initializeDatabase(starknetAgent.getDatabaseCredentials());
+    await initializeDatabase(snakAgent.getDatabaseCredentials());
 
-    const toolsList = await initializeToolsList(starknetAgent, agent_config);
+    const toolsList = await initializeToolsList(snakAgent, agent_config);
 
     let memoryAgent = null;
     if (agent_config.memory) {
@@ -116,12 +116,7 @@ export const createInteractiveAgent = async (
     };
 
     const configPrompt = agent_config.prompt?.content || '';
-    const finalPrompt = agent_config.memory
-      ? `${configPrompt}
-User Memory Context:
-{memories}
-`
-      : `${configPrompt}`;
+    const finalPrompt = `${configPrompt}`;
 
     /**
      * Calls the appropriate language model with the current state and tools.
@@ -137,7 +132,6 @@ User Memory Context:
       }
 
       const interactiveSystemPrompt = `
-        ${baseSystemPrompt(agent_config)}
         ${interactiveRules}
         Available tools: ${toolsList.map((tool) => tool.name).join(', ')}
       `;
@@ -163,7 +157,6 @@ User Memory Context:
         const currentFormattedPrompt = await prompt.formatMessages({
           tool_names: toolsList.map((tool) => tool.name).join(', '),
           messages: currentMessages,
-          memories: state.memories || '',
         });
 
         if (modelSelector) {
@@ -172,9 +165,21 @@ User Memory Context:
               ? (state.memories as any).modelType
               : null;
 
+          // Extract originalUserQuery from first HumanMessage if available
+          const originalUserMessage = currentMessages.find(
+            (msg): msg is HumanMessage => msg instanceof HumanMessage
+          );
+          const originalUserQuery = originalUserMessage
+            ? typeof originalUserMessage.content === 'string'
+              ? originalUserMessage.content
+              : JSON.stringify(originalUserMessage.content)
+            : '';
+
           const selectedModelType =
             stateModelType ||
-            (await modelSelector.selectModelForMessages(currentMessages));
+            (await modelSelector.selectModelForMessages(currentMessages, {
+              originalUserQuery,
+            }));
 
           logger.debug(
             `Using dynamically selected model: ${selectedModelType}`
@@ -194,7 +199,7 @@ User Memory Context:
           TokenTracker.trackCall(result, selectedModelType);
           return formatAIMessageResult(result);
         } else {
-          const existingModelSelector = ModelSelectionAgent.getInstance();
+          const existingModelSelector = ModelSelector.getInstance();
           if (existingModelSelector) {
             logger.debug('Using existing model selector with smart model');
             const smartModel = await existingModelSelector.getModelForTask(
@@ -210,10 +215,10 @@ User Memory Context:
             return formatAIMessageResult(result);
           } else {
             logger.warn(
-              'No model selector available, using direct provider selection is not supported without a ModelSelectionAgent.'
+              'No model selector available, using direct provider selection is not supported without a ModelSelector.'
             );
             throw new Error(
-              'Model selection requires a configured ModelSelectionAgent'
+              'Model selection requires a configured ModelSelector'
             );
           }
         }
@@ -231,10 +236,9 @@ User Memory Context:
             const emergencyPrompt = await prompt.formatMessages({
               tool_names: toolsList.map((tool) => tool.name).join(', '),
               messages: minimalMessages,
-              memories: '',
             });
 
-            const existingModelSelector = ModelSelectionAgent.getInstance();
+            const existingModelSelector = ModelSelector.getInstance();
             if (existingModelSelector) {
               const emergencyModel =
                 await existingModelSelector.getModelForTask(
@@ -250,7 +254,7 @@ User Memory Context:
               return formatAIMessageResult(result);
             } else {
               throw new Error(
-                'Model selection requires a configured ModelSelectionAgent for emergency fallback.'
+                'Model selection requires a configured ModelSelector for emergency fallback.'
               );
             }
           } catch (emergencyError) {

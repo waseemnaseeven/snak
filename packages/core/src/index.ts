@@ -1,10 +1,13 @@
 export type {
   AgentConfig,
-  StarknetAgentInterface,
+  RawAgentConfig,
+  SnakAgentInterface,
   StarknetTool,
   SignatureTool,
   DatabaseCredentials,
 } from './common/agent.js';
+
+export { AgentMode } from './common/agent.js';
 
 export { default as logger } from './logger/logger.js';
 

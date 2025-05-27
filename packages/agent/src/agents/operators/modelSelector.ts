@@ -1,12 +1,17 @@
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { BaseMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
+import {
+  BaseMessage,
+  HumanMessage,
+  AIMessage,
+  SystemMessage,
+} from '@langchain/core/messages';
 import { logger } from '@snakagent/core';
 import { BaseAgent, AgentType, IModelAgent } from '../core/baseAgent.js';
 import { ModelsConfig, ApiKeys } from '@snakagent/core';
 import { ChatOpenAI } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { modelSelectorRules } from '../../prompt/prompts.js';
+import { modelSelectorSystemPrompt } from '../../prompt/prompts.js';
 import { TokenTracker } from '../../token/tokenTracking.js';
 
 /**
@@ -20,7 +25,7 @@ export interface ModelSelectionCriteria {
 }
 
 /**
- * Options for the ModelSelectionAgent.
+ * Options for the ModelSelector.
  */
 export interface ModelSelectionOptions {
   debugMode?: boolean;
@@ -31,17 +36,17 @@ export interface ModelSelectionOptions {
 /**
  * Represents an operator agent responsible for selecting the appropriate model for different tasks.
  */
-export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
+export class ModelSelector extends BaseAgent implements IModelAgent {
   private models: Record<string, BaseChatModel> = {};
   private debugMode: boolean;
   private useModelSelector: boolean;
   private modelsConfig: ModelsConfig | null = null;
   private apiKeys: ApiKeys = {};
 
-  private static instance: ModelSelectionAgent | null = null;
+  private static instance: ModelSelector | null = null;
 
   /**
-   * Creates an instance of ModelSelectionAgent.
+   * Creates an instance of ModelSelector.
    * @param {ModelSelectionOptions} options - The options for the agent.
    */
   constructor(options: ModelSelectionOptions) {
@@ -50,11 +55,11 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
     this.useModelSelector = options.useModelSelector || false;
     this.modelsConfig = options.modelsConfig;
 
-    ModelSelectionAgent.instance = this;
+    ModelSelector.instance = this;
 
     if (this.debugMode) {
       logger.debug(
-        `ModelSelectionAgent initialized with options: ${JSON.stringify({
+        `ModelSelector initialized with options: ${JSON.stringify({
           debugMode: options.debugMode,
           useModelSelector: options.useModelSelector,
         })}`
@@ -63,11 +68,11 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Gets the singleton instance of the ModelSelectionAgent.
-   * @returns {ModelSelectionAgent | null} The singleton instance or null if not initialized.
+   * Gets the singleton instance of the ModelSelector.
+   * @returns {ModelSelector | null} The singleton instance or null if not initialized.
    */
-  public static getInstance(): ModelSelectionAgent | null {
-    return ModelSelectionAgent.instance;
+  public static getInstance(): ModelSelector | null {
+    return ModelSelector.instance;
   }
 
   /**
@@ -79,10 +84,10 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
       this.loadApiKeys();
       await this.initializeModels();
       this.validateModels();
-      logger.debug('ModelSelectionAgent initialized successfully');
+      logger.debug('ModelSelector initialized successfully');
     } catch (error) {
-      logger.error(`ModelSelectionAgent initialization failed: ${error}`);
-      throw new Error(`ModelSelectionAgent initialization failed: ${error}`);
+      logger.error(`ModelSelector initialization failed: ${error}`);
+      throw new Error(`ModelSelector initialization failed: ${error}`);
     }
   }
 
@@ -203,13 +208,13 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
 
     if (missingModels.length > 0) {
       logger.warn(
-        `ModelSelectionAgent initialized with missing models: ${missingModels.join(', ')}`
+        `ModelSelector initialized with missing models: ${missingModels.join(', ')}`
       );
     }
 
     if (this.debugMode) {
       logger.debug(
-        `ModelSelectionAgent initialized with models: ${Object.keys(this.models).join(', ')} (Meta selection: ${this.useModelSelector ? 'enabled' : 'disabled'})`
+        `ModelSelector initialized with models: ${Object.keys(this.models).join(', ')} (Meta selection: ${this.useModelSelector ? 'enabled' : 'disabled'})`
       );
     }
   }
@@ -219,10 +224,12 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
    * If `useModelSelector` is true, it uses the 'fast' model to analyze the messages.
    * Otherwise, it defaults to 'smart' or uses heuristics if the 'fast' model fails.
    * @param {BaseMessage[]} messages - The messages to analyze for model selection.
+   * @param {Record<string, any>} [config] - Optional configuration containing additional context like originalUserQuery.
    * @returns {Promise<string>} The selected model type.
    */
   public async selectModelForMessages(
-    messages: BaseMessage[]
+    messages: BaseMessage[],
+    config?: Record<string, any>
   ): Promise<string> {
     if (!this.useModelSelector) {
       if (this.debugMode) {
@@ -254,39 +261,60 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
         return 'smart';
       }
 
-      const lastMessage = messages[messages.length - 1];
-      if (!lastMessage) {
-        logger.warn(
-          'ModelSelectionAgent: Could not get the last message; defaulting to "smart".'
-        );
-        return 'smart';
+      // Determine content to analyze based on config or last message
+      let analysisContent = '';
+
+      if (
+        config?.originalUserQuery &&
+        typeof config.originalUserQuery === 'string'
+      ) {
+        // Use originalUserQuery from config if available
+        analysisContent = config.originalUserQuery;
+        if (this.debugMode) {
+          logger.debug(
+            `Using originalUserQuery for model selection: "${analysisContent.substring(0, 100)}..."`
+          );
+        }
+      } else {
+        // Fall back to using the last message
+        const lastMessage = messages[messages.length - 1];
+        if (!lastMessage) {
+          logger.warn(
+            'ModelSelector: Could not get the last message; defaulting to "smart".'
+          );
+          return 'smart';
+        }
+
+        const content =
+          lastMessage.content != null
+            ? typeof lastMessage.content === 'string'
+              ? lastMessage.content
+              : JSON.stringify(lastMessage.content)
+            : '';
+
+        analysisContent = content;
       }
 
-      const content =
-        lastMessage.content != null
-          ? typeof lastMessage.content === 'string'
-            ? lastMessage.content
-            : JSON.stringify(lastMessage.content)
-          : '';
-
-      let analysisContent = content;
       let nextStepsSection = '';
 
       // Extract "NEXT STEPS" section for more focused analysis if present
-      const nextStepsMatch = content.match(/NEXT STEPS:(.*?)($|(?=\n\n))/s);
+      const nextStepsMatch = analysisContent.match(
+        /NEXT STEPS:(.*?)($|(?=\n\n))/s
+      );
       if (nextStepsMatch && nextStepsMatch[1]) {
         nextStepsSection = nextStepsMatch[1].trim();
         if (this.debugMode) {
           logger.debug(`Extracted NEXT STEPS section: "${nextStepsSection}"`);
         }
         // Prioritize NEXT STEPS for analysis, with some context
-        const truncatedContext = content.substring(0, 300) + '...';
+        const truncatedContext = analysisContent.substring(0, 300) + '...';
         analysisContent = `Next planned actions: ${nextStepsSection}\n\nContext: ${truncatedContext}`;
       }
 
-      const prompt = new HumanMessage(
-        modelSelectorRules(nextStepsSection, analysisContent)
+      const systemPrompt = new SystemMessage(
+        modelSelectorSystemPrompt(nextStepsSection)
       );
+      const humanMessage = new HumanMessage(analysisContent);
 
       if (this.debugMode) {
         logger.debug(`Invoking "fast" model for meta-selection analysis.`);
@@ -295,7 +323,10 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
         );
       }
 
-      const response = await this.models.fast.invoke([prompt]);
+      const response = await this.models.fast.invoke([
+        systemPrompt,
+        humanMessage,
+      ]);
       const modelChoice = response.content
         .toString()
         .toLowerCase()
@@ -538,7 +569,7 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
       if (availableModels.length > 0) {
         return availableModels[0];
       }
-      throw new Error('No models available in ModelSelectionAgent.');
+      throw new Error('No models available in ModelSelector.');
     }
   }
 
@@ -585,17 +616,22 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
 
   /**
    * Main execution entry point for the agent. Selects a model and returns an AIMessage with the selection.
-   * @param {any} input - Can be a single message, a string (converted to HumanMessage), or an array of BaseMessages.
+   * @param {string | BaseMessage | BaseMessage[]} input - Can be a single message, a string (converted to HumanMessage), or an array of BaseMessages.
+   * @param {Record<string, any>} [config] - Optional. Additional configuration options.
    * @returns {Promise<AIMessage>} An AIMessage indicating the selected model type and other relevant metadata.
    */
-  public async execute(input: any): Promise<AIMessage> {
+  public async execute(
+    input: string | BaseMessage | BaseMessage[],
+    config?: Record<string, any>
+  ): Promise<AIMessage> {
+    // Determine messages array from input
     const messages: BaseMessage[] = Array.isArray(input)
       ? input
       : [typeof input === 'string' ? new HumanMessage(input) : input];
 
     if (messages.length === 0) {
       logger.warn(
-        'ModelSelectionAgent received an empty message array. Defaulting to "smart" model.'
+        'ModelSelector received an empty message array. Defaulting to "smart" model.'
       );
       return new AIMessage({
         content: 'Selected model type: smart (default due to empty input)',
@@ -609,28 +645,45 @@ export class ModelSelectionAgent extends BaseAgent implements IModelAgent {
       });
     }
 
-    // Attempt to find the original user query from HumanMessages
-    const originalUserMessage = messages.find(
-      (msg): msg is HumanMessage => msg instanceof HumanMessage // Type guard
-    );
-    const originalQuery = originalUserMessage
-      ? typeof originalUserMessage.content === 'string'
-        ? originalUserMessage.content
-        : JSON.stringify(originalUserMessage.content)
-      : '';
+    // Extract original user query from config if it exists
+    let originalQuery = '';
 
-    const modelType = await this.selectModelForMessages(messages);
+    if (
+      config?.originalUserQuery &&
+      typeof config.originalUserQuery === 'string'
+    ) {
+      // Use the original user query from config if available
+      originalQuery = config.originalUserQuery;
+      if (this.debugMode) {
+        logger.debug(
+          `ModelSelector: Using originalUserQuery from config for model selection: "${originalQuery.substring(0, 100)}..."`
+        );
+      }
+    } else {
+      // Otherwise, attempt to find the original user query from HumanMessages
+      const originalUserMessage = messages.find(
+        (msg): msg is HumanMessage => msg instanceof HumanMessage
+      );
+      originalQuery = originalUserMessage
+        ? typeof originalUserMessage.content === 'string'
+          ? originalUserMessage.content
+          : JSON.stringify(originalUserMessage.content)
+        : '';
+
+      if (this.debugMode && originalQuery) {
+        logger.debug(
+          `ModelSelector: No originalUserQuery in config, extracted from messages: "${originalQuery.substring(0, 100)}..."`
+        );
+      }
+    }
+
+    const modelType = await this.selectModelForMessages(messages, config);
     const nextAgent = 'snak'; // Define the typical next agent
 
     if (this.debugMode) {
       logger.debug(
-        `ModelSelectionAgent selected model: ${modelType}, routing to: ${nextAgent}.`
+        `ModelSelector selected model: ${modelType}, routing to: ${nextAgent}.`
       );
-      if (originalQuery) {
-        logger.debug(
-          `ModelSelectionAgent preserved original query: "${originalQuery.substring(0, 100)}..."` // Log a snippet
-        );
-      }
     }
 
     return new AIMessage({

@@ -107,7 +107,7 @@ NODE_ENV="development" # "development" or "production"
 {
   "name": "Your Agent name",
   "group": "Your Agent group",
-  "bio": "Your AI Agent Bio",
+  "description": "Your AI Agent Description",
   "lore": ["Some lore of your AI Agent 1", "Some lore of your AI Agent 1"],
   "objectives": [
     "first objective that your AI Agent need to follow",
@@ -192,9 +192,9 @@ pnpm add @snakagent
 2. Create your agent instance
 
 ```typescript
-import { StarknetAgent } from 'starknet-agent-kit';
+import { SnakAgent } from 'starknet-agent-kit';
 
-const agent = new StarknetAgent({
+const agent = new SnakAgent({
   provider: new RpcProvider({ nodeUrl: process.env.STARKNET_RPC_URL }),
   accountPrivateKey: process.env.STARKNET_PRIVATE_KEY,
   accountPublicKey: process.env.STARKNET_PUBLIC_ADDRESS,

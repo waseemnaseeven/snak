@@ -1,82 +1,110 @@
 import { IsNotEmpty } from 'class-validator';
+import { AgentMode } from '../../agent.js';
 
-// TODO Create a common interfaces for the DTO of SNAK and SNAK-AP
+/**
+ * Configuration for agent memory settings
+ */
+export interface AgentMemory {
+  enabled: boolean;
+  short_term_memory_size: number;
+}
 
-interface AgentPrompt {
-  bio: string;
+/**
+ * Unified agent configuration interface for database storage
+ */
+export interface AgentConfigDatabase {
+  name: string;
+  group: string;
+  description: string;
   lore: string[];
   objectives: string[];
   knowledge: string[];
-}
-
-// TODO Need to change to the real agent config
-export interface AgentConfigDatabase {
-  name: string;
-  prompt: AgentPrompt;
-  group: string;
+  system_prompt?: string;
   interval: number;
   plugins: string[];
+  memory: AgentMemory;
+  mode: AgentMode;
+  max_iterations: number;
 }
 
+/**
+ * DTO for adding a new agent
+ */
 export class AddAgentRequestDTO {
   @IsNotEmpty()
   agent: AgentConfigDatabase;
 }
 
+/**
+ * DTO for retrieving messages from a specific agent
+ */
 export class MessageFromAgentIdDTO {
   @IsNotEmpty()
   agent_id: string;
   limit_message: number | undefined;
 }
 
-// TODO Create a common interfaces for the DTO of SNAK and SNAK-APP
-
+/**
+ * Interface for message requests to agents
+ */
 export interface MessageRequest {
   agent_id: string;
   user_request: string;
 }
 
-interface AgentMemory {
-  enabled: boolean;
-  short_term_memory_size: number;
-}
-
-interface AgentPrompt {
-  bio: string;
+/**
+ * DTO for agent initialization configuration
+ */
+export class AgentInitializationDTO {
+  name: string;
+  group: string;
+  description: string;
   lore: string[];
   objectives: string[];
   knowledge: string[];
-}
-
-export class AgentInitializationDTO {
-  name: string;
-  prompt: AgentPrompt;
-  group: string;
+  system_prompt?: string;
   interval: number;
   plugins: string[];
   memory: AgentMemory;
+  mode: AgentMode;
+  max_iterations: number;
 }
 
+/**
+ * DTO for initializing multiple agents
+ */
 export class InitializesRequestDTO {
   @IsNotEmpty()
   agents: AgentInitializationDTO[];
 }
 
+/**
+ * DTO for deleting a single agent
+ */
 export class AgentDeleteRequestDTO {
   @IsNotEmpty()
   agent_id: string;
 }
 
+/**
+ * DTO for deleting multiple agents
+ */
 export class AgentsDeleteRequestDTO {
   @IsNotEmpty()
   agent_id: string[];
 }
 
+/**
+ * DTO for adding an agent with initialization data
+ */
 export class AgentAddRequestDTO {
   @IsNotEmpty()
   agent: AgentInitializationDTO;
 }
 
+/**
+ * DTO for agent requests with user input
+ */
 export class AgentRequestDTO {
   @IsNotEmpty()
   request: {
@@ -85,6 +113,9 @@ export class AgentRequestDTO {
   };
 }
 
+/**
+ * DTO for updating model configuration
+ */
 export class UpdateModelConfigDTO {
   @IsNotEmpty()
   provider: string;

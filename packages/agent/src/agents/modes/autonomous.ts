@@ -1,5 +1,5 @@
 import { logger } from '@snakagent/core';
-import { StarknetAgentInterface } from '../../tools/tools.js';
+import { SnakAgentInterface } from '../../tools/tools.js';
 import { createAllowedTools } from '../../tools/tools.js';
 import { StateGraph, MemorySaver, Annotation } from '@langchain/langgraph';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
@@ -10,22 +10,21 @@ import {
   Tool,
 } from '@langchain/core/tools';
 import { AnyZodObject } from 'zod';
-import { AIMessage, BaseMessage, ToolMessage } from '@langchain/core/messages';
+import {
+  AIMessage,
+  BaseMessage,
+  ToolMessage,
+  HumanMessage,
+} from '@langchain/core/messages';
 import {
   ChatPromptTemplate,
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
-import { ModelSelectionAgent } from '../operators/modelSelectionAgent.js';
+import { ModelSelector } from '../operators/modelSelector.js';
 import { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { truncateToolResults, formatAgentResponse } from '../core/utils.js';
 import { autonomousRules, finalAnswerRules } from '../../prompt/prompts.js';
 import { TokenTracker } from '../../token/tokenTracking.js';
-
-/**
- * @typedef {Object} GraphStateShape
- * @property {BaseMessage[]} messages - The list of messages in the current state.
- * @property {number} [iterations] - Optional: Number of iterations an agent has performed.
- */
 
 /**
  * Defines the state structure for the autonomous agent graph.
@@ -38,45 +37,39 @@ const GraphState = Annotation.Root({
     ): BaseMessage[] => x.concat(y),
     default: (): BaseMessage[] => [],
   }),
-  // Example: Add other state properties if needed for autonomous control later
-  // iterations: Annotation<number>({
-  //   reducer: (x: number, y: number): number => x + y,
-  //   default: (): number => 0,
-  // }),
 });
 
 /**
  * Creates and configures an autonomous agent using a StateGraph.
  * This agent can use tools, interact with models, and follow a defined workflow.
  *
- * @param {StarknetAgentInterface} starknetAgent - The Starknet agent instance, providing configuration and context.
- * @param {ModelSelectionAgent | null} modelSelector - The model selection agent, responsible for choosing the appropriate LLM for tasks.
- * @returns {Promise<Object>} A promise that resolves to an object containing the compiled LangGraph app,
- *                            agent configuration, and maximum iteration count.
- * @throws {Error} If agent configuration or model selector is missing, or if MCP tool initialization fails critically.
+ * @param {SnakAgentInterface} snakAgent - The Starknet agent instance providing configuration and context
+ * @param {ModelSelector | null} modelSelector - The model selection agent for choosing appropriate LLMs
+ * @returns {Promise<Object>} Promise resolving to compiled LangGraph app, agent config, and max iterations
+ * @throws {Error} If agent configuration or model selector is missing, or if MCP tool initialization fails
  */
 export const createAutonomousAgent = async (
-  starknetAgent: StarknetAgentInterface,
-  modelSelector: ModelSelectionAgent | null
+  snakAgent: SnakAgentInterface,
+  modelSelector: ModelSelector | null
 ) => {
   try {
-    const agent_config = starknetAgent.getAgentConfig();
+    const agent_config = snakAgent.getAgentConfig();
     if (!agent_config) {
       throw new Error('Agent configuration is required.');
     }
 
     if (!modelSelector) {
       logger.error(
-        'ModelSelectionAgent is required for autonomous mode but was not provided.'
+        'ModelSelector is required for autonomous mode but was not provided.'
       );
-      throw new Error('ModelSelectionAgent is required for autonomous mode.');
+      throw new Error('ModelSelector is required for autonomous mode.');
     }
 
     let toolsList: (
       | StructuredTool
       | Tool
       | DynamicStructuredTool<AnyZodObject>
-    )[] = await createAllowedTools(starknetAgent, agent_config.plugins);
+    )[] = await createAllowedTools(snakAgent, agent_config.plugins);
 
     if (
       agent_config.mcpServers &&
@@ -92,7 +85,6 @@ export const createAutonomousAgent = async (
         toolsList = [...toolsList, ...mcpTools];
       } catch (error) {
         logger.error(`Failed to initialize MCP tools: ${error}`);
-        // Depending on criticality, this could throw an error to stop agent creation.
       }
     }
 
@@ -100,10 +92,7 @@ export const createAutonomousAgent = async (
     const originalToolNodeInvoke = toolNode.invoke.bind(toolNode);
 
     /**
-     * Custom invoker for the ToolNode to add logging around tool executions.
-     * @param {typeof GraphState.State} state - The current graph state.
-     * @param {LangGraphRunnableConfig} [config] - Optional LangGraph runnable configuration.
-     * @returns {Promise<ToolMessage | ToolMessage[] | null>} The result of the tool invocation, truncated.
+     * Custom tool node invoker with logging and result truncation
      */
     toolNode.invoke = async (
       state: typeof GraphState.State,
@@ -143,21 +132,17 @@ export const createAutonomousAgent = async (
     };
 
     /**
-     * Represents a node in the graph that calls the language model.
-     * It formats the prompt, invokes the selected model, and processes the response.
+     * Language model node that formats prompts, invokes the selected model, and processes responses
      *
-     * @async
-     * @param {typeof GraphState.State} state - The current state of the graph, containing messages.
-     * @returns {Promise<{ messages: BaseMessage[] }>} An object containing the list of new messages generated by the model.
-     * @throws {Error} If agent configuration or model selector is not available during execution.
+     * @param {typeof GraphState.State} state - Current graph state containing messages
+     * @returns {Promise<{ messages: BaseMessage[] }>} Object containing new messages from the model
+     * @throws {Error} If agent configuration or model selector is unavailable
      */
     async function callModel(
       state: typeof GraphState.State
     ): Promise<{ messages: BaseMessage[] }> {
       if (!agent_config || !modelSelector) {
-        throw new Error(
-          'Agent configuration and ModelSelectionAgent are required.'
-        );
+        throw new Error('Agent configuration and ModelSelector are required.');
       }
 
       const lastMessage = state.messages[state.messages.length - 1];
@@ -166,7 +151,7 @@ export const createAutonomousAgent = async (
         lastMessage.additional_kwargs?.final_answer === true
       ) {
         logger.debug('Autonomous agent: Processing final answer continuation.');
-        delete lastMessage.additional_kwargs.final_answer; // Prevent reprocessing
+        delete lastMessage.additional_kwargs.final_answer;
 
         let finalAnswerContent = lastMessage.content;
         if (typeof finalAnswerContent === 'string') {
@@ -204,8 +189,19 @@ export const createAutonomousAgent = async (
           messages: filteredMessages,
         });
 
-        const selectedModelType =
-          await modelSelector.selectModelForMessages(filteredMessages);
+        const originalUserMessage = filteredMessages.find(
+          (msg): msg is HumanMessage => msg instanceof HumanMessage
+        );
+        const originalUserQuery = originalUserMessage
+          ? typeof originalUserMessage.content === 'string'
+            ? originalUserMessage.content
+            : JSON.stringify(originalUserMessage.content)
+          : '';
+
+        const selectedModelType = await modelSelector.selectModelForMessages(
+          filteredMessages,
+          { originalUserQuery }
+        );
         const modelForThisTask = await modelSelector.getModelForTask(
           filteredMessages,
           selectedModelType
@@ -312,7 +308,7 @@ export const createAutonomousAgent = async (
                   'Error: The conversation history has grown too large, exceeding token limits. Cannot proceed.',
                 additional_kwargs: {
                   error: 'token_limit_exceeded',
-                  final: true, // Signal error and potential final state
+                  final: true,
                 },
               }),
             ],
@@ -329,17 +325,15 @@ export const createAutonomousAgent = async (
     }
 
     /**
-     * Determines the next step in the agent's workflow based on the last message.
+     * Determines the next step in the agent's workflow based on the last message
      *
-     * @param {typeof GraphState.State} state - The current state of the graph.
-     * @returns {'tools' | 'agent'} A string indicating whether to proceed to tool execution ('tools')
-     *                              or back to the agent node ('agent').
+     * @param {typeof GraphState.State} state - Current graph state
+     * @returns {'tools' | 'agent'} Next node to execute
      */
     function shouldContinue(state: typeof GraphState.State): 'tools' | 'agent' {
       const lastMessage = state.messages[state.messages.length - 1];
 
       if (!lastMessage) {
-        // Should not happen if state.messages has a default [] and is always appended to
         logger.warn(
           'shouldContinue called with no messages in state. Defaulting to agent.'
         );
@@ -372,7 +366,7 @@ export const createAutonomousAgent = async (
       }
 
       // If no tool calls and no unprocessed FINAL ANSWER, loop back to the agent.
-      // Termination is handled by the external recursion limit in StarknetAgent.execute_autonomous.
+      // Termination is handled by the external recursion limit in SnakAgent.execute_autonomous.
       logger.debug(
         'No tool calls or unprocessed FINAL ANSWER. Routing back to agent for next iteration.'
       );
