@@ -132,16 +132,16 @@ export class AgentSelector extends BaseAgent {
   }
 
   public async execute(
-    input: string | BaseMessage,
+    input: string | BaseMessage, //--CLEANUP-- Might never be a string
     _config?: Record<string, any>
   ): Promise<AIMessage> {
     let queryString: string;
-    if (typeof input === 'string') {
+    if (typeof input === 'string') { //--CLEANUP-- Might never be true
       queryString = input;
     } else if (input instanceof BaseMessage) {
-      if (typeof input.content === 'string') {
+      if (typeof input.content === 'string') { //--CLEANUP-- is always true
         queryString = input.content;
-      } else if (Array.isArray(input.content)) {
+      } else if (Array.isArray(input.content)) { //--CLEANUP-- never reaching this else
         // Handle MessageContentComplex[] by joining or serializing
         queryString = input.content
           .map((part) => {
@@ -159,16 +159,16 @@ export class AgentSelector extends BaseAgent {
             }
           })
           .join(' ');
-      } else {
+      } else { //--CLEANUP-- never reaching this else
         // Fallback for other MessageContent types if necessary, or if input.content is a non-array object
         queryString = JSON.stringify(input.content);
       }
-    } else {
+    } else { //--CLEANUP-- Might never reach this else
       // This path should ideally not be hit due to type signature
       queryString = JSON.stringify(input);
     }
 
-    if (this.debug) {
+    if (!this.debug) {
       logger.debug(
         `AgentSelector: Analyzing query: "${queryString.substring(0, 100)}${queryString.length > 100 ? '...' : ''}"`
       );
@@ -177,7 +177,7 @@ export class AgentSelector extends BaseAgent {
     // Vérifie d'abord s'il y a une mention explicite d'un agent
     const explicitAgent = this.checkForExplicitAgentMention(queryString);
     if (explicitAgent) {
-      if (this.debug) {
+      if (!this.debug) {
         logger.debug(
           `AgentSelector: Detected explicit mention of agent "${explicitAgent.id}"`
         );
@@ -189,7 +189,7 @@ export class AgentSelector extends BaseAgent {
     return await this.analyzeQueryWithModel(queryString);
   }
 
-  private checkForExplicitAgentMention(query: string): AgentInfo | null {
+  private checkForExplicitAgentMention(query: string): AgentInfo | null { //--CLEANUP-- ?
     // Patterns de détection
     const idPattern = /agent(?:\s+id)?\s+(\d+|[a-zA-Z_-]+)/i;
     const namePattern = /agent (?:named|called) ["']?([a-zA-Z_-]+)["']?/i;
@@ -307,7 +307,8 @@ export class AgentSelector extends BaseAgent {
         content: agentSelectionPrompt(promptParams)
       });
 
-      const model = await this.modelSelector.getModelForTask([], 'fast');
+      const model = await this.modelSelector.getModelForTask([], 'fast'); //--CLEANUP-- Always set to fast
+	  console.log("MODEL : ", model)
       const result = await model.invoke([systemPrompt, humanPrompt]);
       const content =
         typeof result.content === 'string'
@@ -456,7 +457,7 @@ export class AgentSelector extends BaseAgent {
     return 'An agent in the system';
   }
 
-  private createSelectionResponse(
+  private createSelectionResponse( //--CLEANUP--
     agentId: string,
     originalQuery: string
   ): AIMessage {

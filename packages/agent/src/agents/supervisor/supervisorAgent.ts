@@ -295,18 +295,19 @@ export class SupervisorAgent extends BaseAgent {
    * @throws Will throw an error if the WorkflowController is not initialized when needed.
    */
   public async execute(
-    input: string | AgentMessage | BaseMessage | BaseMessage[],
+    input: string | AgentMessage | BaseMessage | BaseMessage[], // --CLEANUP-- input can only be a string here (user query)
     config?: Record<string, any>
   ): Promise<any> {
     this.executionDepth++;
     const depthIndent = '  '.repeat(this.executionDepth);
-    const isNodeCall = !!config?.isWorkflowNodeCall || this.executionDepth > 1;
+    const isNodeCall = !!config?.isWorkflowNodeCall || this.executionDepth > 1; // --CLEANUP-- first condition can never be true since we're never sending config
     const callPath = isNodeCall ? 'Node Call Path' : 'External Call Path';
 
     logger.debug(
       `${depthIndent}SupervisorAgent[Depth:${this.executionDepth}, Path:${callPath}]: Executing task`
     );
 
+	// --CLEANUP-- infinite loop
     if (this.executionDepth > 5) {
       logger.warn(
         `${depthIndent}SupervisorAgent: Critical execution depth (${this.executionDepth}) reached. Attempting fallback.`
@@ -352,16 +353,18 @@ export class SupervisorAgent extends BaseAgent {
     }
 
     let currentMessage: BaseMessage;
+	// --CLEANUP-- config is never defined
     const originalUserQueryFromConfig = config?.originalUserQuery as
       | string
       | undefined;
 
+	// --CLEANUP-- can never get in that if
     if (originalUserQueryFromConfig && isNodeCall) {
       currentMessage = new HumanMessage(originalUserQueryFromConfig);
       logger.debug(
         `${depthIndent}SupervisorAgent: Using originalUserQuery from config for ${callPath} processing: \"${originalUserQueryFromConfig}\"`
       );
-    } else if (Array.isArray(input) && input.length > 0) {
+    } else if (Array.isArray(input) && input.length > 0) { // --CLEANUP-- can never get in there since input is always a string
       const lastMsg = input[input.length - 1];
       if (lastMsg instanceof BaseMessage) {
         currentMessage = lastMsg;
@@ -377,11 +380,11 @@ export class SupervisorAgent extends BaseAgent {
       logger.debug(
         `${depthIndent}SupervisorAgent: Processing last message from array for ${callPath}. Content (truncated): \"${String(currentMessage.content).substring(0, 100)}...\"`
       );
-    } else if (typeof input === 'string') {
+    } else if (typeof input === 'string') { // --CLEANUP-- always true, add error checks
       currentMessage = new HumanMessage(input);
-    } else if (input instanceof BaseMessage) {
+    } else if (input instanceof BaseMessage) { // --CLEANUP-- remove this
       currentMessage = input;
-    } else if (
+    } else if ( // --CLEANUP-- remove this
       typeof input === 'object' &&
       input !== null &&
       'content' in input
@@ -391,7 +394,7 @@ export class SupervisorAgent extends BaseAgent {
           ? input.content
           : JSON.stringify(input.content)
       );
-    } else {
+    } else { // --CLEANUP-- remove this
       logger.warn(
         `${depthIndent}SupervisorAgent: Unrecognized input type for ${callPath}: ${typeof input}. Wrapping as HumanMessage 'Unrecognized input format'.`
       );
@@ -405,7 +408,7 @@ export class SupervisorAgent extends BaseAgent {
       logger.debug(
         `${depthIndent}SupervisorAgent: Enriching message with memory context for ${callPath}.`
       );
-      currentMessage = await this.enrichWithMemoryContext(currentMessage);
+      currentMessage = await this.enrichWithMemoryContext(currentMessage); // --CLEANUP-- no memories are stored for now ?
     }
 
     if (isNodeCall) {
@@ -414,13 +417,13 @@ export class SupervisorAgent extends BaseAgent {
       );
 
       let responseContent = '';
-      let nextAgent: string | undefined = undefined;
+      let nextAgent: string | undefined = undefined ;
       let isFinal = false;
       let toolCallsFromSelection: any[] | undefined = undefined;
       let needsClarification = false;
 
-      const preSelectedAgent = config?.selectedSnakAgent;
-      if (preSelectedAgent && this.snakAgents[preSelectedAgent]) {
+      const preSelectedAgent = config?.selectedSnakAgent; // --CLEANUP-- is always undefined
+      if (preSelectedAgent && this.snakAgents[preSelectedAgent]) { // --CLEANUP-- can never reach this if
         logger.debug(
           `${depthIndent}SupervisorAgent (${callPath}): Pre-selected agent "${preSelectedAgent}" found, bypassing AgentSelector entirely.`
         );
@@ -442,7 +445,7 @@ export class SupervisorAgent extends BaseAgent {
       }
 
       const queryForSelection = (originalUserQueryFromConfig ||
-        (typeof currentMessage.content === 'string'
+        (typeof currentMessage.content === 'string' //--CLEANUP-- always true so will always be currentMessage.content
           ? currentMessage.content
           : JSON.stringify(currentMessage.content))) as string;
 
