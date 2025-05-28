@@ -1,6 +1,7 @@
 import { AgentResponse } from './agents.controller.js';
 import { AgentStorage } from '../agents.storage.js';
 import { AgentService } from '../services/agent.service.js';
+import { SupervisorService } from '../services/supervisor.service.js';
 import ServerError from '../utils/error.js';
 import { OnModuleInit } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -44,6 +45,7 @@ export class MyGateway implements OnModuleInit {
   constructor(
     private readonly agentService: AgentService,
     private readonly agentFactory: AgentStorage,
+    private readonly supervisorService: SupervisorService,
     private readonly reflector: Reflector
   ) {
     logger.info('Gateway initialized');
@@ -72,8 +74,10 @@ export class MyGateway implements OnModuleInit {
       logger.info('handleUserRequest called');
       const route = this.reflector.get('path', this.handleUserRequest);
       logger.debug('handleUserRequest:', userRequest);
-      // TODO add the agents check when the project will use the database instead of the mock
-      const agent = this.agentFactory.getAgent(userRequest.request.agent_id);
+
+      const agent = this.supervisorService.getAgentInstance(
+        userRequest.request.agent_id
+      );
       if (!agent) {
         throw new ServerError('E01TA400');
       }
@@ -87,7 +91,7 @@ export class MyGateway implements OnModuleInit {
         route,
         action
       );
-      // Simulate a delay for the story chunks
+
       const storyChunks = divideString(response_metrics.data as string, 5);
 
       const client = this.clients.get(userRequest.socket_id);
@@ -129,9 +133,20 @@ export class MyGateway implements OnModuleInit {
       const client = this.clients.get(userRequest.socket_id);
       if (!client) {
         logger.error('Client not found');
-        throw new ServerError('E01TA400'); // TODO Need to create a new error for socket not found
+        throw new ServerError('E01TA400');
       }
       await this.agentFactory.addAgent(userRequest.agent);
+
+      const agentConfigs = this.agentFactory.getAllAgentConfigs();
+      const newAgentConfig = agentConfigs[agentConfigs.length - 1];
+
+      if (newAgentConfig) {
+        await this.supervisorService.addAgentInstance(
+          newAgentConfig.id,
+          newAgentConfig
+        );
+      }
+
       const response: AgentResponse = {
         status: 'success',
         data: `Agent ${userRequest.agent.name} added`,
@@ -151,13 +166,19 @@ export class MyGateway implements OnModuleInit {
       const client = this.clients.get(userRequest.socket_id);
       if (!client) {
         logger.error('Client not found');
-        throw new ServerError('E01TA400'); // TODO Need to create a new error for socket not found
-      }
-      const agent = this.agentFactory.getAgent(userRequest.agent_id);
-      if (!agent) {
         throw new ServerError('E01TA400');
       }
+
+      const agentConfig = this.agentFactory.getAgentConfig(
+        userRequest.agent_id
+      );
+      if (!agentConfig) {
+        throw new ServerError('E01TA400');
+      }
+
+      await this.supervisorService.removeAgentInstance(userRequest.agent_id);
       await this.agentFactory.deleteAgent(userRequest.agent_id);
+
       const response: AgentResponse = {
         status: 'success',
         data: `Agent ${userRequest.agent_id} deleted`,
