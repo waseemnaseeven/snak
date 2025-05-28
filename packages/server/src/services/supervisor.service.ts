@@ -343,7 +343,7 @@ export class SupervisorService implements OnModuleInit {
       const agentConfigs = this.agentStorage.getAllAgentConfigs();
       const agentsToRegister: AgentRegistration[] = [];
 
-      // Préparer tous les agents pour registration en batch
+      // Prepare all agents for batch registration
       for (const agentConfig of agentConfigs) {
         const snakAgent = this.agentInstances.get(agentConfig.id);
         if (snakAgent) {
@@ -369,38 +369,35 @@ export class SupervisorService implements OnModuleInit {
         }
       }
 
-      // Enregistrer tous les agents en une fois (sans refresh automatique)
+      // Register all agents at once (without automatic refresh)
       if (agentsToRegister.length > 0) {
         (this.supervisor as any).registerMultipleSnakAgents(agentsToRegister, {
           updateRegistryAfter: true,
-          refreshWorkflowAfter: false, // On le fait manuellement après
+          refreshWorkflowAfter: false,
         });
 
         this.logger.log(
           `Batch registered ${agentsToRegister.length} agents with supervisor`
         );
 
-        // CORRECTION : Appeler explicitement le refresh du WorkflowController
         this.logger.log(
           'Refreshing WorkflowController after batch registration...'
         );
         await (this.supervisor as any).refreshWorkflowController(true); // Force full refresh
         this.logger.log('WorkflowController refresh completed');
 
-        // Vérification que les agents sont bien dans le WorkflowController
         const workflowStatus = (this.supervisor as any).getWorkflowStatus();
         this.logger.debug(
           `WorkflowController status after registration: ${JSON.stringify(workflowStatus)}`
         );
 
-        // AJOUT : Vérifier que les agents sont disponibles dans le workflow
         if (workflowStatus.nodeNames.length !== agentsToRegister.length) {
           this.logger.warn(
             `Mismatch: Registered ${agentsToRegister.length} agents but WorkflowController has ${workflowStatus.nodeNames.length} node names`
           );
         } else {
           this.logger.log(
-            `✅ WorkflowController successfully updated with ${workflowStatus.nodeNames.length} agents: ${workflowStatus.nodeNames.join(', ')}`
+            `WorkflowController successfully updated with ${workflowStatus.nodeNames.length} agents: ${workflowStatus.nodeNames.join(', ')}`
           );
         }
       } else {
@@ -505,7 +502,6 @@ export class SupervisorService implements OnModuleInit {
     batchMode: boolean = false
   ): Promise<void> {
     try {
-      // Créer l'instance
       const snakAgent = await this.createSnakAgentFromConfig(agentConfig);
       this.agentInstances.set(agentId, snakAgent);
 
@@ -516,7 +512,6 @@ export class SupervisorService implements OnModuleInit {
           group: agentConfig.group,
         };
 
-        // Enregistrer avec options optimisées
         (this.supervisor as any).registerSnakAgent(
           agentId,
           snakAgent,
@@ -528,7 +523,7 @@ export class SupervisorService implements OnModuleInit {
           }
         );
 
-        // Refresh seulement si pas en mode batch
+        // Refresh only if not in batch mode
         if (!batchMode) {
           await this.supervisor.refreshWorkflowController();
         }
@@ -554,12 +549,10 @@ export class SupervisorService implements OnModuleInit {
     try {
       this.logger.log('Finalizing batch operations...');
 
-      // Mettre à jour le registry
       (this.supervisor as any).updateAgentSelectorRegistry({
         logDetails: true,
       });
 
-      // Refresh le WorkflowController
       await this.supervisor.refreshWorkflowController();
 
       this.logger.log('Batch operations finalized successfully');

@@ -93,13 +93,13 @@ class BatchRegistrationSession {
       `SupervisorAgent: Finalizing batch registration session with ${this.agents.length} agents`
     );
 
-    // Enregistrer tous les agents
+    // Register all agents
     this.supervisor.registerMultipleSnakAgents(this.agents, {
       updateRegistryAfter: options.updateRegistry,
       refreshWorkflowAfter: false,
     });
 
-    // Refresh du WorkflowController si demandé
+    // Refresh WorkflowController if requested
     if (options.refreshWorkflow) {
       logger.debug(
         'SupervisorAgent: Refreshing WorkflowController after batch registration'
@@ -107,7 +107,7 @@ class BatchRegistrationSession {
       await this.supervisor.refreshWorkflowController();
     }
 
-    // Nettoyer la session
+    // Clean up the session
     this.agents = [];
     logger.debug('SupervisorAgent: Batch registration session finalized');
   }
@@ -1594,7 +1594,7 @@ export class SupervisorAgent extends BaseAgent {
       agentMetadata.group
     );
 
-    // Enregistrement interne
+    // Internal registration
     this.snakAgents[id] = agent;
     this.nodeNameToAgentId.set(nodeName, id);
     this.agentIdToNodeName.set(id, nodeName);
@@ -1603,12 +1603,12 @@ export class SupervisorAgent extends BaseAgent {
       `SupervisorAgent: Registered Snak agent "${id}" with node name "${nodeName}" and metadata: ${JSON.stringify(agentMetadata)}`
     );
 
-    // Mise à jour conditionnelle du registry
+    // Conditional registry update
     if (!options.skipRegistryUpdate && !options.deferUpdates) {
       this.updateAgentSelectorRegistry();
     }
 
-    // Pas de refresh automatique du WorkflowController sauf si explicitement demandé
+    // No automatic WorkflowController refresh unless explicitly requested
     if (!options.skipWorkflowRefresh && !options.deferUpdates) {
       logger.debug(
         `SupervisorAgent: Agent ${id} registered, WorkflowController refresh will be handled externally`
@@ -1640,7 +1640,7 @@ export class SupervisorAgent extends BaseAgent {
     const successfulRegistrations: string[] = [];
     const failedRegistrations: Array<{ id: string; error: string }> = [];
 
-    // Enregistrer tous les agents sans mise à jour du registry/workflow
+    // Register all agents without updating registry/workflow
     agents.forEach(({ id, agent, metadata }) => {
       try {
         this.registerSnakAgent(id, agent, metadata, {
@@ -1660,7 +1660,7 @@ export class SupervisorAgent extends BaseAgent {
       }
     });
 
-    // Mettre à jour le registry une seule fois si demandé
+    // Update registry once if requested
     if (options.updateRegistryAfter && successfulRegistrations.length > 0) {
       logger.debug(
         `SupervisorAgent: Updating agent selector registry after batch registration`
@@ -1668,12 +1668,12 @@ export class SupervisorAgent extends BaseAgent {
       this.updateAgentSelectorRegistry();
     }
 
-    // CORRECTION : Faire le refresh du WorkflowController si demandé
+    // CORRECTION: Refresh WorkflowController if requested
     if (options.refreshWorkflowAfter && successfulRegistrations.length > 0) {
       logger.debug(
         `SupervisorAgent: Refreshing WorkflowController after batch registration`
       );
-      // Utiliser setTimeout pour éviter les problèmes de synchronisation
+      // Use setTimeout to avoid synchronization issues
       setTimeout(async () => {
         try {
           await this.refreshWorkflowController(true); // Force full refresh
@@ -1686,10 +1686,9 @@ export class SupervisorAgent extends BaseAgent {
             error
           );
         }
-      }, 100); // Small delay to ensure all registrations are complete
+      }, 100); // TODO: Make sure to secure this delay
     }
 
-    // Log des résultats
     logger.info(
       `SupervisorAgent: Batch registration completed - ${successfulRegistrations.length} successful, ${failedRegistrations.length} failed`
     );
@@ -1764,7 +1763,6 @@ export class SupervisorAgent extends BaseAgent {
       ...registry.getAllAgents(),
     };
 
-    // Ajouter les SnakAgents enregistrés
     Object.entries(this.snakAgents).forEach(([id, agent]) => {
       const nodeName = this.agentIdToNodeName.get(id);
       if (nodeName) {
@@ -1774,7 +1772,6 @@ export class SupervisorAgent extends BaseAgent {
       }
     });
 
-    // Ajouter le main SnakAgent si nécessaire
     if (
       this.snakAgent &&
       !Object.values(this.snakAgents).includes(this.snakAgent)
@@ -1788,7 +1785,6 @@ export class SupervisorAgent extends BaseAgent {
       }
     }
 
-    // Mettre à jour l'AgentSelector
     this.agentSelector.setAvailableAgents(availableAgents);
 
     const totalAgents = Object.keys(availableAgents).length;
@@ -1796,7 +1792,6 @@ export class SupervisorAgent extends BaseAgent {
       `SupervisorAgent: Updated AgentSelector registry with ${totalAgents} agents (${agentCount} SnakAgents)`
     );
 
-    // Log détaillé seulement si demandé
     if (options.logDetails) {
       Object.entries(availableAgents).forEach(([id, agent]) => {
         const metadata = (agent as any).metadata;
@@ -1836,7 +1831,6 @@ export class SupervisorAgent extends BaseAgent {
 
     const agent = this.snakAgents[id];
 
-    // Dispose de l'agent
     if (agent && typeof (agent as any).dispose === 'function') {
       try {
         (agent as any).dispose();
@@ -1845,7 +1839,6 @@ export class SupervisorAgent extends BaseAgent {
       }
     }
 
-    // Nettoyer les mappings
     const nodeName = this.agentIdToNodeName.get(id);
     if (nodeName) {
       this.nodeNameToAgentId.delete(nodeName);
@@ -1855,16 +1848,13 @@ export class SupervisorAgent extends BaseAgent {
       );
     }
 
-    // Supprimer de la liste
     delete this.snakAgents[id];
     logger.debug(`SupervisorAgent: Unregistered Snak agent "${id}"`);
 
-    // Mise à jour conditionnelle
     if (!options.skipRegistryUpdate) {
       this.updateAgentSelectorRegistry({ logDetails: false });
     }
 
-    // Pas de refresh automatique du WorkflowController
     if (!options.skipWorkflowRefresh) {
       logger.debug(
         `SupervisorAgent: Agent ${id} unregistered, WorkflowController refresh should be handled externally`
