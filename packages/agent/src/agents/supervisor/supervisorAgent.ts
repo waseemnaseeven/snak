@@ -325,17 +325,22 @@ export class SupervisorAgent extends BaseAgent {
 
       const allAgents: Record<string, IAgent> = { supervisor: this };
 
+      const snakAgentCount = Object.keys(this.snakAgents).length;
+      logger.debug(
+        `SupervisorAgent: Found ${snakAgentCount} registered SnakAgents`
+      );
+
       Object.entries(this.snakAgents).forEach(([id, agent]) => {
         const nodeName = this.agentIdToNodeName.get(id);
         if (nodeName) {
           allAgents[nodeName] = agent;
           logger.debug(
-            `SupervisorAgent: Added SnakAgent "${id}" to workflow with node name "${nodeName}"`
+            `SupervisorAgent: Added SnakAgent "${id}" with node name "${nodeName}"`
           );
         } else {
           allAgents[id] = agent;
           logger.warn(
-            `SupervisorAgent: No node name mapping found for agent "${id}", using original ID`
+            `SupervisorAgent: No node name mapping for agent "${id}", using original ID`
           );
         }
       });
@@ -354,7 +359,12 @@ export class SupervisorAgent extends BaseAgent {
       const operatorAgents = registry.getAllAgents();
       Object.entries(operatorAgents).forEach(([id, agent]) => {
         allAgents[id] = agent;
+        logger.debug(`SupervisorAgent: Added operator agent "${id}"`);
       });
+
+      logger.debug(
+        `SupervisorAgent: Total agents for WorkflowController: ${Object.keys(allAgents).join(', ')}`
+      );
 
       const snakAgentsCount = Object.keys(allAgents).filter(
         (id) => allAgents[id] && allAgents[id].type === AgentType.SNAK
@@ -434,7 +444,8 @@ export class SupervisorAgent extends BaseAgent {
       logger.debug(
         'SupervisorAgent: WorkflowController not initialized, performing full initialization'
       );
-      await this.initializeWorkflowController(true);
+      const allowNoSnakAgents = Object.keys(this.snakAgents).length === 0;
+      await this.initializeWorkflowController(allowNoSnakAgents);
       return;
     }
 
@@ -443,16 +454,30 @@ export class SupervisorAgent extends BaseAgent {
         'SupervisorAgent: Performing lightweight WorkflowController refresh'
       );
 
+      // Reset workflow controller
       await this.workflowController.reset();
 
+      // Update agent selector with current agents
       if (this.agentSelector) {
         const allAgents: Record<string, IAgent> = { supervisor: this };
 
+        // Add all registered SnakAgents with their node names
         Object.entries(this.snakAgents).forEach(([id, agent]) => {
           const nodeName = this.agentIdToNodeName.get(id);
-          allAgents[nodeName || id] = agent;
+          if (nodeName) {
+            allAgents[nodeName] = agent;
+            logger.debug(
+              `SupervisorAgent: Added agent "${id}" with node name "${nodeName}"`
+            );
+          } else {
+            allAgents[id] = agent;
+            logger.warn(
+              `SupervisorAgent: No node name found for agent "${id}"`
+            );
+          }
         });
 
+        // Add operator agents
         const registry = OperatorRegistry.getInstance();
         const operatorAgents = registry.getAllAgents();
         Object.entries(operatorAgents).forEach(([id, agent]) => {
@@ -460,6 +485,9 @@ export class SupervisorAgent extends BaseAgent {
         });
 
         this.agentSelector.setAvailableAgents(allAgents);
+        logger.debug(
+          `SupervisorAgent: Updated AgentSelector with ${Object.keys(allAgents).length} agents`
+        );
       }
 
       logger.debug(
@@ -1640,6 +1668,27 @@ export class SupervisorAgent extends BaseAgent {
       this.updateAgentSelectorRegistry();
     }
 
+    // CORRECTION : Faire le refresh du WorkflowController si demandé
+    if (options.refreshWorkflowAfter && successfulRegistrations.length > 0) {
+      logger.debug(
+        `SupervisorAgent: Refreshing WorkflowController after batch registration`
+      );
+      // Utiliser setTimeout pour éviter les problèmes de synchronisation
+      setTimeout(async () => {
+        try {
+          await this.refreshWorkflowController(true); // Force full refresh
+          logger.info(
+            `SupervisorAgent: WorkflowController refresh completed after batch registration`
+          );
+        } catch (error) {
+          logger.error(
+            `SupervisorAgent: Error refreshing WorkflowController after batch registration:`,
+            error
+          );
+        }
+      }, 100); // Small delay to ensure all registrations are complete
+    }
+
     // Log des résultats
     logger.info(
       `SupervisorAgent: Batch registration completed - ${successfulRegistrations.length} successful, ${failedRegistrations.length} failed`
@@ -1649,13 +1698,6 @@ export class SupervisorAgent extends BaseAgent {
       logger.warn(
         `SupervisorAgent: Failed registrations:`,
         failedRegistrations
-      );
-    }
-
-    // Ne pas refresh le WorkflowController automatiquement - sera fait par le SupervisorService
-    if (options.refreshWorkflowAfter) {
-      logger.debug(
-        `SupervisorAgent: WorkflowController refresh will be triggered after batch registration`
       );
     }
   }
@@ -1889,6 +1931,10 @@ export class SupervisorAgent extends BaseAgent {
   public async refreshWorkflowController(
     forceFullRefresh: boolean = false
   ): Promise<void> {
+    logger.debug(
+      `SupervisorAgent: refreshWorkflowController called with forceFullRefresh=${forceFullRefresh}`
+    );
+
     if (!this.workflowController && !this.workflowInitialized) {
       logger.debug(
         'SupervisorAgent: WorkflowController not initialized, performing initial setup'
@@ -1899,13 +1945,35 @@ export class SupervisorAgent extends BaseAgent {
     }
 
     try {
-      if (forceFullRefresh) {
+      const agentCount = Object.keys(this.snakAgents).length;
+      logger.debug(
+        `SupervisorAgent: Refreshing WorkflowController. Current agent count: ${agentCount}`
+      );
+
+      if (forceFullRefresh || agentCount > 0) {
         logger.info(
-          'SupervisorAgent: Performing forced full WorkflowController refresh'
+          `SupervisorAgent: Performing ${forceFullRefresh ? 'forced full' : 'standard'} WorkflowController refresh`
         );
+
+        // Reset current workflow controller
+        if (this.workflowController) {
+          await this.workflowController.reset();
+        }
+
+        // Force full reinitialization
         this.workflowInitialized = false;
-        const allowNoSnakAgents = Object.keys(this.snakAgents).length === 0;
+        this.workflowController = null;
+
+        // Reinitialize with current agents
+        const allowNoSnakAgents = agentCount === 0;
         await this.initializeWorkflowController(allowNoSnakAgents, true);
+
+        // Log final status
+        const finalAgentCount = Object.keys(this.snakAgents).length;
+        const nodeNames = Array.from(this.nodeNameToAgentId.keys());
+        logger.info(
+          `SupervisorAgent: WorkflowController refresh completed. Agents: ${finalAgentCount}, Node names: [${nodeNames.join(', ')}]`
+        );
       } else {
         logger.info(
           'SupervisorAgent: Performing optimized WorkflowController refresh'

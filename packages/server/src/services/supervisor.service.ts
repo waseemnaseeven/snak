@@ -65,8 +65,6 @@ export class SupervisorService implements OnModuleInit {
 
       await this.registerAllAgentsWithSupervisor();
 
-      await this.finalizeWorkflowController();
-
       this.initialized = true;
       this.logger.log('SupervisorService initialized successfully');
     } catch (error) {
@@ -371,16 +369,40 @@ export class SupervisorService implements OnModuleInit {
         }
       }
 
-      // Enregistrer tous les agents en une fois
+      // Enregistrer tous les agents en une fois (sans refresh automatique)
       if (agentsToRegister.length > 0) {
         (this.supervisor as any).registerMultipleSnakAgents(agentsToRegister, {
           updateRegistryAfter: true,
-          refreshWorkflowAfter: false, // On le fera dans finalizeWorkflowController
+          refreshWorkflowAfter: false, // On le fait manuellement après
         });
 
         this.logger.log(
           `Batch registered ${agentsToRegister.length} agents with supervisor`
         );
+
+        // CORRECTION : Appeler explicitement le refresh du WorkflowController
+        this.logger.log(
+          'Refreshing WorkflowController after batch registration...'
+        );
+        await (this.supervisor as any).refreshWorkflowController(true); // Force full refresh
+        this.logger.log('WorkflowController refresh completed');
+
+        // Vérification que les agents sont bien dans le WorkflowController
+        const workflowStatus = (this.supervisor as any).getWorkflowStatus();
+        this.logger.debug(
+          `WorkflowController status after registration: ${JSON.stringify(workflowStatus)}`
+        );
+
+        // AJOUT : Vérifier que les agents sont disponibles dans le workflow
+        if (workflowStatus.nodeNames.length !== agentsToRegister.length) {
+          this.logger.warn(
+            `Mismatch: Registered ${agentsToRegister.length} agents but WorkflowController has ${workflowStatus.nodeNames.length} node names`
+          );
+        } else {
+          this.logger.log(
+            `✅ WorkflowController successfully updated with ${workflowStatus.nodeNames.length} agents: ${workflowStatus.nodeNames.join(', ')}`
+          );
+        }
       } else {
         this.logger.warn('No agents available for batch registration');
       }
