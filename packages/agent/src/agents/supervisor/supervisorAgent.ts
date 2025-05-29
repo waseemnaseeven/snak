@@ -94,13 +94,12 @@ export class SupervisorAgent extends BaseAgent {
    * @throws {Error} Will throw an error if initialization of any critical component fails
    */
   public async init(): Promise<void> {
-    const agentConfig = this.config.starknetConfig.agentConfig;
     logger.info('SupervisorAgent: Starting initialization');
 
     try {
       await this.initializeModelSelector();
-      await this.initializeMemoryAgent(agentConfig);
-      await this.initializeToolsOrchestrator(agentConfig);
+      await this.initializeMemoryAgent(this.config.starknetConfig.agentConfig);
+      await this.initializeToolsOrchestrator(this.config.starknetConfig.agentConfig);
       await this.initializeAgentSelector();
 
       this.updateAgentSelectorRegistry();
@@ -108,7 +107,7 @@ export class SupervisorAgent extends BaseAgent {
       await this.initializeWorkflowController(true);
 
       if (Object.keys(this.snakAgents).length > 0) {
-        this.initializeMetrics(agentConfig);
+        this.initializeMetrics(this.config.starknetConfig.agentConfig);
       }
 
       logger.info('SupervisorAgent: All agents initialized successfully');
@@ -256,14 +255,13 @@ export class SupervisorAgent extends BaseAgent {
         );
       }
 
-      const maxIterations = 15;
       const workflowTimeout = 60000;
       const entryPoint = allAgents['agent-selector']
         ? 'agent-selector'
         : 'supervisor';
 
       logger.debug(
-        `SupervisorAgent: WorkflowController configured with maxIterations=${maxIterations}, timeout=${workflowTimeout}ms, entryPoint='${entryPoint}'`
+        `SupervisorAgent: WorkflowController configured with timeout=${workflowTimeout}ms, entryPoint='${entryPoint}'`
       );
 
       this.workflowController = new WorkflowController({
@@ -271,7 +269,7 @@ export class SupervisorAgent extends BaseAgent {
         entryPoint,
         checkpointEnabled: this.checkpointEnabled,
         debug: this.debug,
-        maxIterations,
+        maxIterations: 15,
         workflowTimeout,
       });
 
@@ -398,7 +396,9 @@ export class SupervisorAgent extends BaseAgent {
     );
 
     try {
+      console.log("This snakagent : ", this.snakAgent)
       if (this.snakAgent) {
+        console.log("JE SUIS LE SNAK_AGENT")
         const result = await this.snakAgent.execute(
           typeof input === 'string'
             ? input
@@ -520,6 +520,7 @@ export class SupervisorAgent extends BaseAgent {
     callPath: string,
     depthIndent: string
   ): Promise<any> {
+    console.log("isNodeCall : ", isNodeCall)
     if (isNodeCall) {
       return await this.handleNodeCall(
         currentMessage,
@@ -725,10 +726,12 @@ export class SupervisorAgent extends BaseAgent {
           workflowConfig.originalUserQuery;
       }
 
+      console.log("IJUDDSHJSJKSHDSJKHD")
       const result = await this.workflowController.execute(
         initialMessagesForWorkflow[0],
         workflowConfig
       );
+      console.log("2222222222222222 ")
 
       if (
         result?.metadata?.requiresClarification === true &&
@@ -1433,6 +1436,7 @@ export class SupervisorAgent extends BaseAgent {
       this.snakAgent &&
       !Object.values(this.snakAgents).includes(this.snakAgent)
     ) {
+      console.log("snakAgent added as main agent !")
       const mainAgentId = 'snak-main';
       availableAgents[mainAgentId] = this.snakAgent;
       logger.debug(

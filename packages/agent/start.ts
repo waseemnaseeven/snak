@@ -163,8 +163,6 @@ async function loadMulti(
   const spinner = createSpinner('Initializing Multi-Agent System').start();
 
   try {
-    const initializedAgents = {};
-
     const terminateAgents = await launchMultiAgent(
       multiAgentConfigPath,
       modelsConfig

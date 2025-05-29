@@ -25,7 +25,7 @@ export interface IAgent {
    * @param input Input to process
    * @param config Optional configuration
    */
-  execute(input: any, config?: Record<string, any>): Promise<any>;
+  execute(input: any, config?: Record<string, any>, test? : String): Promise<any>;
 
   /**
    * Optional method to clean up resources used by the agent.

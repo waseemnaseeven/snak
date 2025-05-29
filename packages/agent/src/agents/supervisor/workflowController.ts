@@ -108,6 +108,7 @@ export class WorkflowController {
    * @throws Error if initialization fails.
    */
   public async init(): Promise<void> {
+    console.log("init is there");
     logger.debug('WorkflowController: Starting initialization');
     try {
       const workflow = new StateGraph<WorkflowState>({
@@ -145,7 +146,9 @@ export class WorkflowController {
         },
       });
 
+      // console.log("agents = ", this.agents) 
       for (const [agentId, agent] of Object.entries(this.agents)) {
+        console.log("agentId = ", agentId)
         const execId = this.executionId || 'unknown';
         workflow.addNode(
           agentId,
@@ -250,11 +253,14 @@ export class WorkflowController {
               logger.debug(
                 `WorkflowController[Exec:${execId}]: Node[${agentId}] - Calling agent.execute()...`
               );
+              console.log(
+                "before result workflow controller !"
+              )
               const result = await agent.execute(state.messages, {
                 ...config,
                 isWorkflowNodeCall: true,
-              });
-
+              }, "Hello");
+              console.log(JSON.stringify(result));
               logger.debug(
                 `WorkflowController[Exec:${execId}]: Node[${agentId}] - Agent execution finished. Processing result...`
               );
@@ -841,7 +847,7 @@ export class WorkflowController {
         };
 
         try {
-          const result = await targetAgent.execute([message], agentConfig);
+          const result = await targetAgent.execute([message], agentConfig, '2EME');
 
           let finalResult;
           if (result && typeof result === 'object' && 'messages' in result) {

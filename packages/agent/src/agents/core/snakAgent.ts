@@ -284,10 +284,11 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
    */
   public async execute(
     input: BaseMessage[] | any,
-    config?: Record<string, any>
+    config?: Record<string, any>,
+    test? : String,
   ): Promise<unknown> {
     logger.debug(`SnakAgent executing with mode: ${this.currentMode}`);
-
+    console.log("test",test);
     if (!this.agentReactExecutor) {
       logger.warn(
         'SnakAgent: Agent executor not available. Attempting to recreate.'
@@ -433,7 +434,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
 
       const app = this.agentReactExecutor;
       const result = await app.invoke(graphState, runnableConfig);
-
       if (result?.messages?.length > 0) {
         for (let i = result.messages.length - 1; i >= 0; i--) {
           const msg = result.messages[i];

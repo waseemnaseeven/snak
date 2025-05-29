@@ -115,8 +115,8 @@ export class SupervisorService implements OnModuleInit {
         debug: process.env.DEBUG === 'true',
       };
 
-      this.supervisor = new SupervisorAgent(supervisorConfig);
-      await this.supervisor.init();
+      // this.supervisor = new SupervisorAgent(supervisorConfig);
+      // await this.supervisor.init();
 
       this.logger.log('Supervisor agent initialized successfully');
     } catch (error) {
