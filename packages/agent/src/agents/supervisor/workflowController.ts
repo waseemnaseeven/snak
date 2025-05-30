@@ -6,6 +6,13 @@ import { RunnableConfig } from '@langchain/core/runnables';
 import crypto from 'crypto';
 import { AgentType } from '../core/baseAgent.js';
 
+export interface LangChainResponse {
+  supervisor: {
+    messages: BaseMessage[];
+    metadata: Record<string, any>;
+    currentAgent: string;
+  };
+}
 /**
  * Represents the state of the multi-agent workflow.
  */
@@ -769,12 +776,11 @@ export class WorkflowController {
       );
 
       const threadId = config?.threadId || this.executionId;
-      const runConfig: RunnableConfig = {
+      const runConfig: any = {
         configurable: {
           thread_id: threadId,
         },
-        recursionLimit: this.maxIterations * 2,
-        ...(config || {}),
+        version: 'v2' as const,
       };
       logger.debug(
         `WorkflowController[Exec:${this.executionId}]: Using thread ID: ${threadId}`
@@ -847,6 +853,7 @@ export class WorkflowController {
         };
 
         try {
+          console.log('JE SUIS DEDANS');
           const result = await targetAgent.execute([message], agentConfig);
 
           let finalResult;
@@ -901,19 +908,77 @@ export class WorkflowController {
       logger.debug(
         `WorkflowController[Exec:${this.executionId}]: Invoking workflow with initial state`
       );
-      const workflowPromise = this.workflow.invoke(
-        {
+      // const test = new Promise(async (resolve, reject) => {
+      //   let response_chunk;
+      //   for await (const chunk of await this.workflow.streamEvents(
+      //     {
+      //       messages: [message],
+      //       currentAgent: initialAgent,
+      //       metadata: initialMetadata,
+      //       toolCalls: [],
+      //       error: undefined,
+      //       iterationCount: 0,
+      //     },
+      //     {
+      //       ...runConfig,
+      //       version: 'v2' as const,
+      //     }
+      //   )) {
+      //     console.log((
+      //       {
+      //         event : chunk.event,
+      //         data : chunk.data,
+      //       }
+      //     ));
+      //     if (chunk.event === 'on_chat_model_stream') {
+      //       console.log(`${chunk.data.chunk.content}`);
+      //     }
+
+      //   }
+      // });
+      for await (const event of this.workflow.streamEvents(
+        {   
           messages: [message],
           currentAgent: initialAgent,
           metadata: initialMetadata,
           toolCalls: [],
           error: undefined,
-          iterationCount: 0,
-        },
+          iterationCount: 0, },
         runConfig
-      );
+      )) {
+        const kind = event.event;
+        console.log(`${kind}: ${event.name}`);
+      }
 
-      const result = await Promise.race([workflowPromise, timeoutPromise]);
+       this.workflow.invoke(
+        {   
+          messages: [message],
+          currentAgent: initialAgent,
+          metadata: initialMetadata,
+          toolCalls: [],
+          error: undefined,
+          iterationCount: 0, },
+        runConfig
+      )
+      // const workflowPromise = this.workflow.invoke(
+      //   {
+      //     messages: [message],
+      //     currentAgent: initialAgent,
+      //     metadata: initialMetadata,
+      //     toolCalls: [],
+      //     error: undefined,
+      //     iterationCount: 0,
+      //   },
+      //   {
+      //     configurable: {
+      //       thread_id: threadId,
+      //     },
+      //     version: 'v2' as const,
+      //   }
+      // );
+      console.log('Hello');
+      const result = await Promise.race([timeoutPromise]);
+      console.log(JSON.stringify(result, null, 2));
 
       if (this.timeoutId) {
         clearTimeout(this.timeoutId);
@@ -923,6 +988,7 @@ export class WorkflowController {
       logger.debug(
         `WorkflowController[Exec:${this.executionId}]: Workflow execution completed`
       );
+      logger.debug(result);
       return result;
     } catch (error) {
       logger.error(

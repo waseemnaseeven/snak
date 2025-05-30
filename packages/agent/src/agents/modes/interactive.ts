@@ -194,8 +194,9 @@ export const createInteractiveAgent = async (
               ? modelForThisTask.bindTools(toolsList)
               : modelForThisTask;
 
+          
           const result = await boundModel.invoke(currentFormattedPrompt);
-
+          logger.debug(result);
           TokenTracker.trackCall(result, selectedModelType);
           return formatAIMessageResult(result);
         } else {
