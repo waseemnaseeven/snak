@@ -10,6 +10,7 @@ import { Postgres } from '@snakagent/database';
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
   private initialized = false;
+  private initializationPromise: Promise<void> | null = null;
 
   constructor() {}
 
@@ -26,6 +27,21 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    this.initializationPromise = this.performConnect();
+
+    try {
+      await this.initializationPromise;
+    } catch (error) {
+      this.initializationPromise = null;
+      throw error;
+    }
+  }
+
+  private async performConnect(): Promise<void> {
     try {
       this.logger.log('Initializing database connection...');
 
@@ -54,11 +70,28 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       this.logger.log('Closing database connection...');
       await Postgres.shutdown();
       this.initialized = false;
+      this.initializationPromise = null;
       this.logger.log('Database connection closed successfully');
     } catch (error) {
       this.logger.error('Failed to close database connection:', error);
       throw error;
     }
+  }
+
+  /**
+   * Returns a promise that resolves when the database is fully initialized
+   * @returns Promise<void> that resolves when initialization is complete
+   */
+  public async onReady(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    return this.connect();
   }
 
   isInitialized(): boolean {
