@@ -31,7 +31,7 @@ export class AgentService implements IAgentService {
   constructor(private readonly config: ConfigurationService) {}
 
   async handleUserRequest(
-    agent: AgentSystem,
+    agent: AgentSystem | IAgent,
     userRequest: MessageRequest
   ): Promise<AgentExecutionResponse> {
     this.logger.debug({
@@ -40,16 +40,33 @@ export class AgentService implements IAgentService {
     });
 
     try {
-      const result = await agent.execute(userRequest);
+      let result: Promise<unknown>;
+
+      if (agent && typeof agent.execute === 'function') {
+        const executeMethod = agent.execute;
+        const isAgentSystem =
+          'getSnakAgent' in agent &&
+          typeof (agent as AgentSystem).getSnakAgent === 'function';
+
+        if (isAgentSystem) {
+          result = (agent as AgentSystem).execute(userRequest);
+        } else {
+          result = (agent as IAgent).execute(userRequest.user_request);
+        }
+      } else {
+        throw new Error('Invalid agent: missing execute method');
+      }
+
+      const resolvedResult = await result;
 
       this.logger.debug({
         message: 'Agent request processed successfully',
-        result: result,
+        result: resolvedResult,
       });
 
       return {
         status: 'success',
-        data: result,
+        data: resolvedResult,
       };
     } catch (error: any) {
       this.logger.error('Error processing agent request', {

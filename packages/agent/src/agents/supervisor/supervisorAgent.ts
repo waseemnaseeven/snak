@@ -25,6 +25,14 @@ import { OperatorRegistry } from '../operators/operatorRegistry.js';
 import { ConfigurationAgent } from 'agents/operators/configAgent.js';
 
 /**
+ * Represents an agent to be registered
+ */
+interface AgentRegistration {
+  agent: SnakAgent;
+  metadata?: any;
+}
+
+/**
  * Configuration interface for the SupervisorAgent
  * @interface SupervisorAgentConfig
  */
@@ -55,6 +63,8 @@ export class SupervisorAgent extends BaseAgent {
   private snakAgents: Record<string, SnakAgent> = {};
   private nodeNameToAgentId: Map<string, string> = new Map();
   private agentIdToNodeName: Map<string, string> = new Map();
+  private workflowInitialized: boolean = false;
+  private isInitializing: boolean = false;
 
   private static instance: SupervisorAgent | null = null;
 
@@ -207,27 +217,58 @@ export class SupervisorAgent extends BaseAgent {
   /**
    * Initializes the WorkflowController with all available agents
    * @param allowNoSnakAgents - If true, allows initialization even if there are no Snak execution agents
+   * @param forceReinitialize - If true, forces complete reinitialization even if already initialized
    * @throws {Error} Will throw an error if essential agents are missing
    * @private
    */
   private async initializeWorkflowController(
-    allowNoSnakAgents: boolean = false
+    allowNoSnakAgents: boolean = false,
+    forceReinitialize: boolean = false
   ): Promise<void> {
-    logger.debug('SupervisorAgent: Initializing WorkflowController components');
+    if (this.isInitializing && !forceReinitialize) {
+      logger.debug(
+        'SupervisorAgent: WorkflowController initialization already in progress, skipping'
+      );
+      return;
+    }
+
+    if (
+      this.workflowInitialized &&
+      !forceReinitialize &&
+      Object.keys(this.snakAgents).length > 0
+    ) {
+      logger.debug(
+        'SupervisorAgent: WorkflowController already initialized, performing lightweight refresh'
+      );
+      await this.refreshWorkflowOnly();
+      return;
+    }
+
+    this.isInitializing = true;
+
     try {
+      logger.debug(
+        'SupervisorAgent: Initializing WorkflowController components'
+      );
+
       const allAgents: Record<string, IAgent> = { supervisor: this };
+
+      const snakAgentCount = Object.keys(this.snakAgents).length;
+      logger.debug(
+        `SupervisorAgent: Found ${snakAgentCount} registered SnakAgents`
+      );
 
       Object.entries(this.snakAgents).forEach(([id, agent]) => {
         const nodeName = this.agentIdToNodeName.get(id);
         if (nodeName) {
           allAgents[nodeName] = agent;
           logger.debug(
-            `SupervisorAgent: Added SnakAgent "${id}" to workflow with node name "${nodeName}"`
+            `SupervisorAgent: Added SnakAgent "${id}" with node name "${nodeName}"`
           );
         } else {
           allAgents[id] = agent;
           logger.warn(
-            `SupervisorAgent: No node name mapping found for agent "${id}", using original ID`
+            `SupervisorAgent: No node name mapping for agent "${id}", using original ID`
           );
         }
       });
@@ -246,7 +287,12 @@ export class SupervisorAgent extends BaseAgent {
       const operatorAgents = registry.getAllAgents();
       Object.entries(operatorAgents).forEach(([id, agent]) => {
         allAgents[id] = agent;
+        logger.debug(`SupervisorAgent: Added operator agent "${id}"`);
       });
+
+      logger.debug(
+        `SupervisorAgent: Total agents for WorkflowController: ${Object.keys(allAgents).join(', ')}`
+      );
 
       const snakAgentsCount = Object.keys(allAgents).filter(
         (id) => allAgents[id] && allAgents[id].type === AgentType.SNAK
@@ -276,6 +322,16 @@ export class SupervisorAgent extends BaseAgent {
         `SupervisorAgent: WorkflowController configured with maxIterations=${maxIterations}, timeout=${workflowTimeout}ms, entryPoint='${entryPoint}'`
       );
 
+      if (
+        this.workflowController &&
+        (forceReinitialize || !this.workflowInitialized)
+      ) {
+        logger.debug(
+          'SupervisorAgent: Resetting existing WorkflowController before reinitialization'
+        );
+        await this.workflowController.reset();
+      }
+
       this.workflowController = new WorkflowController({
         agents: allAgents,
         entryPoint,
@@ -290,15 +346,88 @@ export class SupervisorAgent extends BaseAgent {
       }
 
       await this.workflowController.init();
+
+      this.workflowInitialized = true;
       logger.debug(
         'WorkflowController initialized with agents: ' +
           Object.keys(allAgents).join(', ')
       );
     } catch (error: any) {
+      this.workflowInitialized = false;
       logger.error(
         `Failed to initialize workflow controller: ${error.message || error}`
       );
       throw error;
+    } finally {
+      this.isInitializing = false;
+    }
+  }
+
+  /**
+   * Performs a lightweight refresh of the WorkflowController without full reinitialization
+   * @private
+   */
+  private async refreshWorkflowOnly(): Promise<void> {
+    if (!this.workflowController || !this.workflowInitialized) {
+      logger.debug(
+        'SupervisorAgent: WorkflowController not initialized, performing full initialization'
+      );
+      const allowNoSnakAgents = Object.keys(this.snakAgents).length === 0;
+      await this.initializeWorkflowController(allowNoSnakAgents);
+      return;
+    }
+
+    try {
+      logger.debug(
+        'SupervisorAgent: Performing lightweight WorkflowController refresh'
+      );
+
+      // Reset workflow controller
+      await this.workflowController.reset();
+
+      // Update agent selector with current agents
+      if (this.agentSelector) {
+        const allAgents: Record<string, IAgent> = { supervisor: this };
+
+        // Add all registered SnakAgents with their node names
+        Object.entries(this.snakAgents).forEach(([id, agent]) => {
+          const nodeName = this.agentIdToNodeName.get(id);
+          if (nodeName) {
+            allAgents[nodeName] = agent;
+            logger.debug(
+              `SupervisorAgent: Added agent "${id}" with node name "${nodeName}"`
+            );
+          } else {
+            allAgents[id] = agent;
+            logger.warn(
+              `SupervisorAgent: No node name found for agent "${id}"`
+            );
+          }
+        });
+
+        // Add operator agents
+        const registry = OperatorRegistry.getInstance();
+        const operatorAgents = registry.getAllAgents();
+        Object.entries(operatorAgents).forEach(([id, agent]) => {
+          allAgents[id] = agent;
+        });
+
+        this.agentSelector.setAvailableAgents(allAgents);
+        logger.debug(
+          `SupervisorAgent: Updated AgentSelector with ${Object.keys(allAgents).length} agents`
+        );
+      }
+
+      logger.debug(
+        'SupervisorAgent: Lightweight WorkflowController refresh completed'
+      );
+    } catch (error) {
+      logger.error(
+        `SupervisorAgent: Error during lightweight refresh: ${error}`
+      );
+      logger.debug('SupervisorAgent: Falling back to full reinitialization');
+      this.workflowInitialized = false;
+      await this.initializeWorkflowController(true, true);
     }
   }
 
@@ -1150,8 +1279,8 @@ export class SupervisorAgent extends BaseAgent {
     ];
 
     for (const agent of agentsToDispose) {
-      if (agent && typeof (agent as any).dispose === 'function') {
-        await (agent as any).dispose();
+      if (agent && 'dispose' in agent && typeof agent.dispose === 'function') {
+        await agent.dispose();
       }
     }
 
@@ -1359,31 +1488,38 @@ export class SupervisorAgent extends BaseAgent {
 
   /**
    * Registers a new SnakAgent in the system
-   * @param id - The unique identifier for the agent
    * @param agent - The SnakAgent instance to register
-   * @param metadata - Optional metadata for the agent
+   * @param metadata - Optional metadata for the agent (if not provided, uses agent config)
    */
-  public registerSnakAgent(id: string, agent: SnakAgent, metadata?: any): void {
+  public registerSnakAgent(agent: SnakAgent, metadata?: any): void {
+    const agentConfig = agent.getAgentConfig();
+    const id = agentConfig.id;
+
     if (!id || id.trim() === '') {
       logger.warn(
-        'SupervisorAgent: Invalid empty agent ID, using "snak-custom" instead'
+        'SupervisorAgent: Invalid empty agent ID from config, using "snak-custom" instead'
       );
-      id = 'snak-custom';
+      const fallbackId = 'snak-custom';
+      // Update the agent config with the fallback ID
+      agentConfig.id = fallbackId;
     }
 
     const agentMetadata = {
-      name: metadata?.name || id,
-      description: metadata?.description || 'A Snak interaction agent',
-      group: metadata?.group || 'snak',
+      name: metadata?.name || agentConfig.name || id,
+      description:
+        metadata?.description ||
+        agentConfig.description ||
+        'A Snak interaction agent',
+      group: metadata?.group || agentConfig.group || 'snak',
     };
 
     (agent as any).metadata = agentMetadata;
-
     const nodeName = this.generateNodeName(
       agentMetadata.name,
       agentMetadata.group
     );
 
+    // Internal registration
     this.snakAgents[id] = agent;
     this.nodeNameToAgentId.set(nodeName, id);
     this.agentIdToNodeName.set(id, nodeName);
@@ -1392,7 +1528,125 @@ export class SupervisorAgent extends BaseAgent {
       `SupervisorAgent: Registered Snak agent "${id}" with node name "${nodeName}" and metadata: ${JSON.stringify(agentMetadata)}`
     );
 
+    // Always update registry after registration
     this.updateAgentSelectorRegistry();
+
+    logger.debug(
+      `SupervisorAgent: Agent ${id} registered, WorkflowController refresh should be handled externally`
+    );
+  }
+
+  /**
+   * Registers multiple SnakAgents efficiently in batch mode
+   * @param agents - Array of agents to register
+   * @param refreshWorkflowAfter - Whether to refresh workflow after batch registration
+   */
+  public registerMultipleSnakAgents(
+    agents: AgentRegistration[],
+    refreshWorkflowAfter: boolean = true
+  ): void {
+    if (!agents || agents.length === 0) {
+      logger.debug('SupervisorAgent: No agents to register in batch');
+      return;
+    }
+
+    logger.debug(
+      `SupervisorAgent: Starting batch registration of ${agents.length} agents`
+    );
+
+    const successfulRegistrations: string[] = [];
+    const failedRegistrations: Array<{ id: string; error: string }> = [];
+
+    // Register all agents without updating registry each time
+    agents.forEach(({ agent, metadata }) => {
+      try {
+        const agentConfig = agent.getAgentConfig();
+        const id = agentConfig.id;
+
+        if (!id || id.trim() === '') {
+          logger.warn(
+            'SupervisorAgent: Invalid empty agent ID from config, using "snak-custom" instead'
+          );
+          const fallbackId = 'snak-custom';
+          agentConfig.id = fallbackId;
+        }
+
+        const agentMetadata = {
+          name: metadata?.name || agentConfig.name || id,
+          description:
+            metadata?.description ||
+            agentConfig.description ||
+            'A Snak interaction agent',
+          group: metadata?.group || agentConfig.group || 'snak',
+        };
+
+        (agent as any).metadata = agentMetadata;
+        const nodeName = this.generateNodeName(
+          agentMetadata.name,
+          agentMetadata.group
+        );
+
+        // Internal registration without registry update
+        this.snakAgents[id] = agent;
+        this.nodeNameToAgentId.set(nodeName, id);
+        this.agentIdToNodeName.set(id, nodeName);
+
+        successfulRegistrations.push(id);
+        logger.debug(
+          `SupervisorAgent: Registered Snak agent "${id}" with node name "${nodeName}" in batch`
+        );
+      } catch (error) {
+        const agentConfig = agent.getAgentConfig();
+        const id = agentConfig.id || 'unknown';
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        failedRegistrations.push({ id, error: errorMessage });
+        logger.error(
+          `SupervisorAgent: Failed to register agent ${id} in batch:`,
+          error
+        );
+      }
+    });
+
+    // Update registry once after all registrations
+    if (successfulRegistrations.length > 0) {
+      logger.debug(
+        `SupervisorAgent: Updating agent selector registry after batch registration`
+      );
+      this.updateAgentSelectorRegistry();
+    }
+
+    // Refresh WorkflowController if requested
+    if (refreshWorkflowAfter && successfulRegistrations.length > 0) {
+      logger.debug(
+        `SupervisorAgent: Refreshing WorkflowController after batch registration`
+      );
+      // Use setTimeout to avoid synchronization issues
+      setTimeout(async () => {
+        try {
+          await this.refreshWorkflowController(true); // Force full refresh
+          logger.info(
+            `SupervisorAgent: WorkflowController refresh completed after batch registration`
+          );
+        } catch (error) {
+          logger.error(
+            `SupervisorAgent: Error refreshing WorkflowController after batch registration:`,
+            error
+          );
+        }
+      }, 100).unref();
+    }
+
+    logger.info(
+      `SupervisorAgent: Batch registration completed - ${successfulRegistrations.length} successful, ${failedRegistrations.length} failed`
+    );
+
+    if (failedRegistrations.length > 0) {
+      logger.warn(
+        `SupervisorAgent: Failed registrations:`,
+        failedRegistrations
+      );
+    }
   }
 
   /**
@@ -1420,14 +1674,32 @@ export class SupervisorAgent extends BaseAgent {
 
   /**
    * Updates the registry for the agent selector with all available agents
+   * @param options - Update options
    */
   public updateAgentSelectorRegistry(): void {
-    if (!this.agentSelector) return;
+    if (!this.agentSelector) {
+      logger.debug(
+        'SupervisorAgent: AgentSelector not available, skipping registry update'
+      );
+      return;
+    }
 
+    const agentCount = Object.keys(this.snakAgents).length;
     const registry = OperatorRegistry.getInstance();
+    const operatorAgents = registry.getAllAgents();
+    const operatorAgentCount = Object.keys(operatorAgents).length;
+    const totalAgentCount = agentCount + operatorAgentCount;
+
+    if (totalAgentCount === 0) {
+      logger.debug(
+        'SupervisorAgent: No SnakAgents or operator agents registered, skipping registry update'
+      );
+      return;
+    }
+
     const availableAgents: Record<string, IAgent> = {
       supervisor: this,
-      ...registry.getAllAgents(),
+      ...operatorAgents,
     };
 
     Object.entries(this.snakAgents).forEach(([id, agent]) => {
@@ -1445,28 +1717,14 @@ export class SupervisorAgent extends BaseAgent {
     ) {
       const mainAgentId = 'snak-main';
       availableAgents[mainAgentId] = this.snakAgent;
-      logger.debug(
-        `SupervisorAgent: Added main snakAgent with ID "${mainAgentId}"`
-      );
     }
 
     this.agentSelector.setAvailableAgents(availableAgents);
 
+    const finalAgentCount = Object.keys(availableAgents).length;
     logger.debug(
-      `SupervisorAgent: Updated AgentSelector registry with ${Object.keys(availableAgents).length} agents:`
+      `SupervisorAgent: Updated AgentSelector registry with ${finalAgentCount} agents (${agentCount} SnakAgents)`
     );
-    Object.entries(availableAgents).forEach(([id, agent]) => {
-      const metadata = (agent as any).metadata;
-      const type = agent.type;
-
-      if (metadata) {
-        logger.debug(
-          `  - Agent: ${id}, Type: ${type}, Metadata: {"name":"${metadata.name || 'unnamed'}","group":"${metadata.group || 'unknown'}"}`
-        );
-      } else {
-        logger.debug(`  - Agent: ${id}, Type: ${type}, Metadata: no metadata`);
-      }
-    });
   }
 
   /**
@@ -1474,34 +1732,41 @@ export class SupervisorAgent extends BaseAgent {
    * @param id - The unique identifier of the agent to unregister
    */
   public unregisterSnakAgent(id: string): void {
-    if (this.snakAgents[id]) {
-      const agent = this.snakAgents[id];
-      if (agent && typeof (agent as any).dispose === 'function') {
-        try {
-          (agent as any).dispose();
-        } catch (error) {
-          logger.error(`Error disposing agent ${id}:`, error);
-        }
-      }
-
-      const nodeName = this.agentIdToNodeName.get(id);
-      if (nodeName) {
-        this.nodeNameToAgentId.delete(nodeName);
-        this.agentIdToNodeName.delete(id);
-        logger.debug(
-          `SupervisorAgent: Cleaned up node name mapping for "${id}" -> "${nodeName}"`
-        );
-      }
-
-      delete this.snakAgents[id];
-      logger.debug(`SupervisorAgent: Unregistered Snak agent "${id}"`);
-
-      this.updateAgentSelectorRegistry();
-    } else {
+    if (!this.snakAgents[id]) {
       logger.warn(
         `SupervisorAgent: Attempted to unregister non-existent agent "${id}"`
       );
+      return;
     }
+
+    const agent = this.snakAgents[id];
+
+    if (agent && 'dispose' in agent && typeof agent.dispose === 'function') {
+      try {
+        agent.dispose();
+      } catch (error) {
+        logger.error(`Error disposing agent ${id}:`, error);
+      }
+    }
+
+    const nodeName = this.agentIdToNodeName.get(id);
+    if (nodeName) {
+      this.nodeNameToAgentId.delete(nodeName);
+      this.agentIdToNodeName.delete(id);
+      logger.debug(
+        `SupervisorAgent: Cleaned up node name mapping for "${id}" -> "${nodeName}"`
+      );
+    }
+
+    delete this.snakAgents[id];
+    logger.debug(`SupervisorAgent: Unregistered Snak agent "${id}"`);
+
+    // Always update registry after unregistration
+    this.updateAgentSelectorRegistry();
+
+    logger.debug(
+      `SupervisorAgent: Agent ${id} unregistered, WorkflowController refresh should be handled externally`
+    );
   }
 
   /**
@@ -1556,25 +1821,59 @@ export class SupervisorAgent extends BaseAgent {
 
   /**
    * Updates the WorkflowController with currently available agents
-   * Useful after registering new agents
+   * Uses intelligent refresh strategy based on current state
+   * @param forceFullRefresh - If true, forces complete reinitialization
    * @throws {Error} Will throw an error if the refresh fails
    */
-  public async refreshWorkflowController(): Promise<void> {
-    if (!this.workflowController) {
-      logger.warn(
-        'SupervisorAgent: Cannot refresh WorkflowController as it is not initialized yet'
+  public async refreshWorkflowController(
+    forceFullRefresh: boolean = false
+  ): Promise<void> {
+    logger.debug(
+      `SupervisorAgent: refreshWorkflowController called with forceFullRefresh=${forceFullRefresh}`
+    );
+
+    if (!this.workflowController && !this.workflowInitialized) {
+      logger.debug(
+        'SupervisorAgent: WorkflowController not initialized, performing initial setup'
       );
+      const allowNoSnakAgents = Object.keys(this.snakAgents).length === 0;
+      await this.initializeWorkflowController(allowNoSnakAgents);
       return;
     }
 
-    logger.info(
-      'SupervisorAgent: Refreshing WorkflowController with newly registered agents'
-    );
     try {
-      await this.workflowController.reset();
+      const agentCount = Object.keys(this.snakAgents).length;
+      logger.debug(
+        `SupervisorAgent: Refreshing WorkflowController. Current agent count: ${agentCount}`
+      );
 
-      const allowNoSnakAgents = Object.keys(this.snakAgents).length === 0;
-      await this.initializeWorkflowController(allowNoSnakAgents);
+      if (forceFullRefresh || agentCount > 0) {
+        logger.info(
+          `SupervisorAgent: Performing ${forceFullRefresh ? 'forced full' : 'standard'} WorkflowController refresh`
+        );
+
+        if (this.workflowController) {
+          await this.workflowController.reset();
+        }
+
+        this.workflowInitialized = false;
+        this.workflowController = null;
+
+        const allowNoSnakAgents = agentCount === 0;
+        await this.initializeWorkflowController(allowNoSnakAgents, true);
+
+        const finalAgentCount = Object.keys(this.snakAgents).length;
+        const nodeNames = Array.from(this.nodeNameToAgentId.keys());
+        logger.info(
+          `SupervisorAgent: WorkflowController refresh completed. Agents: ${finalAgentCount}, Node names: [${nodeNames.join(', ')}]`
+        );
+      } else {
+        logger.info(
+          'SupervisorAgent: Performing optimized WorkflowController refresh'
+        );
+        await this.refreshWorkflowOnly();
+      }
+
       logger.info('SupervisorAgent: WorkflowController successfully refreshed');
     } catch (error) {
       logger.error(
@@ -1621,5 +1920,23 @@ export class SupervisorAgent extends BaseAgent {
    */
   public getRegisteredNodeNames(): string[] {
     return Array.from(this.nodeNameToAgentId.keys());
+  }
+
+  /**
+   * Gets the initialization status of the WorkflowController
+   * @returns Object containing initialization status information
+   */
+  public getWorkflowStatus(): {
+    initialized: boolean;
+    isInitializing: boolean;
+    agentCount: number;
+    nodeNames: string[];
+  } {
+    return {
+      initialized: this.workflowInitialized,
+      isInitializing: this.isInitializing,
+      agentCount: Object.keys(this.snakAgents).length,
+      nodeNames: Array.from(this.nodeNameToAgentId.keys()),
+    };
   }
 }

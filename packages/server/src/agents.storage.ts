@@ -1,13 +1,6 @@
-import {
-  Injectable,
-  Inject,
-  forwardRef,
-  Logger,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigurationService } from '../config/configuration.js';
 import { DatabaseService } from './services/database.service.js';
-import { SupervisorService } from './services/supervisor.service.js';
 import { Postgres } from '@snakagent/database';
 import {
   AgentConfig,
@@ -29,14 +22,12 @@ const logger = new Logger('AgentStorage');
 @Injectable()
 export class AgentStorage implements OnModuleInit {
   private agentConfigs: AgentConfigSQL[] = [];
-  private agentInstances: Map<string, AgentSystem> = new Map();
   private initialized: boolean = false;
+  private initializationPromise: Promise<void> | null = null;
 
   constructor(
     private readonly config: ConfigurationService,
-    private readonly databaseService: DatabaseService,
-    @Inject(forwardRef(() => SupervisorService))
-    private readonly supervisorService: SupervisorService
+    private readonly databaseService: DatabaseService
   ) {}
 
   async onModuleInit() {
@@ -103,36 +94,34 @@ export class AgentStorage implements OnModuleInit {
    * @private
    */
   private async initialize() {
+    if (this.initialized) {
+      return;
+    }
+
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    // Create and store the initialization promise
+    this.initializationPromise = this.performInitialize();
+
     try {
-      if (this.initialized) {
-        return;
-      }
+      await this.initializationPromise;
+    } catch (error) {
+      // Reset promise on failure so we can retry
+      this.initializationPromise = null;
+      throw error;
+    }
+  }
 
-      if (!this.databaseService.isInitialized()) {
-        logger.log('Waiting for database initialization...');
-        let attempts = 0;
-        const maxAttempts = 10;
-        const waitTime = 500;
-
-        while (
-          !this.databaseService.isInitialized() &&
-          attempts < maxAttempts
-        ) {
-          await new Promise((resolve) => setTimeout(resolve, waitTime));
-          attempts++;
-          logger.debug(
-            `Database initialization attempt ${attempts}/${maxAttempts}`
-          );
-        }
-
-        if (!this.databaseService.isInitialized()) {
-          throw new Error(
-            `Database not initialized after ${maxAttempts} attempts`
-          );
-        }
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 500));
+  /**
+   * Perform the actual initialization logic
+   * @private
+   */
+  private async performInitialize(): Promise<void> {
+    try {
+      // Wait for database service to be ready instead of polling
+      await this.databaseService.onReady();
 
       await DatabaseStorage.connect();
       await this.init_models_config();
@@ -175,18 +164,12 @@ export class AgentStorage implements OnModuleInit {
     try {
       logger.debug('Initializing agents configuration');
       const q = new Postgres.Query(`SELECT * FROM agents`);
-      const q_res = await Postgres.query<any>(q);
+      const q_res = await Postgres.query<AgentConfigSQL>(q);
       this.agentConfigs = [...q_res];
 
       logger.debug(
-        `Agents configuration loaded: ${JSON.stringify(this.agentConfigs)}`
+        `Agents configuration loaded: ${this.agentConfigs.length} agents`
       );
-
-      for (const agentConfig of this.agentConfigs) {
-        await this.createAgentInstance(agentConfig);
-        logger.debug(`Agent instance created: ${JSON.stringify(agentConfig)}`);
-      }
-
       return q_res;
     } catch (error) {
       logger.error('Error during agents configuration initialization:', error);
@@ -226,135 +209,84 @@ export class AgentStorage implements OnModuleInit {
   }
 
   /**
-   * Create an agent instance from configuration
-   * @param agent_config - Agent configuration from database
-   * @returns Promise<AgentSystem> - The created agent instance
+   * Build system prompt from configuration components
+   * @param promptComponents - Components to build the prompt from
+   * @returns string - The built system prompt
    * @private
    */
-  private async createAgentInstance(agent_config: any): Promise<AgentSystem> {
-    try {
-      const database = {
-        database: process.env.POSTGRES_DB as string,
-        host: process.env.POSTGRES_HOST as string,
-        user: process.env.POSTGRES_USER as string,
-        password: process.env.POSTGRES_PASSWORD as string,
-        port: parseInt(process.env.POSTGRES_PORT as string),
-      };
+  private buildSystemPromptFromConfig(promptComponents: {
+    name?: string;
+    description?: string;
+    lore: string[];
+    objectives: string[];
+    knowledge: string[];
+  }): string {
+    const contextParts: string[] = [];
 
-      logger.debug(
-        `Creating agent instance with config: ${JSON.stringify(agent_config)}`
-      );
-
-      const systemPrompt =
-        agent_config.system_prompt ||
-        this.buildSystemPromptFromConfig({
-          name: agent_config.name,
-          description: agent_config.description,
-          lore: agent_config.lore || [],
-          objectives: agent_config.objectives || [],
-          knowledge: agent_config.knowledge || [],
-          mode: agent_config.mode,
-        });
-
-      const systemMessage = new SystemMessage(systemPrompt);
-
-      const json_config: AgentConfig = {
-        id: agent_config.id,
-        name: agent_config.name,
-        group: agent_config.group,
-        description: agent_config.description,
-        plugins: agent_config.plugins,
-        interval: agent_config.interval,
-        memory: {
-          enabled: agent_config.memory?.enabled || false,
-          shortTermMemorySize: agent_config.memory?.short_term_memory_size || 5,
-        },
-        chatId: `agent_${agent_config.id}`,
-        maxIterations: agent_config.max_iterations || 15,
-        mode: agent_config.mode || AgentMode.INTERACTIVE,
-        prompt: systemMessage,
-      };
-
-      const modelsConfig = await this.get_models_config();
-      logger.warn(modelsConfig);
-
-      const config: AgentSystemConfig = {
-        starknetProvider: this.config.starknet.provider,
-        accountPrivateKey: this.config.starknet.privateKey,
-        accountPublicKey: this.config.starknet.publicKey,
-        modelsConfig: modelsConfig,
-        agentMode: json_config.mode,
-        databaseCredentials: database,
-        agentConfigPath: json_config,
-      };
-
-      const agent = new AgentSystem(config);
-      await agent.init();
-
-      if (this.agentInstances.has(agent_config.id)) {
-        logger.debug(
-          `Agent with id ${agent_config.id} already exists, returning existing instance`
-        );
-        const existingAgent = this.agentInstances.get(agent_config.id);
-        if (existingAgent) {
-          return existingAgent;
-        }
-        throw new Error('AgentExecutor not found in instances map');
-      }
-
-      this.agentInstances.set(agent_config.id, agent);
-      return agent;
-    } catch (error) {
-      console.error('Error creating agent instance:', error);
-      throw error;
+    if (promptComponents.name) {
+      contextParts.push(`Your name : [${promptComponents.name}]`);
     }
+    if (promptComponents.description) {
+      contextParts.push(`Your Description : [${promptComponents.description}]`);
+    }
+
+    if (
+      Array.isArray(promptComponents.lore) &&
+      promptComponents.lore.length > 0
+    ) {
+      contextParts.push(`Your lore : [${promptComponents.lore.join(']\n[')}]`);
+    }
+
+    if (
+      Array.isArray(promptComponents.objectives) &&
+      promptComponents.objectives.length > 0
+    ) {
+      contextParts.push(
+        `Your objectives : [${promptComponents.objectives.join(']\n[')}]`
+      );
+    }
+
+    if (
+      Array.isArray(promptComponents.knowledge) &&
+      promptComponents.knowledge.length > 0
+    ) {
+      contextParts.push(
+        `Your knowledge : [${promptComponents.knowledge.join(']\n[')}]`
+      );
+    }
+
+    return contextParts.join('\n');
   }
 
   /**
-   * Create an agent and register it with the supervisor
-   * @param agent_config - Agent configuration
-   * @returns Promise<AgentSystem> - The created agent
-   * @private
+   * Get an agent configuration by ID
+   * @param id - Agent ID
+   * @returns AgentConfigSQL | undefined - The agent configuration or undefined if not found
    */
-  private async createAgent(
-    agent_config: AgentConfigSQL
-  ): Promise<AgentSystem> {
-    try {
-      const agent = await this.createAgentInstance(agent_config);
-
-      if (this.supervisorService.isInitialized()) {
-        const metadata = {
-          name: agent_config.name,
-          description: agent_config.description,
-          group: agent_config.group,
-        };
-
-        await this.supervisorService.registerAgentWithSupervisor(
-          agent_config.id,
-          agent,
-          metadata
-        );
-
-        logger.debug(`Agent ${agent_config.id} registered with supervisor`);
-      } else {
-        logger.warn(
-          `Supervisor not initialized, agent ${agent_config.id} not registered with supervisor`
-        );
-      }
-
-      return agent;
-    } catch (error) {
-      console.error('Error creating agent:', error);
-      throw error;
+  public getAgentConfig(id: string): AgentConfigSQL | undefined {
+    if (!this.initialized) {
+      return undefined;
     }
+    return this.agentConfigs.find((config) => config.id === id);
+  }
+
+  /**
+   * Get all agent configurations
+   * @returns AgentConfigSQL[] - Array of all agent configurations
+   */
+  public getAllAgentConfigs(): AgentConfigSQL[] {
+    if (!this.initialized) {
+      return [];
+    }
+    return [...this.agentConfigs];
   }
 
   /**
    * Add a new agent to the system
    * @param agent_config - Raw agent configuration
-   * @returns Promise<void>
+   * @returns Promise<AgentConfigSQL> - The newly created agent configuration
    */
-  public async addAgent(agent_config: RawAgentConfig): Promise<void> {
+  public async addAgent(agent_config: RawAgentConfig): Promise<AgentConfigSQL> {
     logger.debug(`Adding agent with config: ${JSON.stringify(agent_config)}`);
 
     if (!this.initialized) {
@@ -401,7 +333,6 @@ export class AgentStorage implements OnModuleInit {
       lore: agent_config.lore,
       objectives: agent_config.objectives,
       knowledge: agent_config.knowledge,
-      mode: agent_config.mode,
     });
 
     console.log(agent_config);
@@ -429,92 +360,13 @@ export class AgentStorage implements OnModuleInit {
 
     if (q_res.length > 0) {
       const newAgentDbRecord = q_res[0];
-      const agentToCreate: AgentConfigSQL = newAgentDbRecord;
-
-      await this.createAgent(agentToCreate);
-
-      logger.debug(
-        `Agent ${newAgentDbRecord.id} created and registered with supervisor`
-      );
+      this.agentConfigs.push(newAgentDbRecord);
+      logger.debug(`Agent ${newAgentDbRecord.id} added to configuration`);
+      return newAgentDbRecord;
     } else {
       logger.error('Failed to add agent to database, no record returned.');
       throw new Error('Failed to add agent to database.');
     }
-  }
-
-  /**
-   * Build system prompt from configuration components
-   * @param promptComponents - Components to build the prompt from
-   * @returns string - The built system prompt
-   * @private
-   */
-  private buildSystemPromptFromConfig(promptComponents: {
-    name?: string;
-    description?: string;
-    lore: string[];
-    objectives: string[];
-    knowledge: string[];
-    mode?: AgentMode;
-  }): string {
-    const contextParts: string[] = [];
-
-    if (promptComponents.name) {
-      contextParts.push(`Your name : [${promptComponents.name}]`);
-    }
-    if (promptComponents.description) {
-      contextParts.push(`Your Description : [${promptComponents.description}]`);
-    }
-
-    if (
-      Array.isArray(promptComponents.lore) &&
-      promptComponents.lore.length > 0
-    ) {
-      contextParts.push(`Your lore : [${promptComponents.lore.join(']\n[')}]`);
-    }
-
-    if (
-      Array.isArray(promptComponents.objectives) &&
-      promptComponents.objectives.length > 0
-    ) {
-      contextParts.push(
-        `Your objectives : [${promptComponents.objectives.join(']\n[')}]`
-      );
-    }
-
-    if (
-      Array.isArray(promptComponents.knowledge) &&
-      promptComponents.knowledge.length > 0
-    ) {
-      contextParts.push(
-        `Your knowledge : [${promptComponents.knowledge.join(']\n[')}]`
-      );
-    }
-
-    return contextParts.join('\n');
-  }
-
-  /**
-   * Get an agent by ID
-   * @param id - Agent ID
-   * @returns AgentSystem | undefined - The agent instance or undefined if not found
-   */
-  public getAgent(id: string): AgentSystem | undefined {
-    if (!this.initialized) {
-      return undefined;
-    }
-    return this.agentInstances.get(id);
-  }
-
-  /**
-   * Get all agent instances
-   * @returns AgentSystem[] | undefined - Array of all agent instances or undefined if not initialized
-   */
-  public getAllAgents(): AgentSystem[] | undefined {
-    if (!this.initialized) {
-      return undefined;
-    }
-
-    return Array.from(this.agentInstances.values());
   }
 
   /**
@@ -534,52 +386,28 @@ export class AgentStorage implements OnModuleInit {
     const q_res = await Postgres.query<AgentConfigSQL>(q);
     logger.debug(`Agent deleted from database: ${JSON.stringify(q_res)}`);
 
-    if (this.agentInstances.has(id)) {
-      const agent = this.agentInstances.get(id);
+    this.agentConfigs = this.agentConfigs.filter((config) => config.id !== id);
+    logger.debug(`Agent ${id} removed from local configuration`);
+  }
 
-      if (agent) {
-        try {
-          await agent.dispose();
-        } catch (error) {
-          logger.error(`Error disposing agent ${id}:`, error);
-        }
-      }
-
-      this.agentInstances.delete(id);
-    }
-
-    if (this.supervisorService.isInitialized()) {
-      try {
-        await this.supervisorService.unregisterAgentFromSupervisor(id);
-        logger.debug(`Agent ${id} unregistered from supervisor`);
-      } catch (error) {
-        logger.error(`Error unregistering agent ${id} from supervisor:`, error);
-      }
-    }
+  public isInitialized(): boolean {
+    return this.initialized;
   }
 
   /**
-   * Get supervisor service instance
-   * @returns SupervisorService - The supervisor service instance
+   * Returns a promise that resolves when the agent storage is fully initialized
+   * @returns Promise<void> that resolves when initialization is complete
    */
-  public getSupervisorService(): SupervisorService {
-    return this.supervisorService;
-  }
-
-  /**
-   * Execute a request through the supervisor
-   * @param input - Input string for the request
-   * @param config - Optional configuration for the request
-   * @returns Promise<any> - The result of the request execution
-   */
-  public async executeRequestThroughSupervisor(
-    input: string,
-    config?: Record<string, any>
-  ): Promise<any> {
-    if (!this.supervisorService.isInitialized()) {
-      throw new Error('Supervisor service not initialized');
+  public async onReady(): Promise<void> {
+    if (this.initialized) {
+      return;
     }
 
-    return await this.supervisorService.executeRequest(input, config);
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    // If not initialized and no promise exists, trigger initialization
+    return this.initialize();
   }
 }

@@ -6,6 +6,7 @@ import {
   AgentDeleteRequestDTO,
   AgentRequestDTO,
   getMessagesFromAgentsDTO,
+  AgentDeletesRequestDTO,
 } from '../dto/agents.js';
 import { SupervisorService } from '../services/supervisor.service.js';
 import { Reflector } from '@nestjs/core';
@@ -15,6 +16,7 @@ import {
   metrics,
   MessageFromAgentIdDTO,
   AgentsDeleteRequestDTO,
+  AgentAddRequestDTO,
 } from '@snakagent/core';
 
 export interface AgentResponse {
@@ -52,7 +54,14 @@ export class AgentsController {
   ): Promise<AgentResponse> {
     try {
       const route = this.reflector.get('path', this.handleUserRequest);
-      const agent = this.agentFactory.getAgent(userRequest.request.agent_id);
+
+      if (!userRequest.request.agent_id) {
+        throw new ServerError('E01TA400');
+      }
+
+      const agent = this.supervisorService.getAgentInstance(
+        userRequest.request.agent_id
+      );
       if (!agent) {
         throw new ServerError('E01TA400');
       }
@@ -137,12 +146,22 @@ export class AgentsController {
    * @returns Promise<AgentResponse> - Response with status and confirmation message
    */
   @Post('init_agent')
-  async addAgent(@Body() userRequest: any): Promise<AgentResponse> {
+  async addAgent(
+    @Body() userRequest: AgentAddRequestDTO
+  ): Promise<AgentResponse> {
     try {
-      await this.agentFactory.addAgent(userRequest.agent);
+      const newAgentConfig = await this.agentFactory.addAgent(
+        userRequest.agent
+      );
+
+      await this.supervisorService.addAgentInstance(
+        newAgentConfig.id,
+        newAgentConfig
+      );
+
       const response: AgentResponse = {
         status: 'success',
-        data: `Agent ${userRequest.agent.name} added and registered with supervisor`,
+        data: `Agent ${newAgentConfig.name} added and registered with supervisor`,
       };
       return response;
     } catch (error) {
@@ -161,8 +180,10 @@ export class AgentsController {
     @Body() userRequest: MessageFromAgentIdDTO
   ): Promise<AgentResponse> {
     try {
-      const agent = this.agentFactory.getAgent(userRequest.agent_id);
-      if (!agent) {
+      const agentConfig = this.agentFactory.getAgentConfig(
+        userRequest.agent_id
+      );
+      if (!agentConfig) {
         throw new ServerError('E01TA400');
       }
       const messages =
@@ -188,21 +209,24 @@ export class AgentsController {
     @Body() userRequest: AgentDeleteRequestDTO
   ): Promise<AgentResponse> {
     try {
-      const agent = this.agentFactory.getAgent(userRequest.agent_id);
-      if (!agent) {
+      const agentConfig = this.agentFactory.getAgentConfig(
+        userRequest.agent_id
+      );
+      if (!agentConfig) {
         throw new ServerError('E01TA400');
       }
+
+      await this.supervisorService.removeAgentInstance(userRequest.agent_id);
       await this.agentFactory.deleteAgent(userRequest.agent_id);
+
       const response: AgentResponse = {
         status: 'success',
         data: `Agent ${userRequest.agent_id} deleted and unregistered from supervisor`,
       };
       return response;
     } catch (error) {
-      if (error instanceof ServerError) {
-        throw error;
-      }
-      throw new ServerError('E02TA300');
+      logger.error('Error in deleteAgent:', error);
+      throw new ServerError('E05TA100');
     }
   }
 
@@ -213,52 +237,68 @@ export class AgentsController {
    */
   @Post('delete_agents')
   async deleteAgents(
-    @Body() userRequest: AgentsDeleteRequestDTO
+    @Body() userRequest: AgentDeletesRequestDTO
   ): Promise<AgentResponse[]> {
     try {
-      let arr_response: AgentResponse[] = [];
+      const responses: AgentResponse[] = [];
+
       for (const agentId of userRequest.agent_id) {
-        const agent = this.agentFactory.getAgent(agentId);
-        if (!agent) {
-          throw new ServerError('E01TA400');
+        try {
+          const agentConfig = this.agentFactory.getAgentConfig(agentId);
+          if (!agentConfig) {
+            responses.push({
+              status: 'failure',
+              data: `Agent ${agentId} not found`,
+            });
+            continue;
+          }
+
+          await this.supervisorService.removeAgentInstance(agentId);
+          await this.agentFactory.deleteAgent(agentId);
+
+          responses.push({
+            status: 'success',
+            data: `Agent ${agentId} deleted and unregistered from supervisor`,
+          });
+        } catch (error) {
+          logger.error(`Error deleting agent ${agentId}:`, error);
+          responses.push({
+            status: 'failure',
+            data: `Failed to delete agent ${agentId}: ${error.message}`,
+          });
         }
-        await this.agentFactory.deleteAgent(agentId);
-        logger.error('Agent deleted:', agentId);
-        const response: AgentResponse = {
-          status: 'success',
-          data: `Agent ${agentId} deleted and unregistered from supervisor`,
-        };
-        arr_response.push(response);
       }
-      return arr_response;
+
+      return responses;
     } catch (error) {
-      if (error instanceof ServerError) {
-        throw error;
-      }
-      throw new ServerError('E02TA300');
+      logger.error('Error in deleteAgents:', error);
+      throw new ServerError('E05TA100');
     }
   }
 
   /**
-   * Get messages from agents by ID
+   * Get messages from multiple agents
    * @param userRequest - Request containing agent ID
-   * @returns Promise<AgentResponse> - Response with agent messages
+   * @returns Promise<AgentResponse> - Response with messages from all agents
    */
-  @Post('get_messages_from_agents_id')
+  @Post('get_messages_from_agents')
   async getMessageFromAgentsId(
     @Body() userRequest: getMessagesFromAgentsDTO
   ): Promise<AgentResponse> {
     try {
-      const agent = this.agentFactory.getAgent(userRequest.agent_id);
-      if (!agent) {
+      const agentConfig = this.agentFactory.getAgentConfig(
+        userRequest.agent_id
+      );
+      if (!agentConfig) {
+        logger.warn(`Agent ${userRequest.agent_id} not found`);
         throw new ServerError('E01TA400');
       }
-      const messageRequest: MessageFromAgentIdDTO = {
+
+      const messages = await this.agentService.getMessageFromAgentId({
         agent_id: userRequest.agent_id,
         limit_message: undefined,
-      };
-      const messages =
-        await this.agentService.getMessageFromAgentId(messageRequest);
+      });
+
       const response: AgentResponse = {
         status: 'success',
         data: messages,
@@ -266,21 +306,18 @@ export class AgentsController {
       return response;
     } catch (error) {
       logger.error('Error in getMessageFromAgentsId:', error);
-      throw new ServerError('E05TA100');
+      throw new ServerError('E04TA100');
     }
   }
 
   /**
    * Get all agents
-   * @returns Promise<AgentResponse> - Response with all agents data
+   * @returns Promise<AgentResponse> - Response with all agents
    */
   @Get('get_agents')
   async getAgents(): Promise<AgentResponse> {
     try {
       const agents = await this.agentService.getAllAgents();
-      if (!agents) {
-        throw new ServerError('E01TA400');
-      }
       const response: AgentResponse = {
         status: 'success',
         data: agents,
@@ -288,12 +325,12 @@ export class AgentsController {
       return response;
     } catch (error) {
       logger.error('Error in getAgents:', error);
-      throw new ServerError('E05TA100');
+      throw new ServerError('E06TA100');
     }
   }
 
   /**
-   * Get supervisor status and information
+   * Get supervisor status
    * @returns Promise<AgentResponse> - Response with supervisor status
    */
   @Get('supervisor/status')
@@ -306,14 +343,15 @@ export class AgentsController {
         status: 'success',
         data: {
           initialized: isInitialized,
-          supervisorAvailable: supervisor !== null,
-          registeredAgents: this.agentFactory.getAllAgents()?.length || 0,
+          supervisorAvailable: !!supervisor,
+          registeredAgents:
+            this.supervisorService.getAllAgentInstances()?.length || 0,
         },
       };
       return response;
     } catch (error) {
       logger.error('Error in getSupervisorStatus:', error);
-      throw new ServerError('E05TA100');
+      throw new ServerError('E07TA100');
     }
   }
 

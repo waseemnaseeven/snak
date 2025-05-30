@@ -110,6 +110,10 @@ export class WorkflowController {
   public async init(): Promise<void> {
     logger.debug('WorkflowController: Starting initialization');
     try {
+      logger.debug(
+        `WorkflowController: Available agents: ${Object.keys(this.agents).join(', ')}`
+      );
+
       const workflow = new StateGraph<WorkflowState>({
         channels: {
           messages: {
@@ -492,7 +496,9 @@ export class WorkflowController {
       logger.debug('WorkflowController: Workflow compiled successfully');
 
       this.initialized = true;
-      logger.debug('WorkflowController: Initialization complete');
+      logger.debug(
+        `WorkflowController: Initialization complete with ${Object.keys(this.agents).length} agents`
+      );
     } catch (error) {
       logger.error(
         `WorkflowController: Failed to initialize workflow: ${error}`

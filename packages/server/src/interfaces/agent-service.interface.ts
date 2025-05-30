@@ -24,7 +24,7 @@ export interface AgentExecutionCallDataResponse {
 
 export interface IAgentService {
   handleUserRequest(
-    agent: AgentSystem,
+    agent: AgentSystem | IAgent,
     userRequest: MessageRequest
   ): Promise<AgentExecutionResponse>;
   getAgentStatus(agent: IAgent): Promise<{
