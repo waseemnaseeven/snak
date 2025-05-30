@@ -22,6 +22,7 @@ import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
 import { RpcProvider } from 'starknet';
 import { AgentSelector } from '../operators/agentSelector.js';
 import { OperatorRegistry } from '../operators/operatorRegistry.js';
+import { ConfigurationAgent } from 'agents/operators/configAgent.js';
 
 /**
  * Configuration interface for the SupervisorAgent
@@ -44,6 +45,7 @@ export class SupervisorAgent extends BaseAgent {
   private toolsOrchestrator: ToolsOrchestrator | null = null;
   private memoryAgent: MemoryAgent | null = null;
   private workflowController: WorkflowController | null = null;
+  private configAgent: ConfigurationAgent | null = null;
   private config: SupervisorAgentConfig;
   private operators: Map<string, IAgent> = new Map();
   private debug: boolean = false;
@@ -104,8 +106,10 @@ export class SupervisorAgent extends BaseAgent {
       await this.initializeAgentSelector();
 
       this.updateAgentSelectorRegistry();
+	  await this.initializeConfigAgent();
 
       await this.initializeWorkflowController(true);
+
 
       if (Object.keys(this.snakAgents).length > 0) {
         this.initializeMetrics(agentConfig);
@@ -116,6 +120,12 @@ export class SupervisorAgent extends BaseAgent {
       logger.error(`SupervisorAgent: Initialization failed: ${error}`);
       throw new Error(`SupervisorAgent initialization failed: ${error}`);
     }
+  }
+
+  private async initializeConfigAgent(): Promise<void> {
+	logger.debug('SupervisorAgent: Initializing ConfigAgent...');
+	this.configAgent = new ConfigurationAgent({debug: this.debug});
+	await this.configAgent.init();
   }
 
   /**
