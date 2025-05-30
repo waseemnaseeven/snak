@@ -16,6 +16,7 @@ import {
   metrics,
   MessageFromAgentIdDTO,
   AgentsDeleteRequestDTO,
+  AgentAddRequestDTO,
 } from '@snakagent/core';
 
 export interface AgentResponse {
@@ -53,6 +54,11 @@ export class AgentsController {
   ): Promise<AgentResponse> {
     try {
       const route = this.reflector.get('path', this.handleUserRequest);
+
+      if (!userRequest.request.agent_id) {
+        throw new ServerError('E01TA400');
+      }
+
       const agent = this.supervisorService.getAgentInstance(
         userRequest.request.agent_id
       );
@@ -140,23 +146,22 @@ export class AgentsController {
    * @returns Promise<AgentResponse> - Response with status and confirmation message
    */
   @Post('init_agent')
-  async addAgent(@Body() userRequest: any): Promise<AgentResponse> {
+  async addAgent(
+    @Body() userRequest: AgentAddRequestDTO
+  ): Promise<AgentResponse> {
     try {
-      await this.agentFactory.addAgent(userRequest.agent);
+      const newAgentConfig = await this.agentFactory.addAgent(
+        userRequest.agent
+      );
 
-      const agentConfigs = this.agentFactory.getAllAgentConfigs();
-      const newAgentConfig = agentConfigs[agentConfigs.length - 1];
-
-      if (newAgentConfig) {
-        await this.supervisorService.addAgentInstance(
-          newAgentConfig.id,
-          newAgentConfig
-        );
-      }
+      await this.supervisorService.addAgentInstance(
+        newAgentConfig.id,
+        newAgentConfig
+      );
 
       const response: AgentResponse = {
         status: 'success',
-        data: `Agent ${userRequest.agent.name} added and registered with supervisor`,
+        data: `Agent ${newAgentConfig.name} added and registered with supervisor`,
       };
       return response;
     } catch (error) {

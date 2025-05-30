@@ -135,17 +135,14 @@ export class MyGateway implements OnModuleInit {
         logger.error('Client not found');
         throw new ServerError('E01TA400');
       }
-      await this.agentFactory.addAgent(userRequest.agent);
+      const newAgentConfig = await this.agentFactory.addAgent(
+        userRequest.agent
+      );
 
-      const agentConfigs = this.agentFactory.getAllAgentConfigs();
-      const newAgentConfig = agentConfigs[agentConfigs.length - 1];
-
-      if (newAgentConfig) {
-        await this.supervisorService.addAgentInstance(
-          newAgentConfig.id,
-          newAgentConfig
-        );
-      }
+      await this.supervisorService.addAgentInstance(
+        newAgentConfig.id,
+        newAgentConfig
+      );
 
       const response: AgentResponse = {
         status: 'success',

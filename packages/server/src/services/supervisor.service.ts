@@ -81,50 +81,20 @@ export class SupervisorService implements OnModuleInit {
   private async waitForDependencies(): Promise<void> {
     this.logger.debug('Waiting for dependencies initialization...');
 
-    if (!this.databaseService.isInitialized()) {
-      this.logger.log('Waiting for database initialization...');
-      let attempts = 0;
-      const maxAttempts = 10;
-      const waitTime = 500;
+    try {
+      this.logger.debug('Awaiting database service initialization...');
+      await this.databaseService.onReady();
+      this.logger.debug('Database service initialized');
 
-      while (!this.databaseService.isInitialized() && attempts < maxAttempts) {
-        await new Promise((resolve) => setTimeout(resolve, waitTime));
-        attempts++;
-        this.logger.debug(
-          `Database initialization attempt ${attempts}/${maxAttempts}`
-        );
-      }
+      this.logger.debug('Awaiting agent storage initialization...');
+      await this.agentStorage.onReady();
+      this.logger.debug('Agent storage initialized');
 
-      if (!this.databaseService.isInitialized()) {
-        throw new Error(
-          `Database not initialized after ${maxAttempts} attempts`
-        );
-      }
+      this.logger.debug('All dependencies initialized successfully');
+    } catch (error) {
+      this.logger.error('Failed to wait for dependencies:', error);
+      throw error;
     }
-
-    let storageAttempts = 0;
-    const maxStorageAttempts = 10;
-    const storageWaitTime = 500;
-
-    while (
-      !this.agentStorage.isInitialized() &&
-      storageAttempts < maxStorageAttempts
-    ) {
-      await new Promise((resolve) => setTimeout(resolve, storageWaitTime));
-      storageAttempts++;
-      this.logger.debug(
-        `AgentStorage initialization attempt ${storageAttempts}/${maxStorageAttempts}`
-      );
-    }
-
-    if (!this.agentStorage.isInitialized()) {
-      throw new Error(
-        `AgentStorage not initialized after ${maxStorageAttempts} attempts`
-      );
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    this.logger.debug('All dependencies initialized');
   }
 
   /**
@@ -301,32 +271,6 @@ export class SupervisorService implements OnModuleInit {
   }
 
   /**
-   * Initialize the WorkflowController once with all agents
-   * @private
-   */
-  private async finalizeWorkflowController(): Promise<void> {
-    if (!this.supervisor) {
-      throw new Error('Supervisor not initialized');
-    }
-
-    try {
-      this.logger.log(
-        'Finalizing WorkflowController with all registered agents...'
-      );
-
-      await this.supervisor.refreshWorkflowController();
-
-      const registeredCount = this.supervisor.getRegisteredSnakAgentsCount();
-      this.logger.log(
-        `WorkflowController finalized with ${registeredCount} agents`
-      );
-    } catch (error) {
-      this.logger.error('Error finalizing WorkflowController:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Register all created agents with supervisor using batch registration
    * @private
    */
@@ -440,7 +384,6 @@ export class SupervisorService implements OnModuleInit {
   ): Promise<void> {
     try {
       const snakAgent = await this.createSnakAgentFromConfig(agentConfig);
-      this.agentInstances.set(agentId, snakAgent);
 
       if (this.supervisor) {
         const metadata = {
@@ -449,15 +392,20 @@ export class SupervisorService implements OnModuleInit {
           group: agentConfig.group,
         };
 
-        this.supervisor.registerSnakAgent(agentId, snakAgent, metadata);
+        await this.supervisor.registerSnakAgent(snakAgent, metadata);
         await this.supervisor.refreshWorkflowController();
+
+        this.agentInstances.set(agentId, snakAgent);
 
         this.logger.log(
           `Added and registered agent: ${agentConfig.name} (${agentId})`
         );
+      } else {
+        this.agentInstances.set(agentId, snakAgent);
       }
     } catch (error) {
       this.logger.error(`Failed to add agent instance ${agentId}:`, error);
+      this.agentInstances.delete(agentId);
       throw error;
     }
   }
@@ -471,8 +419,8 @@ export class SupervisorService implements OnModuleInit {
       const agent = this.agentInstances.get(agentId);
 
       if (agent) {
-        if (typeof (agent as any).dispose === 'function') {
-          await (agent as any).dispose();
+        if ('dispose' in agent && typeof agent.dispose === 'function') {
+          await agent.dispose();
         }
 
         this.agentInstances.delete(agentId);
@@ -486,78 +434,6 @@ export class SupervisorService implements OnModuleInit {
       this.logger.log(`Removed agent instance: ${agentId}`);
     } catch (error) {
       this.logger.error(`Failed to remove agent instance ${agentId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Add a single agent using optimized registration
-   * @param {string} agentId - The agent ID
-   * @param {AgentConfigSQL} agentConfig - The agent configuration
-   * @param {boolean} batchMode - If true, defers WorkflowController refresh
-   */
-  public async addAgentInstanceOptimized(
-    agentId: string,
-    agentConfig: AgentConfigSQL,
-    batchMode: boolean = false
-  ): Promise<void> {
-    try {
-      const snakAgent = await this.createSnakAgentFromConfig(agentConfig);
-      this.agentInstances.set(agentId, snakAgent);
-
-      if (this.supervisor) {
-        const metadata = {
-          name: agentConfig.name,
-          description: agentConfig.description,
-          group: agentConfig.group,
-        };
-
-        (this.supervisor as any).registerSnakAgent(
-          agentId,
-          snakAgent,
-          metadata,
-          {
-            skipRegistryUpdate: batchMode,
-            skipWorkflowRefresh: batchMode,
-            deferUpdates: batchMode,
-          }
-        );
-
-        // Refresh only if not in batch mode
-        if (!batchMode) {
-          await this.supervisor.refreshWorkflowController();
-        }
-
-        this.logger.log(
-          `Added and registered agent: ${agentConfig.name} (${agentId}) ${batchMode ? '(batch mode)' : ''}`
-        );
-      }
-    } catch (error) {
-      this.logger.error(`Failed to add agent instance ${agentId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Finalize batch operations (update registry and refresh workflow)
-   */
-  public async finalizeBatchOperations(): Promise<void> {
-    if (!this.supervisor) {
-      throw new Error('Supervisor not initialized');
-    }
-
-    try {
-      this.logger.log('Finalizing batch operations...');
-
-      (this.supervisor as any).updateAgentSelectorRegistry({
-        logDetails: true,
-      });
-
-      await this.supervisor.refreshWorkflowController();
-
-      this.logger.log('Batch operations finalized successfully');
-    } catch (error) {
-      this.logger.error('Error finalizing batch operations:', error);
       throw error;
     }
   }
@@ -731,7 +607,7 @@ export class SupervisorService implements OnModuleInit {
         snakAgent = agent;
       }
 
-      this.supervisor.registerSnakAgent(agentId, snakAgent, metadata);
+      await this.supervisor.registerSnakAgent(snakAgent, metadata);
       await this.supervisor.refreshWorkflowController();
 
       this.logger.log(

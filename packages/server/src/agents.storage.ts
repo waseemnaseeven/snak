@@ -23,6 +23,7 @@ const logger = new Logger('AgentStorage');
 export class AgentStorage implements OnModuleInit {
   private agentConfigs: AgentConfigSQL[] = [];
   private initialized: boolean = false;
+  private initializationPromise: Promise<void> | null = null;
 
   constructor(
     private readonly config: ConfigurationService,
@@ -93,36 +94,34 @@ export class AgentStorage implements OnModuleInit {
    * @private
    */
   private async initialize() {
+    if (this.initialized) {
+      return;
+    }
+
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    // Create and store the initialization promise
+    this.initializationPromise = this.performInitialize();
+
     try {
-      if (this.initialized) {
-        return;
-      }
+      await this.initializationPromise;
+    } catch (error) {
+      // Reset promise on failure so we can retry
+      this.initializationPromise = null;
+      throw error;
+    }
+  }
 
-      if (!this.databaseService.isInitialized()) {
-        logger.log('Waiting for database initialization...');
-        let attempts = 0;
-        const maxAttempts = 10;
-        const waitTime = 500;
-
-        while (
-          !this.databaseService.isInitialized() &&
-          attempts < maxAttempts
-        ) {
-          await new Promise((resolve) => setTimeout(resolve, waitTime));
-          attempts++;
-          logger.debug(
-            `Database initialization attempt ${attempts}/${maxAttempts}`
-          );
-        }
-
-        if (!this.databaseService.isInitialized()) {
-          throw new Error(
-            `Database not initialized after ${maxAttempts} attempts`
-          );
-        }
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 500));
+  /**
+   * Perform the actual initialization logic
+   * @private
+   */
+  private async performInitialize(): Promise<void> {
+    try {
+      // Wait for database service to be ready instead of polling
+      await this.databaseService.onReady();
 
       await DatabaseStorage.connect();
       await this.init_models_config();
@@ -221,7 +220,6 @@ export class AgentStorage implements OnModuleInit {
     lore: string[];
     objectives: string[];
     knowledge: string[];
-    mode?: AgentMode;
   }): string {
     const contextParts: string[] = [];
 
@@ -286,9 +284,9 @@ export class AgentStorage implements OnModuleInit {
   /**
    * Add a new agent to the system
    * @param agent_config - Raw agent configuration
-   * @returns Promise<void>
+   * @returns Promise<AgentConfigSQL> - The newly created agent configuration
    */
-  public async addAgent(agent_config: RawAgentConfig): Promise<void> {
+  public async addAgent(agent_config: RawAgentConfig): Promise<AgentConfigSQL> {
     logger.debug(`Adding agent with config: ${JSON.stringify(agent_config)}`);
 
     if (!this.initialized) {
@@ -335,7 +333,6 @@ export class AgentStorage implements OnModuleInit {
       lore: agent_config.lore,
       objectives: agent_config.objectives,
       knowledge: agent_config.knowledge,
-      mode: agent_config.mode,
     });
 
     console.log(agent_config);
@@ -365,6 +362,7 @@ export class AgentStorage implements OnModuleInit {
       const newAgentDbRecord = q_res[0];
       this.agentConfigs.push(newAgentDbRecord);
       logger.debug(`Agent ${newAgentDbRecord.id} added to configuration`);
+      return newAgentDbRecord;
     } else {
       logger.error('Failed to add agent to database, no record returned.');
       throw new Error('Failed to add agent to database.');
@@ -394,5 +392,22 @@ export class AgentStorage implements OnModuleInit {
 
   public isInitialized(): boolean {
     return this.initialized;
+  }
+
+  /**
+   * Returns a promise that resolves when the agent storage is fully initialized
+   * @returns Promise<void> that resolves when initialization is complete
+   */
+  public async onReady(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    // If not initialized and no promise exists, trigger initialization
+    return this.initialize();
   }
 }
