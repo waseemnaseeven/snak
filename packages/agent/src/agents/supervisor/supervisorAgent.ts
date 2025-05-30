@@ -195,7 +195,8 @@ export class SupervisorAgent extends BaseAgent {
       await this.initializeToolsOrchestrator(agentConfig);
       await this.initializeAgentSelector();
 
-      this.updateAgentSelectorRegistry();
+      this.updateAgentSelectorRegistry(); // EXPLAIN : This function is use to set the agents/supervisor in the AgentSelector
+      // --QUESTION-- Why do we set the supervisor in the differents agents
 
       await this.initializeWorkflowController(true);
 
@@ -297,6 +298,7 @@ export class SupervisorAgent extends BaseAgent {
     allowNoSnakAgents: boolean = false,
     forceReinitialize: boolean = false
   ): Promise<void> {
+    console.log('Hello from InitWorkflow');
     if (this.isInitializing && !forceReinitialize) {
       logger.debug(
         'SupervisorAgent: WorkflowController initialization already in progress, skipping'
@@ -304,7 +306,9 @@ export class SupervisorAgent extends BaseAgent {
       return;
     }
 
+    console.log('Hello : this.workflow : ', this.workflowInitialized);
     if (
+      // EXPLAIN : When do we reach this entrypoint
       this.workflowInitialized &&
       !forceReinitialize &&
       Object.keys(this.snakAgents).length > 0
@@ -330,6 +334,7 @@ export class SupervisorAgent extends BaseAgent {
         `SupervisorAgent: Found ${snakAgentCount} registered SnakAgents`
       );
 
+      // We aldready make this in the previous function need so store it
       Object.entries(this.snakAgents).forEach(([id, agent]) => {
         const nodeName = this.agentIdToNodeName.get(id);
         if (nodeName) {
@@ -384,9 +389,9 @@ export class SupervisorAgent extends BaseAgent {
         );
       }
 
-      const maxIterations = 15;
-      const workflowTimeout = 60000;
-      const entryPoint = allAgents['agent-selector']
+      const maxIterations = 15; // --CLEANUP-- Force paramters need to be configurable
+      const workflowTimeout = 60000; // CLEANUP Dont use magic time
+      const entryPoint = allAgents['agent-selector'] // EXPLAIN : Why do we have to choose normally it can be only supervisor
         ? 'agent-selector'
         : 'supervisor';
 
@@ -539,10 +544,10 @@ export class SupervisorAgent extends BaseAgent {
    * @returns The final agent response or directive message for the workflow
    * @throws {Error} Will throw an error if WorkflowController is not initialized when needed
    */
-  public async execute(
+  public async *execute(
     input: string | AgentMessage | BaseMessage | BaseMessage[],
     config?: Record<string, any>
-  ): Promise<any> {
+  ): AsyncGenerator<any> {
     this.executionDepth++;
     const depthIndent = '  '.repeat(this.executionDepth);
     const isNodeCall = !!config?.isWorkflowNodeCall || this.executionDepth > 1;
@@ -573,22 +578,26 @@ export class SupervisorAgent extends BaseAgent {
       );
       const enrichedMessage =
         await this.enrichWithMemoryContext(currentMessage);
-      return await this.executeWithMessage(
+      for await (const chunk of this.executeWithMessage(
         enrichedMessage,
         config,
         isNodeCall,
         callPath,
         depthIndent
-      );
+      )) {
+        yield chunk;
+      }
     }
 
-    return await this.executeWithMessage(
+    for await (const chunk of this.executeWithMessage(
       currentMessage,
       config,
       isNodeCall,
       callPath,
       depthIndent
-    );
+    )) {
+      yield chunk;
+    }
   }
 
   /**
@@ -724,13 +733,13 @@ export class SupervisorAgent extends BaseAgent {
    * @returns Execution result
    * @private
    */
-  private async executeWithMessage(
+  private async *executeWithMessage(
     currentMessage: BaseMessage,
     config: Record<string, any> | undefined,
     isNodeCall: boolean,
     callPath: string,
     depthIndent: string
-  ): Promise<any> {
+  ): AsyncGenerator<any> {
     if (isNodeCall) {
       return await this.handleNodeCall(
         currentMessage,
@@ -739,12 +748,14 @@ export class SupervisorAgent extends BaseAgent {
         depthIndent
       );
     } else {
-      return await this.handleExternalCall(
+      for await (const chunk of this.handleExternalCall(
         currentMessage,
         config,
         callPath,
         depthIndent
-      );
+      )) {
+        yield chunk;
+      }
     }
   }
 
@@ -799,7 +810,7 @@ export class SupervisorAgent extends BaseAgent {
 
     if (this.agentSelector) {
       try {
-        const selectionOutcome = await this.agentSelector.execute(
+        const selectionOutcome = await this.agentSelector.execute_invoke(
           new HumanMessage(queryForSelection),
           {
             ...(config || {}),
@@ -898,12 +909,12 @@ export class SupervisorAgent extends BaseAgent {
    * @returns Final execution result
    * @private
    */
-  private async handleExternalCall(
+  private async *handleExternalCall(
     currentMessage: BaseMessage,
     config: Record<string, any> | undefined,
     callPath: string,
     depthIndent: string
-  ): Promise<any> {
+  ): AsyncGenerator<any> {
     logger.debug(
       `${depthIndent}SupervisorAgent (${callPath}): Initiating workflow with WorkflowController.`
     );
@@ -935,43 +946,57 @@ export class SupervisorAgent extends BaseAgent {
         initialMessagesForWorkflow[0].additional_kwargs.originalUserQuery =
           workflowConfig.originalUserQuery;
       }
-
-      const result = await this.workflowController.execute(
+      console.log(
+        'Hello from initialMessagesForWorkflow',
+        initialMessagesForWorkflow
+      );
+      for await (const result of this.workflowController.execute(
         initialMessagesForWorkflow[0],
         workflowConfig
-      );
-
-      if (
-        result?.metadata?.requiresClarification === true &&
-        result.metadata.clarificationMessage
-      ) {
-        logger.debug(
-          `${depthIndent}SupervisorAgent (${callPath}): Agent requires clarification. Ending workflow and returning clarification message directly.`
-        );
-        this.executionDepth--;
-        return result.metadata.clarificationMessage.content;
-      }
-
-      if (result?.messages?.length > 0) {
-        const lastMessage = result.messages[result.messages.length - 1];
+      )) {
+        console.log('chunk', result.content);
         if (
-          lastMessage instanceof AIMessage &&
-          lastMessage.additional_kwargs?.needsClarification === true
+          result?.metadata?.requiresClarification === true &&
+          result.metadata.clarificationMessage
         ) {
           logger.debug(
-            `${depthIndent}SupervisorAgent (${callPath}): Found clarification request in final message from ${lastMessage.additional_kwargs?.from || 'unknown agent'}.`
+            `${depthIndent}SupervisorAgent (${callPath}): Agent requires clarification. Ending workflow and returning clarification message directly.`
           );
           this.executionDepth--;
-          return lastMessage.content;
+          return result.metadata.clarificationMessage.content;
         }
-      }
+        if (
+          result?.metadata?.requiresClarification === true &&
+          result.metadata.clarificationMessage
+        ) {
+          logger.debug(
+            `${depthIndent}SupervisorAgent (${callPath}): Agent requires clarification. Ending workflow and returning clarification message directly.`
+          );
+          this.executionDepth--;
+          return result.metadata.clarificationMessage.content;
+        }
 
-      const finalUserResponse = this.extractFinalResponse(result);
-      logger.debug(
-        `${depthIndent}SupervisorAgent (${callPath}): Workflow finished. Final response (truncated): "${finalUserResponse.substring(0, 200)}..."`
-      );
-      this.executionDepth--;
-      return finalUserResponse;
+        if (result?.messages?.length > 0) {
+          const lastMessage = result.messages[result.messages.length - 1];
+          if (
+            lastMessage instanceof AIMessage &&
+            lastMessage.additional_kwargs?.needsClarification === true
+          ) {
+            logger.debug(
+              `${depthIndent}SupervisorAgent (${callPath}): Found clarification request in final message from ${lastMessage.additional_kwargs?.from || 'unknown agent'}.`
+            );
+            this.executionDepth--;
+            return lastMessage.content;
+          }
+        }
+
+        // const finalUserResponse = this.extractFinalResponse(result);
+        // logger.debug(
+        //   `${depthIndent}SupervisorAgent (${callPath}): Workflow finished. Final response (truncated): "${finalUserResponse.substring(0, 200)}..."`
+        // );
+        this.executionDepth--;
+        yield result;
+      }
     } catch (error: any) {
       logger.error(
         `${depthIndent}SupervisorAgent (${callPath}): Error during WorkflowController execution: ${error.message || error}`
@@ -1150,7 +1175,7 @@ export class SupervisorAgent extends BaseAgent {
    * @returns Formatted final response string
    * @private
    */
-  private extractFinalResponse(result: any): string {
+  public extractFinalResponse(result: any): string {
     let finalUserResponse = 'Workflow completed.';
 
     if (
@@ -1749,6 +1774,12 @@ export class SupervisorAgent extends BaseAgent {
       return;
     }
 
+    console.log('this snakAgents : ', JSON.stringify(this.snakAgents));
+    console.log(
+      'agent count',
+      JSON.stringify(Object.keys(this.snakAgents).length)
+    );
+    // --CLEANUP-- Need to check if this.snakAgents is null
     const agentCount = Object.keys(this.snakAgents).length;
     if (options.skipIfEmpty && agentCount === 0) {
       logger.debug(
@@ -1765,9 +1796,11 @@ export class SupervisorAgent extends BaseAgent {
 
     Object.entries(this.snakAgents).forEach(([id, agent]) => {
       const nodeName = this.agentIdToNodeName.get(id);
+      console.log('nodeName : ', nodeName);
       if (nodeName) {
         availableAgents[nodeName] = agent;
       } else {
+        console.log('id : ', id);
         availableAgents[id] = agent;
       }
     });
@@ -1776,6 +1809,8 @@ export class SupervisorAgent extends BaseAgent {
       this.snakAgent &&
       !Object.values(this.snakAgents).includes(this.snakAgent)
     ) {
+      // --CLEANUP-- I think its nerver use
+      console.log('using function to make snak-main');
       const mainAgentId = 'snak-main';
       availableAgents[mainAgentId] = this.snakAgent;
       if (options.logDetails) {
@@ -1785,16 +1820,16 @@ export class SupervisorAgent extends BaseAgent {
       }
     }
 
-    this.agentSelector.setAvailableAgents(availableAgents);
-
-    const totalAgents = Object.keys(availableAgents).length;
+    this.agentSelector.setAvailableAgents(availableAgents); // EXPLAIN : Set Avaible agents in agent selector and remove all the old to add the new ones
+    // --CLEANUP-- Need to add some throw in the setAvaibleAgents to make sure they are set correctly
+    const totalAgents = Object.keys(availableAgents);
     logger.debug(
       `SupervisorAgent: Updated AgentSelector registry with ${totalAgents} agents (${agentCount} SnakAgents)`
     );
 
     if (options.logDetails) {
       Object.entries(availableAgents).forEach(([id, agent]) => {
-        const metadata = (agent as any).metadata;
+        const metadata = (agent as any).metadata; // --CLEANUP-- Agent need to be in the good interface to avoid the as any
         const type = agent.type;
 
         if (metadata) {

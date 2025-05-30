@@ -250,12 +250,17 @@ export class AgentSystem {
     if (!this.supervisorAgent) {
       throw new Error('Agent system not initialized. Call init() first.');
     }
-
+    console.log(
+      `AgentSystem: Executing command with message: ${JSON.stringify(message)}`
+    )
     try {
       Postgres.connect(this.config.databaseCredentials);
       const content =
         typeof message === 'string' ? message : message.user_request;
-      const response = await this.supervisorAgent.execute(content, config);
+      for await (const chunk of this.supervisorAgent.execute(content, config)) {
+        logger.debug('AgentSystem: Execution chunk:', JSON.stringify(chunk));
+      }
+      let response = "HELLO LA DEDAS";
       logger.debug(JSON.stringify(response));
       logger.debug('AgentSystem: Execution result:', JSON.stringify(response));
 

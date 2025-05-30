@@ -36,7 +36,7 @@ export interface ModelSelectionOptions {
 /**
  * Represents an operator agent responsible for selecting the appropriate model for different tasks.
  */
-export class ModelSelector extends BaseAgent implements IModelAgent {
+export class ModelSelector extends BaseAgent  implements IModelAgent {
   private models: Record<string, BaseChatModel> = {};
   private debugMode: boolean;
   private useModelSelector: boolean;
@@ -316,7 +316,7 @@ export class ModelSelector extends BaseAgent implements IModelAgent {
       );
       const humanMessage = new HumanMessage(analysisContent);
 
-      if (this.debugMode) {
+      if (!this.debugMode) {
         logger.debug(`Invoking "fast" model for meta-selection analysis.`);
         logger.debug(
           `Using ${nextStepsSection ? 'NEXT STEPS-focused' : 'full content'} analysis.`
@@ -327,6 +327,7 @@ export class ModelSelector extends BaseAgent implements IModelAgent {
         systemPrompt,
         humanMessage,
       ]);
+      console.log("result of selectModelForMessages : ", response.content)
       const modelChoice = response.content
         .toString()
         .toLowerCase()
@@ -584,43 +585,36 @@ export class ModelSelector extends BaseAgent implements IModelAgent {
     messages: BaseMessage[],
     forceModelType?: string
   ): Promise<any> {
-    const modelType =
-      forceModelType || (await this.selectModelForMessages(messages));
+    console.log(messages,forceModelType)
+    return
+  }
 
-    let selectedModel = this.models[modelType];
-
-    if (!selectedModel) {
-      logger.warn(
-        `Selected model "${modelType}" is not available. Attempting to fall back to "smart".`
-      );
-      selectedModel = this.models['smart'];
-      if (!selectedModel) {
-        logger.error(
-          `Fallback model "smart" is also not available. Cannot invoke model.`
-        );
-        // Potentially throw an error or return a specific error message structure
-        // depending on how the calling code expects to handle this.
-        throw new Error(
-          'Selected model and fallback "smart" model are unavailable.'
-        );
-      }
-    }
+  // useless method, but required by the interface
+  public async* execute(
+    input: BaseMessage[] | any,
+    config?: Record<string, any>
+  ): AsyncGenerator<any> {
+    // Ensure input is an array of BaseMessages
+    const messages: BaseMessage[] =
+      Array.isArray(input) ? input : [new HumanMessage(input)];
 
     if (this.debugMode) {
       logger.debug(
-        `Invoking model: ${modelType} (Forced: ${Boolean(forceModelType)}, Actual: ${selectedModel === this.models.smart ? 'smart (fallback)' : modelType})`
+        `ModelSelector executing with ${messages.length} messages.`
       );
     }
-    return selectedModel.invoke(messages);
-  }
 
+    // Invoke the model selection logic
+    const aiMessage = await this.execute_invoke(messages, config);
+    return aiMessage;
+  }
   /**
    * Main execution entry point for the agent. Selects a model and returns an AIMessage with the selection.
    * @param {string | BaseMessage | BaseMessage[]} input - Can be a single message, a string (converted to HumanMessage), or an array of BaseMessages.
    * @param {Record<string, any>} [config] - Optional. Additional configuration options.
    * @returns {Promise<AIMessage>} An AIMessage indicating the selected model type and other relevant metadata.
    */
-  public async execute(
+  public async execute_invoke(
     input: string | BaseMessage | BaseMessage[],
     config?: Record<string, any>
   ): Promise<AIMessage> {

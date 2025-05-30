@@ -108,6 +108,7 @@ export class WorkflowController {
    * @throws Error if initialization fails.
    */
   public async init(): Promise<void> {
+    // EXPLAIN : Why di we have to make all of this why we just don'e put function to supervisor class t oaccess so different value like allAgents instead of doing this here and need to create the graph every time thaht the agents change
     logger.debug('WorkflowController: Starting initialization');
     try {
       logger.debug(
@@ -734,10 +735,10 @@ export class WorkflowController {
    * @returns The final message or result from the workflow execution.
    * @throws Error if the workflow is not initialized, times out, or encounters an unhandled error.
    */
-  public async execute(
+  public async *execute(
     input: string | BaseMessage,
     config?: Record<string, any>
-  ): Promise<any> {
+  ): AsyncGenerator<any> {
     this.executionId = crypto.randomUUID().substring(0, 8);
     logger.debug(
       `WorkflowController[Exec:${this.executionId}]: Starting execution`
@@ -884,24 +885,25 @@ export class WorkflowController {
         }
       }
 
-      const timeoutPromise = new Promise((_, reject) => {
-        this.timeoutId = setTimeout(() => {
-          logger.warn(
-            `WorkflowController[Exec:${this.executionId}]: Workflow execution TIMED OUT after ${this.workflowTimeout}ms`
-          );
-          this.timeoutId = null;
-          reject(
-            new Error(
-              `Workflow execution timed out after ${this.workflowTimeout}ms`
-            )
-          );
-        }, this.workflowTimeout);
-      });
+      // const timeoutPromise = new Promise((_, reject) => {
+      //   this.timeoutId = setTimeout(() => {
+      //     logger.warn(
+      //       `WorkflowController[Exec:${this.executionId}]: Workflow execution TIMED OUT after ${this.workflowTimeout}ms`
+      //     );
+      //     this.timeoutId = null;
+      //     reject(
+      //       new Error(
+      //         `Workflow execution timed out after ${this.workflowTimeout}ms`
+      //       )
+      //     );
+      //   }, this.workflowTimeout);
+      // });
 
       logger.debug(
         `WorkflowController[Exec:${this.executionId}]: Invoking workflow with initial state`
       );
-      const workflowPromise = this.workflow.invoke(
+      let response_chunk;
+      for await (const chunk of await this.workflow.stream(
         {
           messages: [message],
           currentAgent: initialAgent,
@@ -910,10 +912,20 @@ export class WorkflowController {
           error: undefined,
           iterationCount: 0,
         },
-        runConfig
-      );
+        runConfig,
+        {
+          streamMode: 'values',
+        }
+      )) {
+        response_chunk = chunk;
+        // console.log(
+        //   `WorkflowController[Exec:${this.executionId}]: Received chunk: ${JSON.stringify(chunk.kwargs.content)}`
+        // );
 
-      const result = await Promise.race([workflowPromise, timeoutPromise]);
+        // yield chunk;
+      }
+
+      console.log(JSON.stringify(response_chunk));
 
       if (this.timeoutId) {
         clearTimeout(this.timeoutId);
@@ -923,7 +935,7 @@ export class WorkflowController {
       logger.debug(
         `WorkflowController[Exec:${this.executionId}]: Workflow execution completed`
       );
-      return result;
+      return response_chunk;
     } catch (error) {
       logger.error(
         `WorkflowController[Exec:${this.executionId}]: Workflow execution failed: ${error}`

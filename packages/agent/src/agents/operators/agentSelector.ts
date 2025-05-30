@@ -88,6 +88,7 @@ export class AgentSelector extends BaseAgent {
       let description: string | undefined;
 
       if (typeof (agent as any).getAgentConfig === 'function') {
+        // --CLEANUP-- WHY ??
         try {
           const agentConfig = (agent as any).getAgentConfig();
           if (agentConfig) {
@@ -109,7 +110,9 @@ export class AgentSelector extends BaseAgent {
       };
 
       if ((agent as any).metadata) {
+        // --CLEANUP-- BIG Problem with IAgent interface we use a lot of things that doesnt exist on this interface like the metadata need to REFACTO this.
         const metadata = (agent as any).metadata;
+        console.log('Metadata : ', metadata);
         if (metadata.name) info.name = metadata.name;
         if (metadata.group) info.group = metadata.group;
         if (metadata.description) info.description = metadata.description;
@@ -131,11 +134,20 @@ export class AgentSelector extends BaseAgent {
     }
   }
 
+  public async *execute(
+    _input?: string | BaseMessage,
+    _config?: Record<string, any>
+  ): AsyncGenerator<any> {
+    logger.warn(
+      'AgentSelector: execute() method should not be called directly, use execute(input) instead'
+    );
+    yield 'This method is not intended to be called directly.';
+  }
   /**
    * Executes agent selection based on the input query.
    * First checks for explicit agent mentions, then uses AI model for intelligent selection.
    */
-  public async execute(
+  public async execute_invoke(
     input: string | BaseMessage,
     _config?: Record<string, any>
   ): Promise<AIMessage> {
@@ -322,7 +334,7 @@ export class AgentSelector extends BaseAgent {
           ? result.content.trim()
           : JSON.stringify(result.content);
 
-      if (this.debug) {
+      if (!this.debug) {
         logger.debug(`AgentSelector: Model raw response: "${content}"`);
       }
 

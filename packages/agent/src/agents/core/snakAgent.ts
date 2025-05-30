@@ -201,6 +201,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
     if (!this.modelSelector) {
       throw new Error('ModelSelector not available');
     }
+    logger.warn("invokeModel");
     return this.modelSelector.invokeModel(messages, forceModelType);
   }
 
@@ -282,10 +283,10 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
    * @param config - Optional configuration for execution
    * @returns Promise resolving to the agent response
    */
-  public async execute(
+  public async* execute(
     input: BaseMessage[] | any,
     config?: Record<string, any>
-  ): Promise<unknown> {
+  ): AsyncGenerator<unknown> {
     logger.debug(`SnakAgent executing with mode: ${this.currentMode}`);
 
     if (!this.agentReactExecutor) {

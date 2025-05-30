@@ -110,13 +110,19 @@ export class ToolsOrchestrator extends BaseAgent {
     }
   }
 
+  public async* execute(): AsyncGenerator<any> {
+    logger.warn(
+      'ToolsOrchestrator: execute() is not implemented. Use execute_invoke() instead.'
+    );
+    yield 'ToolsOrchestrator: execute() is not implemented. Use execute_invoke() instead.';
+  }
   /**
    * Execute a tool call with the provided input and configuration
    * @param input - Tool call input (string, BaseMessage, or tool call object)
    * @param config - Optional execution configuration
    * @returns Result of the tool execution
    */
-  public async execute(
+  public async execute_invoke(
     input: string | BaseMessage | any,
     config?: Record<string, any>
   ): Promise<any> {

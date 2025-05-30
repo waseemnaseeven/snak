@@ -789,7 +789,14 @@ export class SupervisorService implements OnModuleInit {
       this.logger.debug(
         `SupervisorService: Executing request with config: ${JSON.stringify(config)}`
       );
-      return await this.supervisor.execute(input, config);
+      let allChunk = [];
+      for await ( const chunk of this.supervisor.execute(input, config) ) {
+        allChunk.push(chunk.content);
+      }
+      const result = allChunk.join('');
+      this.logger.debug(
+        `SupervisorService: Execution completed with result: ${result}`)
+      return result;
     } catch (error) {
       this.logger.error('Error executing request through supervisor:', error);
       throw error;
