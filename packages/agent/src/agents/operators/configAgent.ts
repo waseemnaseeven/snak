@@ -1,10 +1,5 @@
-import { BaseAgent, AgentType, IAgent } from '../core/baseAgent.js';
-import {
-  BaseMessage,
-  HumanMessage,
-  AIMessage,
-  SystemMessage,
-} from '@langchain/core/messages';
+import { BaseAgent, AgentType } from '../core/baseAgent.js';
+import { BaseMessage, AIMessage } from '@langchain/core/messages';
 import { Postgres } from '@snakagent/database';
 import { logger } from '@snakagent/core';
 import { OperatorRegistry } from './operatorRegistry.js';
@@ -75,9 +70,12 @@ export class ConfigurationAgent extends BaseAgent {
   private debug: boolean = false;
 
   constructor(config: ConfigurationAgentConfig = {}) {
-    super('config-agent', AgentType.OPERATOR);
+    super(
+      'config-agent',
+      AgentType.OPERATOR,
+      'Configuration agent that can manipulate configuration in database'
+    );
     this.debug = config.debug !== undefined ? config.debug : true; // Enable debug by default
-
     if (this.debug) {
       logger.debug('ConfigurationAgent initialized with debug mode enabled');
     }
@@ -106,8 +104,7 @@ export class ConfigurationAgent extends BaseAgent {
    * Parses the input to determine the configuration operation to perform
    */
   public async execute(
-    input: string | BaseMessage | BaseMessage[],
-    config?: Record<string, any>
+    input: string | BaseMessage | BaseMessage[]
   ): Promise<AIMessage> {
     try {
       const request = this.parseInput(input);
