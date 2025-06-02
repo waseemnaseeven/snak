@@ -204,6 +204,12 @@ export class AgentSelector extends BaseAgent {
    * - Combined group+name patterns
    */
   private checkForExplicitAgentMention(query: string): AgentInfo | null {
+    // First check for configuration-related queries
+    const configQuery = this.checkForConfigurationQuery(query);
+    if (configQuery) {
+      return configQuery;
+    }
+
     const idPattern = /agent(?:\s+id)?\s+(\d+|[a-zA-Z_-]+)/i;
     const namePattern = /agent (?:named|called) ["']?([a-zA-Z_-]+)["']?/i;
     const groupPattern =
@@ -269,6 +275,133 @@ export class AgentSelector extends BaseAgent {
 
       if (matchingAgents.length === 1) {
         return matchingAgents[0];
+      }
+    }
+
+    return null;
+  }
+
+  private checkForConfigurationQuery(query: string): AgentInfo | null {
+    const lowerQuery = query.toLowerCase();
+
+    // Configuration operation keywords
+    const configOperations = [
+      'create agent',
+      'add agent',
+      'new agent',
+      'update agent',
+      'modify agent',
+      'change agent',
+      'edit agent',
+      'delete agent',
+      'remove agent',
+      'drop agent',
+      'list agents',
+      'show agents',
+      'get agents',
+      'view agents',
+      'agent config',
+      'agent configuration',
+      'agent settings',
+      'configure agent',
+      'manage agent',
+      'agent management',
+    ];
+
+    // Database/config related terms
+    const configTerms = [
+      'database config',
+      'db config',
+      'configuration',
+      'settings',
+      'parameters',
+      'properties',
+    ];
+
+    // Agent property keywords
+    const agentProperties = [
+      'agent name',
+      'agent group',
+      'agent description',
+      'agent mode',
+      'agent interval',
+      'max iterations',
+      'system prompt',
+      'agent lore',
+      'agent objectives',
+      'agent knowledge',
+      'agent plugins',
+      'agent memory',
+    ];
+
+    // Check for configuration operations
+    for (const operation of configOperations) {
+      if (lowerQuery.includes(operation)) {
+        if (this.debug) {
+          logger.debug(
+            `AgentSelector: Detected configuration operation: "${operation}"`
+          );
+        }
+        // Return config-agent info if it exists
+        if (this.availableAgents['config-agent']) {
+          return this.agentInfo['config-agent'];
+        }
+      }
+    }
+
+    // Check for configuration terms
+    for (const term of configTerms) {
+      if (lowerQuery.includes(term) && lowerQuery.includes('agent')) {
+        if (this.debug) {
+          logger.debug(`AgentSelector: Detected configuration term: "${term}"`);
+        }
+        if (this.availableAgents['config-agent']) {
+          return this.agentInfo['config-agent'];
+        }
+      }
+    }
+
+    // Check for agent property modifications
+    for (const property of agentProperties) {
+      if (
+        lowerQuery.includes(property) &&
+        (lowerQuery.includes('set') ||
+          lowerQuery.includes('change') ||
+          lowerQuery.includes('update') ||
+          lowerQuery.includes('modify'))
+      ) {
+        if (this.debug) {
+          logger.debug(
+            `AgentSelector: Detected agent property modification: "${property}"`
+          );
+        }
+        if (this.availableAgents['config-agent']) {
+          return this.agentInfo['config-agent'];
+        }
+      }
+    }
+
+    // Check for CRUD patterns
+    const crudPatterns = [
+      /create.*agent.*(?:name|group|description)/i,
+      /add.*agent.*(?:to|with|called)/i,
+      /update.*agent.*(?:set|change|modify)/i,
+      /delete.*agent.*(?:named|called|id)/i,
+      /remove.*agent.*(?:named|called|id)/i,
+      /list.*all.*agents?/i,
+      /show.*all.*agents?/i,
+      /get.*agent.*(?:list|info|details)/i,
+      /manage.*agent.*(?:config|settings)/i,
+    ];
+
+    for (const pattern of crudPatterns) {
+      if (pattern.test(query)) {
+        if (this.debug) {
+          logger.debug(`AgentSelector: Detected CRUD pattern: ${pattern}`);
+        }
+        if (this.availableAgents['config-agent']) {
+          return this.agentInfo['config-agent'];
+        }
       }
     }
 

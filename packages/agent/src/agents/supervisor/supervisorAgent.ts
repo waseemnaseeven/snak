@@ -116,10 +116,9 @@ export class SupervisorAgent extends BaseAgent {
       await this.initializeAgentSelector();
 
       this.updateAgentSelectorRegistry();
-	  await this.initializeConfigAgent();
+      await this.initializeConfigAgent();
 
       await this.initializeWorkflowController(true);
-
 
       if (Object.keys(this.snakAgents).length > 0) {
         this.initializeMetrics(agentConfig);
@@ -133,9 +132,9 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   private async initializeConfigAgent(): Promise<void> {
-	logger.debug('SupervisorAgent: Initializing ConfigAgent...');
-	this.configAgent = new ConfigurationAgent({debug: this.debug});
-	await this.configAgent.init();
+    logger.debug('SupervisorAgent: Initializing ConfigAgent...');
+    this.configAgent = new ConfigurationAgent({ debug: this.debug });
+    await this.configAgent.init();
   }
 
   /**
