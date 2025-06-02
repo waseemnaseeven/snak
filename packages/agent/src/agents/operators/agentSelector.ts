@@ -139,6 +139,7 @@ export class AgentSelector extends BaseAgent {
     input: string | BaseMessage,
     _config?: Record<string, any>
   ): Promise<AIMessage> {
+    console.log(`Execute :3`);
     const queryString = this.extractQueryString(input);
 
     if (this.debug) {

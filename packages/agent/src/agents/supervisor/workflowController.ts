@@ -5,6 +5,7 @@ import { IAgent } from '../core/baseAgent.js';
 import { RunnableConfig } from '@langchain/core/runnables';
 import crypto from 'crypto';
 import { AgentType } from '../core/baseAgent.js';
+import fs from 'fs';
 
 export interface LangChainResponse {
   supervisor: {
@@ -161,6 +162,7 @@ export class WorkflowController {
         workflow.addNode(
           agentId,
           async (state: WorkflowState, runnable_config?: RunnableConfig) => {
+            console.log('I GET COMPILE');
             if (this.debug) {
               const lastAgents = (state.metadata.agentHistory || [])
                 .slice(-3)
@@ -265,7 +267,6 @@ export class WorkflowController {
                 ...config,
                 isWorkflowNodeCall: true,
               });
-
               logger.debug(
                 `WorkflowController[Exec:${execId}]: Node[${agentId}] - Agent execution finished. Processing result...`
               );
@@ -484,6 +485,10 @@ export class WorkflowController {
         logger.debug(
           `WorkflowController: Adding conditional edges from "${agentId}" with router function`
         );
+
+        for (const routingId of Object.keys(routingMap)) {
+          logger.info(routingId);
+        }
         workflow.addConditionalEdges(
           // @ts-expect-error - The type definition expects "__start__" but routing from agentId is intended here
           agentId,
@@ -493,6 +498,7 @@ export class WorkflowController {
       }
 
       workflow.addNode('hybrid_pause', async () => {
+        // WHY ???
         return {};
       });
 
@@ -741,10 +747,11 @@ export class WorkflowController {
    * @returns The final message or result from the workflow execution.
    * @throws Error if the workflow is not initialized, times out, or encounters an unhandled error.
    */
-  public async execute(
+  public async *execute(
     input: string | BaseMessage,
     config?: Record<string, any>
-  ): Promise<any> {
+  ): AsyncGenerator<any> {
+    console.log(`Execute : 10`);
     this.executionId = crypto.randomUUID().substring(0, 8);
     logger.debug(
       `WorkflowController[Exec:${this.executionId}]: Starting execution`
@@ -891,105 +898,69 @@ export class WorkflowController {
         }
       }
 
-      const timeoutPromise = new Promise((_, reject) => {
-        this.timeoutId = setTimeout(() => {
-          logger.warn(
-            `WorkflowController[Exec:${this.executionId}]: Workflow execution TIMED OUT after ${this.workflowTimeout}ms`
-          );
-          this.timeoutId = null;
-          reject(
-            new Error(
-              `Workflow execution timed out after ${this.workflowTimeout}ms`
-            )
-          );
-        }, this.workflowTimeout);
-      });
-
       logger.debug(
         `WorkflowController[Exec:${this.executionId}]: Invoking workflow with initial state`
       );
-      // const test = new Promise(async (resolve, reject) => {
-      //   let response_chunk;
-      //   for await (const chunk of await this.workflow.streamEvents(
-      //     {
-      //       messages: [message],
-      //       currentAgent: initialAgent,
-      //       metadata: initialMetadata,
-      //       toolCalls: [],
-      //       error: undefined,
-      //       iterationCount: 0,
-      //     },
-      //     {
-      //       ...runConfig,
-      //       version: 'v2' as const,
-      //     }
-      //   )) {
-      //     console.log((
-      //       {
-      //         event : chunk.event,
-      //         data : chunk.data,
-      //       }
-      //     ));
-      //     if (chunk.event === 'on_chat_model_stream') {
-      //       console.log(`${chunk.data.chunk.content}`);
-      //     }
 
-      //   }
-      // });
-      for await (const event of this.workflow.streamEvents(
-        {   
+      const iteration: Array<any> = [];
+      let chunk_to_save;
+      let i_count = 0;
+      let iteration_number = 0;
+      let langraph_run_id;
+      for await (const chunk of await this.workflow.streamEvents(
+        {
           messages: [message],
           currentAgent: initialAgent,
           metadata: initialMetadata,
           toolCalls: [],
           error: undefined,
-          iterationCount: 0, },
-        runConfig
+          iterationCount: 0,
+        },
+        {
+          ...runConfig,
+          version: 'v2' as const,
+        }
       )) {
-        const kind = event.event;
-        console.log(`${kind}: ${event.name}`);
+        if (i_count === 0) {
+          langraph_run_id = chunk.run_id;
+        }
+        if (chunk.name === 'Branch<agent>' && chunk.event === 'on_chain_start') {
+          iteration_number++;
+        }
+        if (chunk.name === 'Branch<agent>' && chunk.event === 'on_chain_end') {
+          chunk_to_save = chunk;
+        }
+        if (chunk.event != 'on_chat_model_stream') {
+          iteration.push(chunk);
+        }
+        i_count++;
+        // ...
+        console.log(chunk.event);
+        if (chunk.event === 'on_chat_model_stream') {
+          // console.log(`${chunk.data.chunk.content}`);
+          yield { chunk: chunk.data.chunk.content, iteration_number : iteration_number,final: false };
+        }
+        if (
+          chunk.event === 'on_chain_end' &&
+          chunk.run_id === langraph_run_id
+        ) {
+          logger.warn(`C'EST LA FIN DU WORKFLOW`); 
+          logger.warn(JSON.stringify(chunk_to_save));
+        }
       }
 
-       this.workflow.invoke(
-        {   
-          messages: [message],
-          currentAgent: initialAgent,
-          metadata: initialMetadata,
-          toolCalls: [],
-          error: undefined,
-          iterationCount: 0, },
-        runConfig
-      )
-      // const workflowPromise = this.workflow.invoke(
-      //   {
-      //     messages: [message],
-      //     currentAgent: initialAgent,
-      //     metadata: initialMetadata,
-      //     toolCalls: [],
-      //     error: undefined,
-      //     iterationCount: 0,
-      //   },
-      //   {
-      //     configurable: {
-      //       thread_id: threadId,
-      //     },
-      //     version: 'v2' as const,
-      //   }
-      // );
-      console.log('Hello');
-      const result = await Promise.race([timeoutPromise]);
-      console.log(JSON.stringify(result, null, 2));
-
-      if (this.timeoutId) {
-        clearTimeout(this.timeoutId);
-        this.timeoutId = null;
+      try {
+        fs.writeFileSync(
+          'log_iterations.json',
+          JSON.stringify(iteration, null, 2),
+          { encoding: 'utf-8' }
+        );
+      } catch (err) {
+        logger.error(
+          "Erreur lors de l'écriture de log_iterations.json : " + err
+        );
       }
-
-      logger.debug(
-        `WorkflowController[Exec:${this.executionId}]: Workflow execution completed`
-      );
-      logger.debug(result);
-      return result;
+      return { chunk_to_save, iteration_number : iteration_number,  final: true };
     } catch (error) {
       logger.error(
         `WorkflowController[Exec:${this.executionId}]: Workflow execution failed: ${error}`

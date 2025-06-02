@@ -83,7 +83,6 @@ export const createInteractiveAgent = async (
     });
 
     const toolNode = new ToolNode(toolsList);
-
     // Add wrapper to log tool executions
     const originalInvoke = toolNode.invoke.bind(toolNode);
     toolNode.invoke = async (state, config) => {
@@ -194,8 +193,8 @@ export const createInteractiveAgent = async (
               ? modelForThisTask.bindTools(toolsList)
               : modelForThisTask;
 
-          
-          const result = await boundModel.invoke(currentFormattedPrompt);
+          logger.debug('test : ', JSON.stringify(currentFormattedPrompt));
+          const result = await boundModel.invoke(currentMessages);
           logger.debug(result);
           TokenTracker.trackCall(result, selectedModelType);
           return formatAIMessageResult(result);
@@ -287,6 +286,8 @@ export const createInteractiveAgent = async (
      * @returns An object containing an array with a single formatted AIMessage.
      */
     function formatAIMessageResult(result: any): { messages: BaseMessage[] } {
+      // logger.info('The format');
+      // console.log(result);
       let finalResult = result;
       if (!(finalResult instanceof AIMessage)) {
         finalResult = new AIMessage({
@@ -327,9 +328,8 @@ export const createInteractiveAgent = async (
 ${formatAgentResponse(content)}`);
         }
       }
-
       return {
-        messages: [finalResult],
+        messages: [result],
       };
     }
 
@@ -344,12 +344,17 @@ ${formatAgentResponse(content)}`);
       const messages = state.messages;
       const lastMessage = messages[messages.length - 1] as AIMessage;
 
+      // logger.info('state : ');
+      // console.log(state);
       if (lastMessage.tool_calls?.length) {
         logger.debug(
           `Detected ${lastMessage.tool_calls.length} tool calls, routing to tools node.`
         );
         return 'tools';
       }
+      console.log(
+        `No tool calls detected in the last message, ending execution.`
+      );
       return 'end';
     }
 

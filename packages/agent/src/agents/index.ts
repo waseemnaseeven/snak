@@ -255,7 +255,13 @@ export class AgentSystem {
       Postgres.connect(this.config.databaseCredentials);
       const content =
         typeof message === 'string' ? message : message.user_request;
-      const response = await this.supervisorAgent.execute(content, config);
+      const response = 'ok';
+      for await (const chunk of this.supervisorAgent.execute(content, config)) {
+        if (chunk.chunk.last === true) {
+          logger.warn('LAST ITERATIONS IS SAVED!');
+          await this.insert_message_into_db(message as Message, chunk.chunk);
+        }
+      }
       logger.debug(JSON.stringify(response));
       logger.debug('AgentSystem: Execution result:', JSON.stringify(response));
 

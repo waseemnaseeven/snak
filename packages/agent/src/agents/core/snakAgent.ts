@@ -285,7 +285,8 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   public async execute(
     input: BaseMessage[] | any,
     config?: Record<string, any>
-  ): Promise<unknown> {
+  ): Promise<any> {
+    console.log(`Execute : 1`);
     logger.debug(`SnakAgent executing with mode: ${this.currentMode}`);
 
     if (!this.agentReactExecutor) {
@@ -432,8 +433,19 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       }
 
       const app = this.agentReactExecutor;
+      // console.log(`Execute : 11`);
+      // for await (const chunk of app.streamEvents(graphState, {
+      //   ...runnableConfig,
+      //   version: 'v2' as const,
+      // })) {
+      //   console.log('chunk : ', chunk.event);
+      //   if (chunk.event === 'on_chat_model_stream') {
+      //     console.log(`chunk_model_stream :${JSON.stringify(chunk.data)}`);
+      //   }
+      // }
+      // console.log("finito")
       const result = await app.invoke(graphState, runnableConfig);
-
+      console.log(`Execute : 12`);
       if (result?.messages?.length > 0) {
         for (let i = result.messages.length - 1; i >= 0; i--) {
           const msg = result.messages[i];
@@ -485,7 +497,8 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   private async executeSimpleFallback(
     input: string | BaseMessage
   ): Promise<AIMessage> {
-    logger.warn('SnakAgent: Executing in simple fallback mode.');
+    console.log(`Execute : 2`);
+    logger.debug('SnakAgent: Using simple fallback execution.');
 
     let queryContent = 'Unavailable';
     try {

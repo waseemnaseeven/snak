@@ -388,6 +388,7 @@ export class MemoryAgent extends BaseAgent {
    * @param config Optional configuration
    */
   public async execute(input: any, config?: Record<string, any>): Promise<any> {
+    console.log(`Execute : 4`);
     try {
       if (!this.initialized) {
         throw new Error('MemoryAgent: Not initialized');

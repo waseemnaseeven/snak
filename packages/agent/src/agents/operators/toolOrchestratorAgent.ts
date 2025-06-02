@@ -120,6 +120,7 @@ export class ToolsOrchestrator extends BaseAgent {
     input: string | BaseMessage | any,
     config?: Record<string, any>
   ): Promise<any> {
+    console.log(`Execute : 6`);
     if (!this.toolNode) {
       throw new Error('ToolsOrchestrator: ToolNode is not initialized');
     }
@@ -239,6 +240,7 @@ export class ToolsOrchestrator extends BaseAgent {
     toolName: string,
     config?: Record<string, any>
   ): Promise<any> {
+    console.log(`Execute : 7`);
     const state = {
       messages: [
         new HumanMessage({

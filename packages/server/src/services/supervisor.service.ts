@@ -304,7 +304,7 @@ export class SupervisorService implements OnModuleInit {
    * Initialize the WorkflowController once with all agents
    * @private
    */
-  private async finalizeWorkflowController(): Promise<void> {
+  private async q(): Promise<void> {
     if (!this.supervisor) {
       throw new Error('Supervisor not initialized');
     }
@@ -784,12 +784,51 @@ export class SupervisorService implements OnModuleInit {
     if (!this.supervisor) {
       throw new Error('Supervisor not initialized');
     }
-
+    const result: string[] = [];
     try {
       this.logger.debug(
         `SupervisorService: Executing request with config: ${JSON.stringify(config)}`
       );
-      return await this.supervisor.execute(input, config);
+      for await (const chunk of this.supervisor.execute(input, config)) {
+        if (chunk.last === true) {
+          this.logger.debug('SupervisorService: Execution completed');
+          return chunk;
+        }
+        this.logger.debug(
+          `SupervisorService: Received chunk: ${JSON.stringify(chunk)}`
+        );
+        result.push(chunk.chunk);
+      }
+      return result.join('');
+    } catch (error) {
+      this.logger.error('Error executing request through supervisor:', error);
+      throw error;
+    }
+  }
+
+  async *WebsocketexecuteRequest(
+    input: string,
+    config?: Record<string, any>
+  ): AsyncGenerator<any> {
+    if (!this.supervisor) {
+      throw new Error('Supervisor not initialized');
+    }
+    const result: string[] = [];
+    try {
+      this.logger.debug(
+        `SupervisorService: Executing request with config: ${JSON.stringify(config)}`
+      );
+      for await (const chunk of this.supervisor.execute(input, config)) {
+        if (chunk.last === true) {
+          this.logger.debug('SupervisorService: Execution completed');
+          return chunk;
+        }
+        this.logger.debug(
+          `SupervisorService: Received chunk: ${JSON.stringify(chunk)}`
+        );
+        yield chunk;
+      }
+      return result.join('');
     } catch (error) {
       this.logger.error('Error executing request through supervisor:', error);
       throw error;

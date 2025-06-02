@@ -81,37 +81,50 @@ export class MyGateway implements OnModuleInit {
       if (!agent) {
         throw new ServerError('E01TA400');
       }
-      const action = this.agentService.handleUserRequest(
-        agent,
-        userRequest.request
-      );
-      const response_metrics = await metrics.metricsAgentResponseTime(
-        userRequest.request.agent_id.toString(),
-        'key',
-        route,
-        action
-      );
-
-      const storyChunks = divideString(response_metrics.data as string, 5);
 
       const client = this.clients.get(userRequest.socket_id);
       if (!client) {
         logger.error('Client not found');
         throw new ServerError('E01TA400');
       }
-
-      for (let i = 0; i < storyChunks.length; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        logger.debug('Sending chunk:', storyChunks[i]);
+      for await (const chunk of this.supervisorService.WebsocketexecuteRequest(
+        userRequest.request.user_request
+      )) {
         const response: AgentResponse = {
           status: 'success',
           data: {
-            chunk: storyChunks[i],
-            isLastChunk: i === storyChunks.length - 1,
+            chunk: chunk.chunk,
+            isLastChunk: chunk.last,
           },
         };
         client.emit('onAgentRequest', response);
       }
+      // const response_metrics = await metrics.metricsAgentResponseTime(
+      //   userRequest.request.agent_id.toString(),
+      //   'key',
+      //   route,
+      //   action
+      // );
+
+      // const storyChunks = divideString(response_metrics.data as string, 5);
+
+      // if (!client) {
+      //   logger.error('Client not found');
+      //   throw new ServerError('E01TA400');
+      // }
+
+      // for (let i = 0; i < storyChunks.length; i++) {
+      //   await new Promise((resolve) => setTimeout(resolve, 100));
+      //   logger.debug('Sending chunk:', storyChunks[i]);
+      //   const response: AgentResponse = {
+      //     status: 'success',
+      //     data: {
+      //       chunk: storyChunks[i],
+      //       isLastChunk: i === storyChunks.length - 1,
+      //     },
+      //   };
+      //   client.emit('onAgentRequest', response);
+      // }
     } catch (error) {
       const client = this.clients.get(userRequest.socket_id);
       if (!client) {

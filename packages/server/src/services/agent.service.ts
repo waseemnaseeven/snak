@@ -46,7 +46,6 @@ export class AgentService implements IAgentService {
       message: 'Processing agent request',
       request: userRequest.user_request,
     });
-
     try {
       let result: any;
 
