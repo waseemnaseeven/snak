@@ -158,7 +158,7 @@ export class ConfigurationAgent extends BaseAgent {
       logger.error(`ConfigurationAgent execution error: ${error}`);
 
       return new AIMessage({
-        content: `❌ Configuration operation failed: ${error instanceof Error ? error.message : String(error)}`,
+        content: `Configuration operation failed: ${error instanceof Error ? error.message : String(error)}`,
         additional_kwargs: {
           from: 'configuration-agent',
           final: true,

@@ -94,7 +94,7 @@ export const createAgentTool = new DynamicStructuredTool({
       const result = await Postgres.query<AgentConfig>(query);
 
       if (result.length > 0) {
-        logger.info(`✅ Created new agent "${input.name}" successfully`);
+        logger.info(`Created new agent "${input.name}" successfully`);
         return JSON.stringify({
           success: true,
           message: `Agent "${input.name}" created successfully`,
@@ -107,7 +107,7 @@ export const createAgentTool = new DynamicStructuredTool({
         });
       }
     } catch (error) {
-      logger.error(`❌ Error creating agent: ${error}`);
+      logger.error(`Error creating agent: ${error}`);
       return JSON.stringify({
         success: false,
         message: 'Failed to create agent',

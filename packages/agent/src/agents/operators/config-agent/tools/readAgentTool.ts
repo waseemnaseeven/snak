@@ -54,7 +54,7 @@ export const readAgentTool = new DynamicStructuredTool({
         });
       }
     } catch (error) {
-      logger.error(`❌ Error reading agent: ${error}`);
+      logger.error(`Error reading agent: ${error}`);
       return JSON.stringify({
         success: false,
         message: 'Failed to read agent configuration',

@@ -159,7 +159,7 @@ export const updateAgentTool = new DynamicStructuredTool({
         });
       }
     } catch (error) {
-      logger.error(`❌ Error updating agent: ${error}`);
+      logger.error(`Error updating agent: ${error}`);
       return JSON.stringify({
         success: false,
         message: 'Failed to update agent configuration',

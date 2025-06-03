@@ -105,7 +105,7 @@ export const listAgentsTool = new DynamicStructuredTool({
         count: result.length,
       });
     } catch (error) {
-      logger.error(`❌ Error listing agents: ${error}`);
+      logger.error(`Error listing agents: ${error}`);
       return JSON.stringify({
         success: false,
         message: 'Failed to list agents',

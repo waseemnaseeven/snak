@@ -72,13 +72,13 @@ export const deleteAgentTool = new DynamicStructuredTool({
       );
       await Postgres.query(deleteQuery);
 
-      logger.info(`✅ Deleted agent "${agent.name}" successfully`);
+      logger.info(`Deleted agent "${agent.name}" successfully`);
       return JSON.stringify({
         success: true,
         message: `Agent "${agent.name}" deleted successfully`,
       });
     } catch (error) {
-      logger.error(`❌ Error deleting agent: ${error}`);
+      logger.error(`Error deleting agent: ${error}`);
       return JSON.stringify({
         success: false,
         message: 'Failed to delete agent',
