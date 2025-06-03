@@ -52,16 +52,6 @@ export class ConfigurationAgent extends BaseAgent {
   private reactAgent: any;
   private tools: any[];
 
-  /**
-   * Creates a new instance of ConfigurationAgent
-   * @param {ConfigurationAgentConfig} config - Configuration options for the agent
-   * @param {boolean} config.debug - Enable debug mode for verbose logging
-   * @param {Object} config.llmConfig - Configuration for the language model
-   * @param {string} config.llmConfig.modelName - Name of the model to use
-   * @param {number} config.llmConfig.temperature - Temperature setting for the model
-   * @param {string} config.llmConfig.apiKey - OpenAI API key
-   * @param {string} config.llmConfig.baseURL - Base URL for API requests
-   */
   constructor(config: ConfigurationAgentConfig = {}) {
     super(
       'configuration-agent',

@@ -4,6 +4,10 @@ import { Postgres } from '@snakagent/database';
 import { logger } from '@snakagent/core';
 import { AgentConfig } from '../../configAgent.js';
 
+/**
+ * Schema definition for creating a new agent
+ * Validates and describes the required and optional parameters for agent creation
+ */
 const CreateAgentSchema = z.object({
   name: z
     .string()
@@ -62,6 +66,10 @@ const CreateAgentSchema = z.object({
     .describe('Maximum number of iterations per execution cycle (default: 15)'),
 });
 
+/**
+ * Tool for creating new agent configurations in the database
+ * @type {DynamicStructuredTool}
+ */
 export const createAgentTool = new DynamicStructuredTool({
   name: 'create_agent',
   description:
