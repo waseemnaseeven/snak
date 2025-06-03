@@ -1,4 +1,5 @@
 import { Tool } from '@langchain/core/tools';
+import { DynamicStructuredTool } from '@langchain/core/tools';
 import {
   createAgentTool,
   readAgentTool,
@@ -11,7 +12,7 @@ import {
  * Get all configuration tools for the Config Agent
  * @returns Array of LangChain tools for agent configuration management
  */
-export function getConfigAgentTools(): Tool[] {
+export function getConfigAgentTools(): (Tool | DynamicStructuredTool)[] {
   return [
     createAgentTool,
     readAgentTool,

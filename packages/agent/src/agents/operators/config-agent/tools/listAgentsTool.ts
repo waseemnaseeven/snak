@@ -2,7 +2,7 @@ import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { Postgres } from '@snakagent/database';
 import { logger } from '@snakagent/core';
-import { AgentConfig } from '../../configAgent.js';
+import { AgentConfig } from '@snakagent/core';
 
 const ListAgentsSchema = z.object({
   filters: z
