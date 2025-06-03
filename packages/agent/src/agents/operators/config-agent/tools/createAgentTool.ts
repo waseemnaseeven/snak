@@ -8,14 +8,32 @@ const CreateAgentSchema = z.object({
   name: z.string().describe('The name of the agent to create'),
   group: z.string().describe('The group/category of the agent'),
   description: z.string().describe('A description of what the agent does'),
-  lore: z.array(z.string()).optional().describe('Optional lore/background information'),
-  objectives: z.array(z.string()).optional().describe('Optional objectives for the agent'),
-  knowledge: z.array(z.string()).optional().describe('Optional knowledge base entries'),
+  lore: z
+    .array(z.string())
+    .optional()
+    .describe('Optional lore/background information'),
+  objectives: z
+    .array(z.string())
+    .optional()
+    .describe('Optional objectives for the agent'),
+  knowledge: z
+    .array(z.string())
+    .optional()
+    .describe('Optional knowledge base entries'),
   system_prompt: z.string().optional().describe('Optional system prompt'),
   interval: z.number().default(5).describe('Execution interval in seconds'),
-  plugins: z.array(z.string()).optional().describe('Optional plugins to enable'),
-  mode: z.string().default('interactive').describe('Agent mode (interactive, autonomous, hybrid)'),
-  max_iterations: z.number().default(15).describe('Maximum iterations per execution'),
+  plugins: z
+    .array(z.string())
+    .optional()
+    .describe('Optional plugins to enable'),
+  mode: z
+    .string()
+    .default('interactive')
+    .describe('Agent mode (interactive, autonomous, hybrid)'),
+  max_iterations: z
+    .number()
+    .default(15)
+    .describe('Maximum iterations per execution'),
 });
 
 export const createAgentTool = new DynamicStructuredTool({
@@ -70,4 +88,4 @@ export const createAgentTool = new DynamicStructuredTool({
       });
     }
   },
-}); 
+});

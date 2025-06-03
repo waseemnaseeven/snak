@@ -6,7 +6,10 @@ import { AgentConfig } from '../../configAgent.js';
 
 const ReadAgentSchema = z.object({
   identifier: z.string().describe('Agent ID or name to retrieve'),
-  searchBy: z.enum(['id', 'name']).default('name').describe('Search by ID or name'),
+  searchBy: z
+    .enum(['id', 'name'])
+    .default('name')
+    .describe('Search by ID or name'),
 });
 
 export const readAgentTool = new DynamicStructuredTool({
@@ -50,4 +53,4 @@ export const readAgentTool = new DynamicStructuredTool({
       });
     }
   },
-}); 
+});

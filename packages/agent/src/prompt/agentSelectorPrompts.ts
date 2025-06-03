@@ -32,13 +32,6 @@ Then determine which agent or type of agent would be most appropriate based on i
 Your response must ONLY contain the ID of the selected agent (the exact string from the "id" field).
 Do not include any explanations, analysis, or other text.
 
-If multiple agents could handle this query but you need more specific information, respond with "NEED_CLARIFICATION" followed by a JSON object with these fields:
-{
-  "possibleAgents": [list of agent IDs that could handle this],
-  "missingInfo": "what specific information is needed",
-  "clarificationQuestion": "a precise question to ask the user"
-}
-
 If the query doesn't match any available agent's capabilities, respond with "NO_MATCHING_AGENT".
 
 Always prioritize accuracy and specificity in your selections.`;

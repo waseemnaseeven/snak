@@ -51,7 +51,7 @@ export class ConfigurationAgent extends BaseAgent {
     super(
       'configuration-agent',
       AgentType.OPERATOR,
-      "I specialize in managing agent configurations in the database. I can create, read, update, delete, and list agent configurations using intelligent tool selection based on your natural language requests."
+      'I specialize in managing agent configurations in the database. I can create, read, update, delete, and list agent configurations using intelligent tool selection based on your natural language requests.'
     );
 
     this.debug = config.debug !== undefined ? config.debug : true;
@@ -72,7 +72,7 @@ export class ConfigurationAgent extends BaseAgent {
 
     if (this.debug) {
       logger.debug(
-        `ConfigurationAgent initialized with ${this.tools.length} tools: ${this.tools.map(t => t.name).join(', ')}`
+        `ConfigurationAgent initialized with ${this.tools.length} tools: ${this.tools.map((t) => t.name).join(', ')}`
       );
     }
   }
@@ -109,7 +109,9 @@ Always be specific about what you're doing and provide useful feedback about the
       const registry = OperatorRegistry.getInstance();
       registry.register(this.id, this);
 
-      logger.debug('ConfigurationAgent initialized with React agent and registered successfully');
+      logger.debug(
+        'ConfigurationAgent initialized with React agent and registered successfully'
+      );
     } catch (error) {
       logger.error(`ConfigurationAgent initialization failed: ${error}`);
       throw new Error(`ConfigurationAgent initialization failed: ${error}`);
@@ -120,33 +122,41 @@ Always be specific about what you're doing and provide useful feedback about the
    * Execute configuration operations using React agent and tools
    */
   public async execute(
-    input: string | BaseMessage | BaseMessage[]
+    input: string | BaseMessage | BaseMessage[],
+    config?: Record<string, any>
   ): Promise<AIMessage> {
     try {
-      const content = this.extractContent(input);
+      // Extract the original human message content
+      const content = this.extractOriginalUserContent(input, config);
 
       if (this.debug) {
         logger.debug(`ConfigurationAgent: Processing request: "${content}"`);
+        logger.debug(`ConfigurationAgent: Config received:`, {
+          originalUserQuery: config?.originalUserQuery,
+          hasConfig: !!config,
+          configKeys: config ? Object.keys(config) : [],
+        });
       }
 
       if (!this.reactAgent) {
         throw new Error('React agent not initialized. Call init() first.');
       }
 
-      // Execute with React agent
+      // Execute with React agent using the original user content
       const result = await this.reactAgent.invoke({
-        messages: [new HumanMessage(content)]
+        messages: [new HumanMessage(content)],
       });
 
       // Extract final response
       const messages = result.messages || [];
       const lastMessage = messages[messages.length - 1];
-      
+
       let responseContent = '';
       if (lastMessage && lastMessage.content) {
-        responseContent = typeof lastMessage.content === 'string' 
-          ? lastMessage.content 
-          : JSON.stringify(lastMessage.content);
+        responseContent =
+          typeof lastMessage.content === 'string'
+            ? lastMessage.content
+            : JSON.stringify(lastMessage.content);
       } else {
         responseContent = 'Configuration operation completed.';
       }
@@ -159,10 +169,9 @@ Always be specific about what you're doing and provide useful feedback about the
           success: true,
         },
       });
-
     } catch (error) {
       logger.error(`ConfigurationAgent execution error: ${error}`);
-      
+
       return new AIMessage({
         content: `❌ Configuration operation failed: ${error instanceof Error ? error.message : String(error)}`,
         additional_kwargs: {
@@ -176,7 +185,115 @@ Always be specific about what you're doing and provide useful feedback about the
   }
 
   /**
-   * Extract content from various input types
+   * Extract original user content from various input sources
+   * This method prioritizes the original user query over intermediate agent responses
+   */
+  private extractOriginalUserContent(
+    input: string | BaseMessage | BaseMessage[],
+    config?: Record<string, any>
+  ): string {
+    // First priority: originalUserQuery from config (set by SupervisorAgent)
+    if (
+      config?.originalUserQuery &&
+      typeof config.originalUserQuery === 'string'
+    ) {
+      if (this.debug) {
+        logger.debug(
+          `ConfigurationAgent: Using originalUserQuery from config: "${config.originalUserQuery}"`
+        );
+      }
+      return config.originalUserQuery;
+    }
+
+    // Second priority: originalUserQuery from message additional_kwargs
+    if (Array.isArray(input)) {
+      // Look through messages for originalUserQuery in additional_kwargs
+      for (const message of input) {
+        if (
+          message.additional_kwargs?.originalUserQuery &&
+          typeof message.additional_kwargs.originalUserQuery === 'string'
+        ) {
+          if (this.debug) {
+            logger.debug(
+              `ConfigurationAgent: Using originalUserQuery from message additional_kwargs`
+            );
+          }
+          return message.additional_kwargs.originalUserQuery;
+        }
+      }
+
+      // Look for the first HumanMessage in the array
+      for (const message of input) {
+        if (
+          message instanceof HumanMessage &&
+          typeof message.content === 'string'
+        ) {
+          if (this.debug) {
+            logger.debug(
+              `ConfigurationAgent: Using first HumanMessage content`
+            );
+          }
+          return message.content;
+        }
+      }
+
+      // Fallback to last message content
+      const lastMessage = input[input.length - 1];
+      const content =
+        typeof lastMessage.content === 'string'
+          ? lastMessage.content
+          : JSON.stringify(lastMessage.content);
+
+      if (this.debug) {
+        logger.debug(`ConfigurationAgent: Fallback to last message content`);
+      }
+      return content;
+    }
+
+    // Handle single BaseMessage
+    if (input instanceof BaseMessage) {
+      // Check for originalUserQuery in additional_kwargs first
+      if (
+        input.additional_kwargs?.originalUserQuery &&
+        typeof input.additional_kwargs.originalUserQuery === 'string'
+      ) {
+        if (this.debug) {
+          logger.debug(
+            `ConfigurationAgent: Using originalUserQuery from single message additional_kwargs`
+          );
+        }
+        return input.additional_kwargs.originalUserQuery;
+      }
+
+      // Use the message content
+      const content =
+        typeof input.content === 'string'
+          ? input.content
+          : JSON.stringify(input.content);
+
+      if (this.debug) {
+        logger.debug(`ConfigurationAgent: Using single message content`);
+      }
+      return content;
+    }
+
+    // Handle string input
+    if (typeof input === 'string') {
+      if (this.debug) {
+        logger.debug(`ConfigurationAgent: Using string input directly`);
+      }
+      return input;
+    }
+
+    // Final fallback
+    if (this.debug) {
+      logger.debug(`ConfigurationAgent: Using fallback content extraction`);
+    }
+    return this.extractContent(input);
+  }
+
+  /**
+   * Extract content from various input types (fallback method)
    */
   private extractContent(input: string | BaseMessage | BaseMessage[]): string {
     if (Array.isArray(input)) {
@@ -212,4 +329,4 @@ Always be specific about what you're doing and provide useful feedback about the
       logger.error(`Error disposing ConfigurationAgent: ${error}`);
     }
   }
-} 
+}

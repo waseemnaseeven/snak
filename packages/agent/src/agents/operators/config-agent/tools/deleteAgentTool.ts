@@ -6,8 +6,14 @@ import { AgentConfig } from '../../configAgent.js';
 
 const DeleteAgentSchema = z.object({
   identifier: z.string().describe('Agent ID or name to delete'),
-  searchBy: z.enum(['id', 'name']).default('name').describe('Search by ID or name'),
-  confirm: z.boolean().default(false).describe('Confirmation to delete the agent'),
+  searchBy: z
+    .enum(['id', 'name'])
+    .default('name')
+    .describe('Search by ID or name'),
+  confirm: z
+    .boolean()
+    .default(false)
+    .describe('Confirmation to delete the agent'),
 });
 
 export const deleteAgentTool = new DynamicStructuredTool({
@@ -19,7 +25,8 @@ export const deleteAgentTool = new DynamicStructuredTool({
       if (!input.confirm) {
         return JSON.stringify({
           success: false,
-          message: 'Deletion requires explicit confirmation. Set confirm to true.',
+          message:
+            'Deletion requires explicit confirmation. Set confirm to true.',
         });
       }
 
@@ -46,9 +53,10 @@ export const deleteAgentTool = new DynamicStructuredTool({
       const agent = existingAgent[0];
 
       // Delete the agent
-      const deleteQuery = new Postgres.Query('DELETE FROM agents WHERE id = $1', [
-        agent.id,
-      ]);
+      const deleteQuery = new Postgres.Query(
+        'DELETE FROM agents WHERE id = $1',
+        [agent.id]
+      );
       await Postgres.query(deleteQuery);
 
       logger.info(`✅ Deleted agent "${agent.name}" successfully`);
@@ -65,4 +73,4 @@ export const deleteAgentTool = new DynamicStructuredTool({
       });
     }
   },
-}); 
+});

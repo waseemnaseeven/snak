@@ -131,4 +131,4 @@ Create a clear, conversational response that:
 4. Keeps it concise but informative
 
 Use markdown formatting for better readability.`;
-}; 
+};

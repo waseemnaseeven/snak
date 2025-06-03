@@ -6,20 +6,28 @@ import { AgentConfig } from '../../configAgent.js';
 
 const UpdateAgentSchema = z.object({
   identifier: z.string().describe('Agent ID or name to update'),
-  searchBy: z.enum(['id', 'name']).default('name').describe('Search by ID or name'),
-  updates: z.object({
-    name: z.string().optional().describe('New name for the agent'),
-    group: z.string().optional().describe('New group for the agent'),
-    description: z.string().optional().describe('New description'),
-    lore: z.array(z.string()).optional().describe('New lore entries'),
-    objectives: z.array(z.string()).optional().describe('New objectives'),
-    knowledge: z.array(z.string()).optional().describe('New knowledge entries'),
-    system_prompt: z.string().optional().describe('New system prompt'),
-    interval: z.number().optional().describe('New execution interval'),
-    plugins: z.array(z.string()).optional().describe('New plugins list'),
-    mode: z.string().optional().describe('New agent mode'),
-    max_iterations: z.number().optional().describe('New max iterations'),
-  }).describe('Fields to update'),
+  searchBy: z
+    .enum(['id', 'name'])
+    .default('name')
+    .describe('Search by ID or name'),
+  updates: z
+    .object({
+      name: z.string().optional().describe('New name for the agent'),
+      group: z.string().optional().describe('New group for the agent'),
+      description: z.string().optional().describe('New description'),
+      lore: z.array(z.string()).optional().describe('New lore entries'),
+      objectives: z.array(z.string()).optional().describe('New objectives'),
+      knowledge: z
+        .array(z.string())
+        .optional()
+        .describe('New knowledge entries'),
+      system_prompt: z.string().optional().describe('New system prompt'),
+      interval: z.number().optional().describe('New execution interval'),
+      plugins: z.array(z.string()).optional().describe('New plugins list'),
+      mode: z.string().optional().describe('New agent mode'),
+      max_iterations: z.number().optional().describe('New max iterations'),
+    })
+    .describe('Fields to update'),
 });
 
 export const updateAgentTool = new DynamicStructuredTool({
@@ -101,4 +109,4 @@ export const updateAgentTool = new DynamicStructuredTool({
       });
     }
   },
-}); 
+});

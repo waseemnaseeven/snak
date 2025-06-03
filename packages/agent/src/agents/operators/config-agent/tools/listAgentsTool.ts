@@ -5,11 +5,17 @@ import { logger } from '@snakagent/core';
 import { AgentConfig } from '../../configAgent.js';
 
 const ListAgentsSchema = z.object({
-  filters: z.object({
-    group: z.string().optional().describe('Filter by group'),
-    mode: z.string().optional().describe('Filter by mode'),
-    name_contains: z.string().optional().describe('Filter by name containing text'),
-  }).optional().describe('Optional filters to apply'),
+  filters: z
+    .object({
+      group: z.string().optional().describe('Filter by group'),
+      mode: z.string().optional().describe('Filter by mode'),
+      name_contains: z
+        .string()
+        .optional()
+        .describe('Filter by name containing text'),
+    })
+    .optional()
+    .describe('Optional filters to apply'),
   limit: z.number().optional().describe('Maximum number of agents to return'),
   offset: z.number().optional().describe('Number of agents to skip'),
 });
@@ -80,4 +86,4 @@ export const listAgentsTool = new DynamicStructuredTool({
       });
     }
   },
-}); 
+});

@@ -22,7 +22,7 @@ import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
 import { RpcProvider } from 'starknet';
 import { AgentSelector } from '../operators/agentSelector.js';
 import { OperatorRegistry } from '../operators/operatorRegistry.js';
-import { ConfigurationAgent } from '../operators/configAgent.js';
+import { ConfigurationAgent } from '../operators/config-agent/configAgent.js';
 
 /**
  * Represents an agent to be registered
@@ -700,6 +700,13 @@ export class SupervisorAgent extends BaseAgent {
     let toolCallsFromSelection: any[] | undefined = undefined;
     let needsClarification = false;
 
+    // Extract and preserve the original user query
+    const originalUserQuery =
+      config?.originalUserQuery ||
+      (typeof currentMessage.content === 'string'
+        ? currentMessage.content
+        : JSON.stringify(currentMessage.content));
+
     const preSelectedAgent = config?.selectedSnakAgent;
     if (preSelectedAgent && this.snakAgents[preSelectedAgent]) {
       logger.debug(
@@ -715,14 +722,15 @@ export class SupervisorAgent extends BaseAgent {
       this.executionDepth--;
       return new AIMessage({
         content: responseContent,
-        additional_kwargs: { from: 'supervisor', next_agent: nextAgent },
+        additional_kwargs: {
+          from: 'supervisor',
+          next_agent: nextAgent,
+          originalUserQuery: originalUserQuery, // Preserve original query
+        },
       });
     }
 
-    const queryForSelection = (config?.originalUserQuery ||
-      (typeof currentMessage.content === 'string'
-        ? currentMessage.content
-        : JSON.stringify(currentMessage.content))) as string;
+    const queryForSelection = originalUserQuery;
 
     if (this.agentSelector) {
       try {
@@ -799,6 +807,7 @@ export class SupervisorAgent extends BaseAgent {
       content: responseContent,
       additional_kwargs: {
         from: 'supervisor',
+        originalUserQuery: originalUserQuery, // Always preserve original user query
         ...(nextAgent && { next_agent: nextAgent }),
         ...(isFinal && !nextAgent && { final: true }),
         ...(needsClarification && { needsClarification: true }),
@@ -811,7 +820,7 @@ export class SupervisorAgent extends BaseAgent {
     }
 
     logger.debug(
-      `${depthIndent}SupervisorAgent (${callPath}): Returning directive: ${JSON.stringify(directiveMessage.toJSON())}`
+      `${depthIndent}SupervisorAgent (${callPath}): Returning directive with preserved originalUserQuery: ${JSON.stringify(directiveMessage.toJSON())}`
     );
     return directiveMessage;
   }

@@ -30,4 +30,4 @@ export const configToolCategories = {
   update: [updateAgentTool],
   delete: [deleteAgentTool],
   list: [listAgentsTool],
-}; 
+};
