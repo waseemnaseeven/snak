@@ -1,8 +1,10 @@
 import { BaseAgent, AgentType } from '../core/baseAgent.js';
-import { BaseMessage, AIMessage } from '@langchain/core/messages';
+import { BaseMessage, AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { ChatOpenAI } from '@langchain/openai';
 import { Postgres } from '@snakagent/database';
 import { logger } from '@snakagent/core';
 import { OperatorRegistry } from './operatorRegistry.js';
+import { DatabaseSync } from 'node:sqlite';
 
 /**
  * Interface representing an agent configuration in the database
@@ -28,6 +30,12 @@ export interface AgentConfig {
  */
 export interface ConfigurationAgentConfig {
   debug?: boolean;
+  llmConfig?: {
+    modelName?: string;
+    temperature?: number;
+    apiKey?: string;
+    baseURL?: string;
+  };
 }
 
 /**
@@ -39,6 +47,7 @@ export enum ConfigOperation {
   UPDATE = 'update',
   DELETE = 'delete',
   LIST = 'list',
+  CLARIFY = 'clarify',
 }
 
 /**
@@ -50,6 +59,9 @@ export interface ConfigRequest {
   agentName?: string;
   config?: Partial<AgentConfig>;
   filters?: Record<string, any>;
+  confidence?: number;
+  missingInfo?: string[];
+  clarification?: string;
 }
 
 /**
@@ -60,24 +72,55 @@ export interface ConfigResponse {
   message: string;
   data?: AgentConfig | AgentConfig[];
   error?: string;
+  needsClarification?: boolean;
+  suggestedValues?: Record<string, any>;
+}
+
+/**
+ * AI Analysis result structure
+ */
+interface AIAnalysis {
+  operation: ConfigOperation;
+  parameters: {
+    agentId?: string;
+    agentName?: string;
+    config?: Partial<AgentConfig>;
+    filters?: Record<string, any>;
+  };
+  confidence: number;
+  missingInfo: string[];
+  reasoning: string;
 }
 
 /**
  * ConfigurationAgent manages agent configurations stored in the database.
  * It provides CRUD operations for agent settings and integrates with the operator registry.
+ * Enhanced with AI for natural language understanding and intelligent responses.
  */
 export class ConfigurationAgent extends BaseAgent {
   private debug: boolean = false;
+  private llm: ChatOpenAI;
 
   constructor(config: ConfigurationAgentConfig = {}) {
     super(
-      'config-agent',
+      'configuration-agent',
       AgentType.OPERATOR,
-      'Configuration agent that can manipulate configuration in database'
+      'I specialize in handling the project\'s database. I can list, modify, delete configurations as an example but I basically can do anything that is related to the database.'
     );
-    this.debug = config.debug !== undefined ? config.debug : true; // Enable debug by default
+
+    this.debug = config.debug !== undefined ? config.debug : true;
+
+    // Initialize LLM with configuration
+    const llmConfig = config.llmConfig || {};
+    this.llm = new ChatOpenAI({
+      modelName: llmConfig.modelName || 'gpt-4',
+      temperature: llmConfig.temperature || 0.1,
+      openAIApiKey: llmConfig.apiKey || process.env.OPENAI_API_KEY,
+      ...(llmConfig.baseURL && { configuration: { baseURL: llmConfig.baseURL } }),
+    });
+
     if (this.debug) {
-      logger.debug('ConfigurationAgent initialized with debug mode enabled');
+      logger.debug('ConfigurationAgent initialized with AI capabilities enabled');
     }
   }
 
@@ -86,13 +129,12 @@ export class ConfigurationAgent extends BaseAgent {
    */
   public async init(): Promise<void> {
     try {
-      // Register this agent with the operator registry
+      // Test AI connection
+
       const registry = OperatorRegistry.getInstance();
       registry.register(this.id, this);
 
-      logger.debug(
-        'ConfigurationAgent initialized and registered successfully'
-      );
+      logger.debug('ConfigurationAgent initialized and registered successfully');
     } catch (error) {
       logger.error(`ConfigurationAgent initialization failed: ${error}`);
       throw new Error(`ConfigurationAgent initialization failed: ${error}`);
@@ -100,18 +142,36 @@ export class ConfigurationAgent extends BaseAgent {
   }
 
   /**
-   * Main execution entry point for the agent
-   * Parses the input to determine the configuration operation to perform
+   * Test AI connection to ensure the LLM is working
    */
-  public async execute(
-    input: string | BaseMessage | BaseMessage[]
-  ): Promise<AIMessage> {
+
+  /**
+   * Main execution entry point for the agent
+   * Uses AI to understand the input and determine the appropriate action
+   */
+  public async execute(input: string | BaseMessage | BaseMessage[]): Promise<AIMessage> {
     try {
-      const request = this.parseInput(input);
-      const response = await this.handleConfigOperation(request);
+      const content = this.extractContent(input);
+
+      if (this.debug) {
+        logger.debug(`ConfigurationAgent: Processing input: "${content}"`);
+      }
+
+      // Use AI to analyze the request
+      const aiAnalysis = await this.analyzeRequestWithAI(content);
+
+      if (this.debug) {
+        logger.debug(`ConfigurationAgent: AI Analysis: ${JSON.stringify(aiAnalysis, null, 2)}`);
+      }
+
+      // Convert AI analysis to config request
+      const request = this.convertAIAnalysisToRequest(aiAnalysis);
+
+      // Handle the configuration operation
+      const response = await this.handleConfigOperation(request, content);
 
       return new AIMessage({
-        content: this.formatResponse(response),
+        content: await this.formatResponseWithAI(response, content),
         additional_kwargs: {
           from: 'config-agent',
           final: true,
@@ -122,8 +182,12 @@ export class ConfigurationAgent extends BaseAgent {
       });
     } catch (error) {
       logger.error(`ConfigurationAgent execution error: ${error}`);
+
+      // Use AI to generate a helpful error message
+      const errorMessage = await this.generateErrorMessage(error, input);
+
       return new AIMessage({
-        content: `Configuration operation failed: ${error instanceof Error ? error.message : String(error)}`,
+        content: errorMessage,
         additional_kwargs: {
           from: 'config-agent',
           final: true,
@@ -135,253 +199,140 @@ export class ConfigurationAgent extends BaseAgent {
   }
 
   /**
-   * Parses input to extract configuration request details
+   * Extract content from various input types
    */
-  private parseInput(
-    input: string | BaseMessage | BaseMessage[]
-  ): ConfigRequest {
-    let content: string;
-
+  private extractContent(input: string | BaseMessage | BaseMessage[]): string {
     if (Array.isArray(input)) {
       const lastMessage = input[input.length - 1];
-      content =
-        typeof lastMessage.content === 'string'
-          ? lastMessage.content
-          : JSON.stringify(lastMessage.content);
+      return typeof lastMessage.content === 'string'
+        ? lastMessage.content
+        : JSON.stringify(lastMessage.content);
     } else if (typeof input === 'string') {
-      content = input;
+      return input;
     } else {
-      content =
-        typeof input.content === 'string'
-          ? input.content
-          : JSON.stringify(input.content);
+      return typeof input.content === 'string'
+        ? input.content
+        : JSON.stringify(input.content);
     }
+  }
 
-    // Simple parsing logic - in a real implementation, you might want to use NLP or more sophisticated parsing
+  /**
+   * Use AI to analyze and understand the user's request
+   */
+  private async analyzeRequestWithAI(content: string): Promise<AIAnalysis> {
+    const systemPrompt = `You are an expert at analyzing configuration requests for AI agents.
+
+Your task is to analyze user requests and extract:
+1. The operation they want to perform (create, read, update, delete, list)
+2. Any parameters they've provided (agent name, description, group, mode, etc.)
+3. Any missing required information
+4. Your reasoning
+
+Available operations:
+- CREATE: Create a new agent (requires: name, group, description)
+- READ: Get details of a specific agent (requires: agent name or ID)
+- UPDATE: Modify an existing agent (requires: agent identifier + fields to update)
+- DELETE: Remove an agent (requires: agent name or ID)
+- LIST: Show multiple agents (optional: filters like group, mode)
+
+}`;
+
+    try {
+      const response = await this.llm.invoke([
+        new SystemMessage(systemPrompt),
+        new HumanMessage(`Analyze this request: "${content}"`)
+      ]);
+
+      const aiResponse = typeof response.content === 'string'
+        ? response.content
+        : JSON.stringify(response.content);
+
+      return JSON.parse(aiResponse);
+    } catch (error) {
+      logger.error(`AI analysis failed: ${error}`);
+      // Fallback to rule-based parsing
+      return this.fallbackAnalysis(content);
+    }
+  }
+
+  /**
+   * Fallback analysis when AI fails
+   */
+  private fallbackAnalysis(content: string): AIAnalysis {
     const lowerContent = content.toLowerCase();
 
-    if (this.debug) {
-      logger.debug(`ConfigurationAgent: Parsing content: "${content}"`);
-      logger.debug(`ConfigurationAgent: Lowercase content: "${lowerContent}"`);
+    if (lowerContent.includes('create') || lowerContent.includes('add') || lowerContent.includes('new agent')) {
+      return {
+        operation: ConfigOperation.CREATE,
+        parameters: { config: {} },
+        confidence: 50,
+        missingInfo: ['name', 'group', 'description'],
+        reasoning: 'Fallback analysis detected create operation'
+      };
+    } else if (lowerContent.includes('list') || lowerContent.includes('show all')) {
+      return {
+        operation: ConfigOperation.LIST,
+        parameters: {},
+        confidence: 70,
+        missingInfo: [],
+        reasoning: 'Fallback analysis detected list operation'
+      };
     }
-
-    if (
-      lowerContent.includes('create') ||
-      lowerContent.includes('add') ||
-      lowerContent.includes('new agent')
-    ) {
-      if (this.debug) {
-        logger.debug(`ConfigurationAgent: Detected CREATE operation`);
-      }
-      return this.parseCreateRequest(content);
-    } else if (
-      lowerContent.includes('update') ||
-      lowerContent.includes('modify') ||
-      lowerContent.includes('change') ||
-      lowerContent.includes('edit')
-    ) {
-      if (this.debug) {
-        logger.debug(`ConfigurationAgent: Detected UPDATE operation`);
-      }
-      return this.parseUpdateRequest(content);
-    } else if (
-      lowerContent.includes('delete') ||
-      lowerContent.includes('remove') ||
-      lowerContent.includes('drop')
-    ) {
-      if (this.debug) {
-        logger.debug(`ConfigurationAgent: Detected DELETE operation`);
-      }
-      return this.parseDeleteRequest(content);
-    } else if (
-      lowerContent.includes('list') ||
-      lowerContent.includes('show all') ||
-      lowerContent.includes('get all')
-    ) {
-      if (this.debug) {
-        logger.debug(`ConfigurationAgent: Detected LIST operation`);
-      }
-      return this.parseListRequest(content);
-    } else if (
-      lowerContent.includes('get') ||
-      lowerContent.includes('show') ||
-      lowerContent.includes('find')
-    ) {
-      if (this.debug) {
-        logger.debug(`ConfigurationAgent: Detected READ operation`);
-      }
-      return this.parseReadRequest(content);
-    }
-
-    // Default to list operation if unclear
-    if (this.debug) {
-      logger.debug(
-        `ConfigurationAgent: No clear operation detected, defaulting to LIST`
-      );
-    }
-    return { operation: ConfigOperation.LIST };
-  }
-
-  /**
-   * Parses create operation request
-   */
-  private parseCreateRequest(content: string): ConfigRequest {
-    // Extract agent details from content
-    const config: Partial<AgentConfig> = {};
-
-    // Extract name with more flexible patterns
-    let nameMatch = content.match(/name[:\s]+["']?([^"'\n]+)["']?/i);
-    if (!nameMatch) {
-      // Try "called X" or "named X" patterns
-      nameMatch = content.match(/(?:called|named)\s+["']?([^"'\n,]+)["']?/i);
-    }
-    if (!nameMatch) {
-      // Try "agent X" patterns
-      nameMatch = content.match(/agent\s+["']?([^"'\n,]+)["']?/i);
-    }
-    if (nameMatch) config.name = nameMatch[1].trim();
-
-    // Extract group with flexible patterns
-    let groupMatch = content.match(/group[:\s]+["']?([^"'\n]+)["']?/i);
-    if (!groupMatch) {
-      // Try "in X group" patterns
-      groupMatch = content.match(
-        /in\s+(?:the\s+)?["']?([^"'\n,]+)["']?\s+group/i
-      );
-    }
-    if (groupMatch) {
-      config.group = groupMatch[1].trim();
-    } else {
-      // Default group if not specified
-      config.group = 'default';
-    }
-
-    // Extract description with flexible patterns
-    let descriptionMatch = content.match(
-      /description[:\s]+["']?([^"'\n]+)["']?/i
-    );
-    if (!descriptionMatch) {
-      // Try "for X" or "that does X" patterns
-      descriptionMatch = content.match(
-        /(?:for|that does|to)\s+["']?([^"'\n]+)["']?/i
-      );
-    }
-    if (descriptionMatch) {
-      config.description = descriptionMatch[1].trim();
-    } else if (config.name) {
-      // Default description based on name
-      config.description = `Agent ${config.name} for automated tasks`;
-    }
-
-    // Extract mode
-    const modeMatch = content.match(/mode[:\s]+["']?([^"'\n]+)["']?/i);
-    if (modeMatch) config.mode = modeMatch[1].trim();
-
-    return {
-      operation: ConfigOperation.CREATE,
-      config,
-    };
-  }
-
-  /**
-   * Parses update operation request
-   */
-  private parseUpdateRequest(content: string): ConfigRequest {
-    const config: Partial<AgentConfig> = {};
-    let agentId: string | undefined;
-    let agentName: string | undefined;
-
-    // Extract agent identifier
-    const idMatch = content.match(/id[:\s]+["']?([^"'\s]+)["']?/i);
-    if (idMatch) agentId = idMatch[1].trim();
-
-    const nameMatch = content.match(/agent[:\s]+["']?([^"'\n]+)["']?/i);
-    if (nameMatch) agentName = nameMatch[1].trim();
-
-    // Extract fields to update (similar to create parsing)
-    const descriptionMatch = content.match(
-      /description[:\s]+["']?([^"'\n]+)["']?/i
-    );
-    if (descriptionMatch) config.description = descriptionMatch[1].trim();
-
-    const modeMatch = content.match(/mode[:\s]+["']?([^"'\n]+)["']?/i);
-    if (modeMatch) config.mode = modeMatch[1].trim();
-
-    const intervalMatch = content.match(/interval[:\s]+(\d+)/i);
-    if (intervalMatch) config.interval = parseInt(intervalMatch[1]);
-
-    return {
-      operation: ConfigOperation.UPDATE,
-      agentId,
-      agentName,
-      config,
-    };
-  }
-
-  /**
-   * Parses delete operation request
-   */
-  private parseDeleteRequest(content: string): ConfigRequest {
-    const idMatch = content.match(/id[:\s]+["']?([^"'\s]+)["']?/i);
-    const nameMatch = content.match(/agent[:\s]+["']?([^"'\n]+)["']?/i);
-
-    return {
-      operation: ConfigOperation.DELETE,
-      agentId: idMatch?.[1]?.trim(),
-      agentName: nameMatch?.[1]?.trim(),
-    };
-  }
-
-  /**
-   * Parses read operation request
-   */
-  private parseReadRequest(content: string): ConfigRequest {
-    const idMatch = content.match(/id[:\s]+["']?([^"'\s]+)["']?/i);
-    const nameMatch = content.match(/agent[:\s]+["']?([^"'\n]+)["']?/i);
-
-    return {
-      operation: ConfigOperation.READ,
-      agentId: idMatch?.[1]?.trim(),
-      agentName: nameMatch?.[1]?.trim(),
-    };
-  }
-
-  /**
-   * Parses list operation request
-   */
-  private parseListRequest(content: string): ConfigRequest {
-    const filters: Record<string, any> = {};
-
-    // Extract optional filters
-    const groupMatch = content.match(/group[:\s]+["']?([^"'\n]+)["']?/i);
-    if (groupMatch) filters.group = groupMatch[1].trim();
-
-    const modeMatch = content.match(/mode[:\s]+["']?([^"'\n]+)["']?/i);
-    if (modeMatch) filters.mode = modeMatch[1].trim();
 
     return {
       operation: ConfigOperation.LIST,
-      filters: Object.keys(filters).length > 0 ? filters : undefined,
+      parameters: {},
+      confidence: 30,
+      missingInfo: [],
+      reasoning: 'Fallback analysis defaulting to list operation'
     };
   }
 
   /**
-   * Handles the configuration operation based on the request
+   * Convert AI analysis to ConfigRequest
+   */
+  private convertAIAnalysisToRequest(analysis: AIAnalysis): ConfigRequest {
+    return {
+      operation: analysis.operation,
+      agentId: analysis.parameters.agentId,
+      agentName: analysis.parameters.agentName,
+      config: analysis.parameters.config,
+      filters: analysis.parameters.filters,
+      confidence: analysis.confidence,
+      missingInfo: analysis.missingInfo,
+    };
+  }
+
+  /**
+   * Enhanced request handling with AI assistance
    */
   private async handleConfigOperation(
-    request: ConfigRequest
+    request: ConfigRequest,
+    originalInput: string
   ): Promise<ConfigResponse> {
+    // Check if we need clarification for missing information
+    if (request.missingInfo && request.missingInfo.length > 0) {
+      const clarification = await this.generateClarificationQuestion(request, originalInput);
+      return {
+        success: false,
+        message: clarification,
+        needsClarification: true,
+      };
+    }
+
+    // Use AI to generate smart defaults for missing optional fields
+    if (request.operation === ConfigOperation.CREATE && request.config) {
+      request.config = await this.enhanceConfigWithAI(request.config);
+    }
+
+    // Execute the operation
     switch (request.operation) {
       case ConfigOperation.CREATE:
         return await this.createAgent(request.config!);
       case ConfigOperation.READ:
         return await this.readAgent(request.agentId, request.agentName);
       case ConfigOperation.UPDATE:
-        return await this.updateAgent(
-          request.agentId,
-          request.agentName,
-          request.config!
-        );
+        return await this.updateAgent(request.agentId, request.agentName, request.config!);
       case ConfigOperation.DELETE:
         return await this.deleteAgent(request.agentId, request.agentName);
       case ConfigOperation.LIST:
@@ -396,18 +347,155 @@ export class ConfigurationAgent extends BaseAgent {
   }
 
   /**
+   * Generate clarifying questions using AI
+   */
+  private async generateClarificationQuestion(
+    request: ConfigRequest,
+    originalInput: string
+  ): Promise<string> {
+    const prompt = `The user wants to ${request.operation} an agent but is missing some required information.
+
+Original request: "${originalInput}"
+Missing information: ${request.missingInfo?.join(', ')}
+
+Generate a helpful, conversational question to ask the user for the missing information.
+Be specific about what you need and provide examples if helpful.
+Keep it concise and friendly.`;
+
+    try {
+      const response = await this.llm.invoke([
+        new SystemMessage('You are a helpful assistant that asks clarifying questions.'),
+        new HumanMessage(prompt)
+      ]);
+
+      return typeof response.content === 'string'
+        ? response.content
+        : 'I need some additional information to help you with that request.';
+    } catch (error) {
+      logger.error(`Failed to generate clarification: ${error}`);
+      return `I need some additional information: ${request.missingInfo?.join(', ')}`;
+    }
+  }
+
+  /**
+   * Use AI to enhance configuration with smart defaults
+   */
+  private async enhanceConfigWithAI(config: Partial<AgentConfig>): Promise<Partial<AgentConfig>> {
+    try {
+      // Generate description if missing
+      if (!config.description && config.name) {
+        const prompt = `Generate a concise, professional description for an AI agent named "${config.name}"
+        in the "${config.group || 'default'}" group. Keep it under 100 characters and describe what the agent might do.`;
+
+        const response = await this.llm.invoke([
+          new SystemMessage('You generate brief, professional descriptions for AI agents.'),
+          new HumanMessage(prompt)
+        ]);
+
+        if (typeof response.content === 'string') {
+          config.description = response.content.replace(/"/g, '').trim();
+        }
+      }
+
+      // Set smart defaults
+      if (!config.group) config.group = 'default';
+      if (!config.mode) config.mode = 'interactive';
+      if (!config.interval) config.interval = 5;
+      if (!config.max_iterations) config.max_iterations = 15;
+
+      return config;
+    } catch (error) {
+      logger.error(`Failed to enhance config with AI: ${error}`);
+      return config;
+    }
+  }
+
+  /**
+   * Generate helpful error messages using AI
+   */
+  private async generateErrorMessage(error: any, input: string | BaseMessage | BaseMessage[]): Promise<string> {
+    const content = this.extractContent(input);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+
+    const prompt = `A user tried to perform a configuration operation but encountered an error.
+
+User request: "${content}"
+Error: ${errorMsg}
+
+Generate a helpful, user-friendly error message that:
+1. Acknowledges what they were trying to do
+2. Explains what went wrong in simple terms
+3. Suggests what they can try instead
+4. Keeps a helpful, professional tone
+
+Keep it concise but informative.`;
+
+    try {
+      const response = await this.llm.invoke([
+        new SystemMessage('You are a helpful assistant that explains errors in a user-friendly way.'),
+        new HumanMessage(prompt)
+      ]);
+
+      return typeof response.content === 'string'
+        ? `❌ ${response.content}`
+        : `❌ Configuration operation failed: ${errorMsg}`;
+    } catch (aiError) {
+      logger.error(`Failed to generate error message: ${aiError}`);
+      return `❌ Configuration operation failed: ${errorMsg}`;
+    }
+  }
+
+  /**
+   * Enhanced response formatting with AI assistance
+   */
+  private async formatResponseWithAI(response: ConfigResponse, originalInput: string): Promise<string> {
+    if (!response.success) {
+      return response.message;
+    }
+
+    // For successful operations, enhance the response with AI
+    try {
+      const prompt = `Format this configuration operation result in a user-friendly way:
+
+Original request: "${originalInput}"
+Operation result: ${JSON.stringify(response, null, 2)}
+
+Create a clear, conversational response that:
+1. Confirms what was accomplished
+2. Shows relevant details in an organized way
+3. Uses appropriate emojis for visual appeal
+4. Keeps it concise but informative
+
+Use markdown formatting for better readability.`;
+
+      const aiResponse = await this.llm.invoke([
+        new SystemMessage('You format technical responses in a user-friendly, conversational way.'),
+        new HumanMessage(prompt)
+      ]);
+
+      if (typeof aiResponse.content === 'string') {
+        return aiResponse.content;
+      }
+    } catch (error) {
+      logger.error(`Failed to format response with AI: ${error}`);
+    }
+
+    // Fallback to original formatting
+    return this.formatResponse(response);
+  }
+
+  // [Keep all the existing database methods: createAgent, readAgent, updateAgent, deleteAgent, listAgents]
+
+  /**
    * Creates a new agent configuration in the database
    */
-  private async createAgent(
-    config: Partial<AgentConfig>
-  ): Promise<ConfigResponse> {
+  private async createAgent(config: Partial<AgentConfig>): Promise<ConfigResponse> {
     try {
       // Validate required fields
       if (!config.name || !config.group || !config.description) {
         return {
           success: false,
-          message:
-            'Missing required fields: name, group, and description are required',
+          message: 'Missing required fields: name, group, and description are required',
           error: 'Validation error',
         };
       }
@@ -463,21 +551,14 @@ export class ConfigurationAgent extends BaseAgent {
   /**
    * Reads an agent configuration from the database
    */
-  private async readAgent(
-    agentId?: string,
-    agentName?: string
-  ): Promise<ConfigResponse> {
+  private async readAgent(agentId?: string, agentName?: string): Promise<ConfigResponse> {
     try {
       let query: Postgres.Query;
 
       if (agentId) {
-        query = new Postgres.Query('SELECT * FROM agents WHERE id = $1', [
-          agentId,
-        ]);
+        query = new Postgres.Query('SELECT * FROM agents WHERE id = $1', [agentId]);
       } else if (agentName) {
-        query = new Postgres.Query('SELECT * FROM agents WHERE name = $1', [
-          agentName,
-        ]);
+        query = new Postgres.Query('SELECT * FROM agents WHERE name = $1', [agentName]);
       } else {
         return {
           success: false,
@@ -591,10 +672,7 @@ export class ConfigurationAgent extends BaseAgent {
   /**
    * Deletes an agent configuration from the database
    */
-  private async deleteAgent(
-    agentId?: string,
-    agentName?: string
-  ): Promise<ConfigResponse> {
+  private async deleteAgent(agentId?: string, agentName?: string): Promise<ConfigResponse> {
     try {
       // First, find the agent to get its details for the response
       const existingAgent = await this.readAgent(agentId, agentName);
@@ -604,9 +682,7 @@ export class ConfigurationAgent extends BaseAgent {
 
       const agent = existingAgent.data as AgentConfig;
 
-      const query = new Postgres.Query('DELETE FROM agents WHERE id = $1', [
-        agent.id,
-      ]);
+      const query = new Postgres.Query('DELETE FROM agents WHERE id = $1', [agent.id]);
       await Postgres.query(query);
 
       logger.info(`ConfigurationAgent: Deleted agent "${agent.name}"`);
@@ -627,9 +703,7 @@ export class ConfigurationAgent extends BaseAgent {
   /**
    * Lists agent configurations from the database with optional filters
    */
-  private async listAgents(
-    filters?: Record<string, any>
-  ): Promise<ConfigResponse> {
+  private async listAgents(filters?: Record<string, any>): Promise<ConfigResponse> {
     try {
       let query: Postgres.Query;
 
@@ -651,7 +725,7 @@ export class ConfigurationAgent extends BaseAgent {
       } else {
         query = new Postgres.Query('SELECT * FROM agents ORDER BY name');
       }
-
+	  console.log("Query : ", query)
       const result = await Postgres.query<AgentConfig>(query);
 
       return {
@@ -670,7 +744,7 @@ export class ConfigurationAgent extends BaseAgent {
   }
 
   /**
-   * Formats the response for display
+   * Fallback response formatting (original method)
    */
   private formatResponse(response: ConfigResponse): string {
     if (!response.success) {

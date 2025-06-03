@@ -22,7 +22,7 @@ import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
 import { RpcProvider } from 'starknet';
 import { AgentSelector } from '../operators/agentSelector.js';
 import { OperatorRegistry } from '../operators/operatorRegistry.js';
-import { ConfigurationAgent } from 'agents/operators/configAgent.js';
+import { ConfigurationAgent } from '../operators/configAgent.js';
 
 /**
  * Represents an agent to be registered
