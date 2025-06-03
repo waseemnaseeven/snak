@@ -1,5 +1,10 @@
 import { BaseAgent, AgentType } from '../core/baseAgent.js';
-import { BaseMessage, AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import {
+  BaseMessage,
+  AIMessage,
+  HumanMessage,
+  SystemMessage,
+} from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 import { Postgres } from '@snakagent/database';
 import { logger } from '@snakagent/core';
@@ -105,7 +110,7 @@ export class ConfigurationAgent extends BaseAgent {
     super(
       'configuration-agent',
       AgentType.OPERATOR,
-      'I specialize in handling the project\'s database. I can list, modify, delete configurations as an example but I basically can do anything that is related to the database.'
+      "I specialize in handling the project's database. I can list, modify, delete configurations as an example but I basically can do anything that is related to the database."
     );
 
     this.debug = config.debug !== undefined ? config.debug : true;
@@ -116,11 +121,15 @@ export class ConfigurationAgent extends BaseAgent {
       modelName: llmConfig.modelName || 'gpt-4',
       temperature: llmConfig.temperature || 0.1,
       openAIApiKey: llmConfig.apiKey || process.env.OPENAI_API_KEY,
-      ...(llmConfig.baseURL && { configuration: { baseURL: llmConfig.baseURL } }),
+      ...(llmConfig.baseURL && {
+        configuration: { baseURL: llmConfig.baseURL },
+      }),
     });
 
     if (this.debug) {
-      logger.debug('ConfigurationAgent initialized with AI capabilities enabled');
+      logger.debug(
+        'ConfigurationAgent initialized with AI capabilities enabled'
+      );
     }
   }
 
@@ -134,7 +143,9 @@ export class ConfigurationAgent extends BaseAgent {
       const registry = OperatorRegistry.getInstance();
       registry.register(this.id, this);
 
-      logger.debug('ConfigurationAgent initialized and registered successfully');
+      logger.debug(
+        'ConfigurationAgent initialized and registered successfully'
+      );
     } catch (error) {
       logger.error(`ConfigurationAgent initialization failed: ${error}`);
       throw new Error(`ConfigurationAgent initialization failed: ${error}`);
@@ -149,7 +160,9 @@ export class ConfigurationAgent extends BaseAgent {
    * Main execution entry point for the agent
    * Uses AI to understand the input and determine the appropriate action
    */
-  public async execute(input: string | BaseMessage | BaseMessage[]): Promise<AIMessage> {
+  public async execute(
+    input: string | BaseMessage | BaseMessage[]
+  ): Promise<AIMessage> {
     try {
       const content = this.extractContent(input);
 
@@ -161,7 +174,9 @@ export class ConfigurationAgent extends BaseAgent {
       const aiAnalysis = await this.analyzeRequestWithAI(content);
 
       if (this.debug) {
-        logger.debug(`ConfigurationAgent: AI Analysis: ${JSON.stringify(aiAnalysis, null, 2)}`);
+        logger.debug(
+          `ConfigurationAgent: AI Analysis: ${JSON.stringify(aiAnalysis, null, 2)}`
+        );
       }
 
       // Convert AI analysis to config request
@@ -240,12 +255,13 @@ Available operations:
     try {
       const response = await this.llm.invoke([
         new SystemMessage(systemPrompt),
-        new HumanMessage(`Analyze this request: "${content}"`)
+        new HumanMessage(`Analyze this request: "${content}"`),
       ]);
 
-      const aiResponse = typeof response.content === 'string'
-        ? response.content
-        : JSON.stringify(response.content);
+      const aiResponse =
+        typeof response.content === 'string'
+          ? response.content
+          : JSON.stringify(response.content);
 
       return JSON.parse(aiResponse);
     } catch (error) {
@@ -261,21 +277,28 @@ Available operations:
   private fallbackAnalysis(content: string): AIAnalysis {
     const lowerContent = content.toLowerCase();
 
-    if (lowerContent.includes('create') || lowerContent.includes('add') || lowerContent.includes('new agent')) {
+    if (
+      lowerContent.includes('create') ||
+      lowerContent.includes('add') ||
+      lowerContent.includes('new agent')
+    ) {
       return {
         operation: ConfigOperation.CREATE,
         parameters: { config: {} },
         confidence: 50,
         missingInfo: ['name', 'group', 'description'],
-        reasoning: 'Fallback analysis detected create operation'
+        reasoning: 'Fallback analysis detected create operation',
       };
-    } else if (lowerContent.includes('list') || lowerContent.includes('show all')) {
+    } else if (
+      lowerContent.includes('list') ||
+      lowerContent.includes('show all')
+    ) {
       return {
         operation: ConfigOperation.LIST,
         parameters: {},
         confidence: 70,
         missingInfo: [],
-        reasoning: 'Fallback analysis detected list operation'
+        reasoning: 'Fallback analysis detected list operation',
       };
     }
 
@@ -284,7 +307,7 @@ Available operations:
       parameters: {},
       confidence: 30,
       missingInfo: [],
-      reasoning: 'Fallback analysis defaulting to list operation'
+      reasoning: 'Fallback analysis defaulting to list operation',
     };
   }
 
@@ -312,7 +335,10 @@ Available operations:
   ): Promise<ConfigResponse> {
     // Check if we need clarification for missing information
     if (request.missingInfo && request.missingInfo.length > 0) {
-      const clarification = await this.generateClarificationQuestion(request, originalInput);
+      const clarification = await this.generateClarificationQuestion(
+        request,
+        originalInput
+      );
       return {
         success: false,
         message: clarification,
@@ -332,7 +358,11 @@ Available operations:
       case ConfigOperation.READ:
         return await this.readAgent(request.agentId, request.agentName);
       case ConfigOperation.UPDATE:
-        return await this.updateAgent(request.agentId, request.agentName, request.config!);
+        return await this.updateAgent(
+          request.agentId,
+          request.agentName,
+          request.config!
+        );
       case ConfigOperation.DELETE:
         return await this.deleteAgent(request.agentId, request.agentName);
       case ConfigOperation.LIST:
@@ -364,8 +394,10 @@ Keep it concise and friendly.`;
 
     try {
       const response = await this.llm.invoke([
-        new SystemMessage('You are a helpful assistant that asks clarifying questions.'),
-        new HumanMessage(prompt)
+        new SystemMessage(
+          'You are a helpful assistant that asks clarifying questions.'
+        ),
+        new HumanMessage(prompt),
       ]);
 
       return typeof response.content === 'string'
@@ -380,7 +412,9 @@ Keep it concise and friendly.`;
   /**
    * Use AI to enhance configuration with smart defaults
    */
-  private async enhanceConfigWithAI(config: Partial<AgentConfig>): Promise<Partial<AgentConfig>> {
+  private async enhanceConfigWithAI(
+    config: Partial<AgentConfig>
+  ): Promise<Partial<AgentConfig>> {
     try {
       // Generate description if missing
       if (!config.description && config.name) {
@@ -388,8 +422,10 @@ Keep it concise and friendly.`;
         in the "${config.group || 'default'}" group. Keep it under 100 characters and describe what the agent might do.`;
 
         const response = await this.llm.invoke([
-          new SystemMessage('You generate brief, professional descriptions for AI agents.'),
-          new HumanMessage(prompt)
+          new SystemMessage(
+            'You generate brief, professional descriptions for AI agents.'
+          ),
+          new HumanMessage(prompt),
         ]);
 
         if (typeof response.content === 'string') {
@@ -413,7 +449,10 @@ Keep it concise and friendly.`;
   /**
    * Generate helpful error messages using AI
    */
-  private async generateErrorMessage(error: any, input: string | BaseMessage | BaseMessage[]): Promise<string> {
+  private async generateErrorMessage(
+    error: any,
+    input: string | BaseMessage | BaseMessage[]
+  ): Promise<string> {
     const content = this.extractContent(input);
     const errorMsg = error instanceof Error ? error.message : String(error);
 
@@ -432,8 +471,10 @@ Keep it concise but informative.`;
 
     try {
       const response = await this.llm.invoke([
-        new SystemMessage('You are a helpful assistant that explains errors in a user-friendly way.'),
-        new HumanMessage(prompt)
+        new SystemMessage(
+          'You are a helpful assistant that explains errors in a user-friendly way.'
+        ),
+        new HumanMessage(prompt),
       ]);
 
       return typeof response.content === 'string'
@@ -448,7 +489,10 @@ Keep it concise but informative.`;
   /**
    * Enhanced response formatting with AI assistance
    */
-  private async formatResponseWithAI(response: ConfigResponse, originalInput: string): Promise<string> {
+  private async formatResponseWithAI(
+    response: ConfigResponse,
+    originalInput: string
+  ): Promise<string> {
     if (!response.success) {
       return response.message;
     }
@@ -469,8 +513,10 @@ Create a clear, conversational response that:
 Use markdown formatting for better readability.`;
 
       const aiResponse = await this.llm.invoke([
-        new SystemMessage('You format technical responses in a user-friendly, conversational way.'),
-        new HumanMessage(prompt)
+        new SystemMessage(
+          'You format technical responses in a user-friendly, conversational way.'
+        ),
+        new HumanMessage(prompt),
       ]);
 
       if (typeof aiResponse.content === 'string') {
@@ -489,13 +535,16 @@ Use markdown formatting for better readability.`;
   /**
    * Creates a new agent configuration in the database
    */
-  private async createAgent(config: Partial<AgentConfig>): Promise<ConfigResponse> {
+  private async createAgent(
+    config: Partial<AgentConfig>
+  ): Promise<ConfigResponse> {
     try {
       // Validate required fields
       if (!config.name || !config.group || !config.description) {
         return {
           success: false,
-          message: 'Missing required fields: name, group, and description are required',
+          message:
+            'Missing required fields: name, group, and description are required',
           error: 'Validation error',
         };
       }
@@ -551,14 +600,21 @@ Use markdown formatting for better readability.`;
   /**
    * Reads an agent configuration from the database
    */
-  private async readAgent(agentId?: string, agentName?: string): Promise<ConfigResponse> {
+  private async readAgent(
+    agentId?: string,
+    agentName?: string
+  ): Promise<ConfigResponse> {
     try {
       let query: Postgres.Query;
 
       if (agentId) {
-        query = new Postgres.Query('SELECT * FROM agents WHERE id = $1', [agentId]);
+        query = new Postgres.Query('SELECT * FROM agents WHERE id = $1', [
+          agentId,
+        ]);
       } else if (agentName) {
-        query = new Postgres.Query('SELECT * FROM agents WHERE name = $1', [agentName]);
+        query = new Postgres.Query('SELECT * FROM agents WHERE name = $1', [
+          agentName,
+        ]);
       } else {
         return {
           success: false,
@@ -672,7 +728,10 @@ Use markdown formatting for better readability.`;
   /**
    * Deletes an agent configuration from the database
    */
-  private async deleteAgent(agentId?: string, agentName?: string): Promise<ConfigResponse> {
+  private async deleteAgent(
+    agentId?: string,
+    agentName?: string
+  ): Promise<ConfigResponse> {
     try {
       // First, find the agent to get its details for the response
       const existingAgent = await this.readAgent(agentId, agentName);
@@ -682,7 +741,9 @@ Use markdown formatting for better readability.`;
 
       const agent = existingAgent.data as AgentConfig;
 
-      const query = new Postgres.Query('DELETE FROM agents WHERE id = $1', [agent.id]);
+      const query = new Postgres.Query('DELETE FROM agents WHERE id = $1', [
+        agent.id,
+      ]);
       await Postgres.query(query);
 
       logger.info(`ConfigurationAgent: Deleted agent "${agent.name}"`);
@@ -703,7 +764,9 @@ Use markdown formatting for better readability.`;
   /**
    * Lists agent configurations from the database with optional filters
    */
-  private async listAgents(filters?: Record<string, any>): Promise<ConfigResponse> {
+  private async listAgents(
+    filters?: Record<string, any>
+  ): Promise<ConfigResponse> {
     try {
       let query: Postgres.Query;
 
@@ -725,7 +788,7 @@ Use markdown formatting for better readability.`;
       } else {
         query = new Postgres.Query('SELECT * FROM agents ORDER BY name');
       }
-	  console.log("Query : ", query)
+      console.log('Query : ', query);
       const result = await Postgres.query<AgentConfig>(query);
 
       return {
