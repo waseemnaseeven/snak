@@ -1,42 +1,19 @@
 import { BaseAgent, AgentType } from '../../core/baseAgent.js';
 import { BaseMessage, AIMessage, HumanMessage } from '@langchain/core/messages';
-import { ChatOpenAI } from '@langchain/openai';
+import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { logger } from '@snakagent/core';
 import { OperatorRegistry } from '../operatorRegistry.js';
 import { getConfigAgentTools } from './configAgentTools.js';
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { configurationAgentSystemPrompt } from '../../../prompt/configAgentPrompts.js';
-
-/**
- * Interface defining the configuration structure for an agent
- */
-export interface AgentConfig {
-  id?: string;
-  name: string;
-  group: string;
-  description: string;
-  lore?: string[];
-  objectives?: string[];
-  knowledge?: string[];
-  system_prompt?: string;
-  interval?: number;
-  plugins?: string[];
-  memory?: any;
-  mode?: string;
-  max_iterations?: number;
-}
+import { ModelSelector } from '../modelSelector.js';
 
 /**
  * Interface defining the configuration options for the ConfigurationAgent
  */
 export interface ConfigurationAgentConfig {
   debug?: boolean;
-  llmConfig?: {
-    modelName?: string;
-    temperature?: number;
-    apiKey?: string;
-    baseURL?: string;
-  };
+  modelType?: 'fast' | 'smart' | 'cheap';
 }
 
 /**
@@ -44,9 +21,10 @@ export interface ConfigurationAgentConfig {
  */
 export class ConfigurationAgent extends BaseAgent {
   private debug: boolean = false;
-  private llm: ChatOpenAI;
+  private llm: BaseChatModel;
   private reactAgent: any;
   private tools: any[];
+  private modelType: string;
 
   constructor(config: ConfigurationAgentConfig = {}) {
     super(
@@ -56,19 +34,7 @@ export class ConfigurationAgent extends BaseAgent {
     );
 
     this.debug = config.debug !== undefined ? config.debug : true;
-
-    // Initialize LLM
-    const llmConfig = config.llmConfig || {};
-    this.llm = new ChatOpenAI({
-      modelName: llmConfig.modelName || 'gpt-4',
-      temperature: llmConfig.temperature || 0.1,
-      openAIApiKey: llmConfig.apiKey || process.env.OPENAI_API_KEY,
-      ...(llmConfig.baseURL && {
-        configuration: { baseURL: llmConfig.baseURL },
-      }),
-    });
-
-    // Get configuration tools
+    this.modelType = config.modelType || 'smart'; // Default to smart model
     this.tools = getConfigAgentTools();
 
     if (this.debug) {
@@ -85,6 +51,15 @@ export class ConfigurationAgent extends BaseAgent {
    */
   public async init(): Promise<void> {
     try {
+      // Get the model selector instance
+      const modelSelector = ModelSelector.getInstance();
+      if (!modelSelector) {
+        throw new Error('ModelSelector is not initialized');
+      }
+
+      // Get the appropriate model
+      this.llm = await modelSelector.getModelForTask([], this.modelType);
+
       // Create React agent with tools
       this.reactAgent = createReactAgent({
         llm: this.llm,

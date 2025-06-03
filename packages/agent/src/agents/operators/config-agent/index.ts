@@ -1,6 +1,5 @@
 export {
   ConfigurationAgent,
-  type AgentConfig,
   type ConfigurationAgentConfig,
 } from './configAgent.js';
 export {
