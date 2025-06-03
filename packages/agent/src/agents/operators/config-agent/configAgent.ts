@@ -34,7 +34,7 @@ export class ConfigurationAgent extends BaseAgent {
     );
 
     this.debug = config.debug !== undefined ? config.debug : true;
-    this.modelType = config.modelType || 'smart'; // Default to smart model
+    this.modelType = config.modelType || 'smart';
     this.tools = getConfigAgentTools();
 
     if (this.debug) {
@@ -51,23 +51,19 @@ export class ConfigurationAgent extends BaseAgent {
    */
   public async init(): Promise<void> {
     try {
-      // Get the model selector instance
       const modelSelector = ModelSelector.getInstance();
       if (!modelSelector) {
         throw new Error('ModelSelector is not initialized');
       }
 
-      // Get the appropriate model
       this.llm = await modelSelector.getModelForTask([], this.modelType);
 
-      // Create React agent with tools
       this.reactAgent = createReactAgent({
         llm: this.llm,
         tools: this.tools,
         stateModifier: configurationAgentSystemPrompt(),
       });
 
-      // Register with operator registry
       const registry = OperatorRegistry.getInstance();
       registry.register(this.id, this);
 
@@ -92,7 +88,6 @@ export class ConfigurationAgent extends BaseAgent {
     config?: Record<string, any>
   ): Promise<AIMessage> {
     try {
-      // Extract the original human message content
       const content = this.extractOriginalUserContent(input, config);
 
       if (this.debug) {
@@ -108,12 +103,10 @@ export class ConfigurationAgent extends BaseAgent {
         throw new Error('React agent not initialized. Call init() first.');
       }
 
-      // Execute with React agent using the original user content
       const result = await this.reactAgent.invoke({
         messages: [new HumanMessage(content)],
       });
 
-      // Extract final response
       const messages = result.messages || [];
       const lastMessage = messages[messages.length - 1];
 
@@ -161,7 +154,6 @@ export class ConfigurationAgent extends BaseAgent {
     input: string | BaseMessage | BaseMessage[],
     config?: Record<string, any>
   ): string {
-    // First priority: originalUserQuery from config (set by SupervisorAgent)
     if (
       config?.originalUserQuery &&
       typeof config.originalUserQuery === 'string'
@@ -174,9 +166,7 @@ export class ConfigurationAgent extends BaseAgent {
       return config.originalUserQuery;
     }
 
-    // Second priority: originalUserQuery from message additional_kwargs
     if (Array.isArray(input)) {
-      // Look through messages for originalUserQuery in additional_kwargs
       for (const message of input) {
         if (
           message.additional_kwargs?.originalUserQuery &&
@@ -191,7 +181,6 @@ export class ConfigurationAgent extends BaseAgent {
         }
       }
 
-      // Look for the first HumanMessage in the array
       for (const message of input) {
         if (
           message instanceof HumanMessage &&
@@ -206,7 +195,6 @@ export class ConfigurationAgent extends BaseAgent {
         }
       }
 
-      // Fallback to last message content
       const lastMessage = input[input.length - 1];
       const content =
         typeof lastMessage.content === 'string'
@@ -219,9 +207,7 @@ export class ConfigurationAgent extends BaseAgent {
       return content;
     }
 
-    // Handle single BaseMessage
     if (input instanceof BaseMessage) {
-      // Check for originalUserQuery in additional_kwargs first
       if (
         input.additional_kwargs?.originalUserQuery &&
         typeof input.additional_kwargs.originalUserQuery === 'string'
@@ -234,7 +220,6 @@ export class ConfigurationAgent extends BaseAgent {
         return input.additional_kwargs.originalUserQuery;
       }
 
-      // Use the message content
       const content =
         typeof input.content === 'string'
           ? input.content
@@ -246,7 +231,6 @@ export class ConfigurationAgent extends BaseAgent {
       return content;
     }
 
-    // Handle string input
     if (typeof input === 'string') {
       if (this.debug) {
         logger.debug(`ConfigurationAgent: Using string input directly`);
@@ -254,7 +238,6 @@ export class ConfigurationAgent extends BaseAgent {
       return input;
     }
 
-    // Final fallback
     if (this.debug) {
       logger.debug(`ConfigurationAgent: Using fallback content extraction`);
     }
