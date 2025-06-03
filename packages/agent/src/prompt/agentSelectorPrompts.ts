@@ -29,12 +29,18 @@ AVAILABLE AGENTS:
 
 SNAK AGENTS:
 [
-${agentDescriptions.split('\n').filter(line => line.toLowerCase().includes('snak')).join('\n')}
+${agentDescriptions
+  .split('\n')
+  .filter((line) => line.toLowerCase().includes('snak'))
+  .join('\n')}
 ]
 
 OPERATOR AGENTS:
 [
-${agentDescriptions.split('\n').filter(line => !line.toLowerCase().includes('snak')).join('\n')}
+${agentDescriptions
+  .split('\n')
+  .filter((line) => !line.toLowerCase().includes('snak'))
+  .join('\n')}
 ]
 
 INSTRUCTIONS:
