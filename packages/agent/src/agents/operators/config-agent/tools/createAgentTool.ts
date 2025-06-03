@@ -5,40 +5,67 @@ import { logger } from '@snakagent/core';
 import { AgentConfig } from '../../configAgent.js';
 
 const CreateAgentSchema = z.object({
-  name: z.string().describe('The name of the agent to create'),
-  group: z.string().describe('The group/category of the agent'),
-  description: z.string().describe('A description of what the agent does'),
+  name: z
+    .string()
+    .describe(
+      'The name of the new agent to create (extract from user request)'
+    ),
+  group: z
+    .string()
+    .describe(
+      'The group/category of the agent (e.g., "trading", "rpc", "general")'
+    ),
+  description: z
+    .string()
+    .describe('A clear description of what the agent does and its purpose'),
   lore: z
     .array(z.string())
     .optional()
-    .describe('Optional lore/background information'),
+    .nullable()
+    .describe('Optional background story or lore entries for the agent'),
   objectives: z
     .array(z.string())
     .optional()
-    .describe('Optional objectives for the agent'),
+    .nullable()
+    .describe('Optional specific goals and objectives for the agent'),
   knowledge: z
     .array(z.string())
     .optional()
-    .describe('Optional knowledge base entries'),
-  system_prompt: z.string().optional().describe('Optional system prompt'),
-  interval: z.number().default(5).describe('Execution interval in seconds'),
+    .nullable()
+    .describe('Optional knowledge base entries that the agent should know'),
+  system_prompt: z
+    .string()
+    .optional()
+    .nullable()
+    .describe('Optional custom system prompt to define agent behavior'),
+  interval: z
+    .number()
+    .optional()
+    .nullable()
+    .describe('Execution interval in seconds (default: 5)'),
   plugins: z
     .array(z.string())
     .optional()
-    .describe('Optional plugins to enable'),
+    .nullable()
+    .describe('Optional list of plugins to enable for this agent'),
   mode: z
     .string()
-    .default('interactive')
-    .describe('Agent mode (interactive, autonomous, hybrid)'),
+    .optional()
+    .nullable()
+    .describe(
+      'Agent execution mode: "interactive", "autonomous", or "hybrid" (default: interactive)'
+    ),
   max_iterations: z
     .number()
-    .default(15)
-    .describe('Maximum iterations per execution'),
+    .optional()
+    .nullable()
+    .describe('Maximum number of iterations per execution cycle (default: 15)'),
 });
 
 export const createAgentTool = new DynamicStructuredTool({
   name: 'create_agent',
-  description: 'Create a new agent configuration in the database',
+  description:
+    'Create/add/make a new agent configuration. Use when user wants to create, add, or make a new agent with specified properties.',
   schema: CreateAgentSchema,
   func: async (input) => {
     try {
@@ -56,11 +83,11 @@ export const createAgentTool = new DynamicStructuredTool({
           input.objectives || null,
           input.knowledge || null,
           input.system_prompt || null,
-          input.interval,
+          input.interval || 5,
           input.plugins || null,
           null, // memory - will be set to default
-          input.mode,
-          input.max_iterations,
+          input.mode || 'interactive',
+          input.max_iterations || 15,
         ]
       );
 

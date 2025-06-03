@@ -5,40 +5,98 @@ import { logger } from '@snakagent/core';
 import { AgentConfig } from '../../configAgent.js';
 
 const UpdateAgentSchema = z.object({
-  identifier: z.string().describe('Agent ID or name to update'),
+  identifier: z
+    .string()
+    .describe(
+      'The current agent ID or name to update (extract from user request, usually in quotes like "Ethereum RPC Agent")'
+    ),
   searchBy: z
     .enum(['id', 'name'])
-    .default('name')
-    .describe('Search by ID or name'),
+    .optional()
+    .nullable()
+    .describe(
+      'Search by "id" when user provides an ID, or "name" when user provides agent name (default: name)'
+    ),
   updates: z
     .object({
-      name: z.string().optional().describe('New name for the agent'),
-      group: z.string().optional().describe('New group for the agent'),
-      description: z.string().optional().describe('New description'),
-      lore: z.array(z.string()).optional().describe('New lore entries'),
-      objectives: z.array(z.string()).optional().describe('New objectives'),
+      name: z
+        .string()
+        .optional()
+        .nullable()
+        .describe(
+          'New name for the agent (use when user wants to rename/change name)'
+        ),
+      group: z
+        .string()
+        .optional()
+        .nullable()
+        .describe(
+          'New group for the agent (use when user wants to change group)'
+        ),
+      description: z
+        .string()
+        .optional()
+        .nullable()
+        .describe(
+          'New description (use when user wants to change/update description)'
+        ),
+      lore: z
+        .array(z.string())
+        .optional()
+        .nullable()
+        .describe('New lore entries (background story elements)'),
+      objectives: z
+        .array(z.string())
+        .optional()
+        .nullable()
+        .describe('New objectives (goals for the agent)'),
       knowledge: z
         .array(z.string())
         .optional()
-        .describe('New knowledge entries'),
-      system_prompt: z.string().optional().describe('New system prompt'),
-      interval: z.number().optional().describe('New execution interval'),
-      plugins: z.array(z.string()).optional().describe('New plugins list'),
-      mode: z.string().optional().describe('New agent mode'),
-      max_iterations: z.number().optional().describe('New max iterations'),
+        .nullable()
+        .describe('New knowledge entries (information the agent should know)'),
+      system_prompt: z
+        .string()
+        .optional()
+        .nullable()
+        .describe(
+          'New system prompt (use when user wants to change agent behavior/prompt)'
+        ),
+      interval: z
+        .number()
+        .optional()
+        .nullable()
+        .describe('New execution interval in milliseconds'),
+      plugins: z
+        .array(z.string())
+        .optional()
+        .nullable()
+        .describe('New plugins list'),
+      mode: z
+        .string()
+        .optional()
+        .nullable()
+        .describe('New agent mode (execution mode)'),
+      max_iterations: z
+        .number()
+        .optional()
+        .nullable()
+        .describe('New maximum iterations limit'),
     })
-    .describe('Fields to update'),
+    .describe('Object containing only the fields that need to be updated'),
 });
 
 export const updateAgentTool = new DynamicStructuredTool({
   name: 'update_agent',
-  description: 'Update an existing agent configuration',
+  description:
+    'Update/modify/change/rename specific properties of an existing agent configuration. Use when user wants to modify, change, update, edit, or rename any agent property like name, description, group, etc.',
   schema: UpdateAgentSchema,
   func: async (input) => {
     try {
       // First, find the agent
       let findQuery: Postgres.Query;
-      if (input.searchBy === 'id') {
+      const searchBy = input.searchBy || 'name';
+      if (searchBy === 'id') {
         findQuery = new Postgres.Query('SELECT * FROM agents WHERE id = $1', [
           input.identifier,
         ]);
@@ -52,7 +110,7 @@ export const updateAgentTool = new DynamicStructuredTool({
       if (existingAgent.length === 0) {
         return JSON.stringify({
           success: false,
-          message: `Agent not found with ${input.searchBy}: ${input.identifier}`,
+          message: `Agent not found with ${searchBy}: ${input.identifier}`,
         });
       }
 

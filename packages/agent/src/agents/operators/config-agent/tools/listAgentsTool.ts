@@ -7,22 +7,49 @@ import { AgentConfig } from '../../configAgent.js';
 const ListAgentsSchema = z.object({
   filters: z
     .object({
-      group: z.string().optional().describe('Filter by group'),
-      mode: z.string().optional().describe('Filter by mode'),
+      group: z
+        .string()
+        .optional()
+        .nullable()
+        .describe(
+          'Filter agents by specific group (use when user wants agents from a particular group)'
+        ),
+      mode: z
+        .string()
+        .optional()
+        .nullable()
+        .describe(
+          'Filter agents by execution mode (use when user wants agents with specific mode)'
+        ),
       name_contains: z
         .string()
         .optional()
-        .describe('Filter by name containing text'),
+        .nullable()
+        .describe(
+          'Filter agents whose names contain this text (use for partial name searches)'
+        ),
     })
     .optional()
-    .describe('Optional filters to apply'),
-  limit: z.number().optional().describe('Maximum number of agents to return'),
-  offset: z.number().optional().describe('Number of agents to skip'),
+    .nullable()
+    .describe('Optional filters to narrow down the agent list'),
+  limit: z
+    .number()
+    .optional()
+    .nullable()
+    .describe(
+      'Maximum number of agents to return (use when user specifies a limit)'
+    ),
+  offset: z
+    .number()
+    .optional()
+    .nullable()
+    .describe('Number of agents to skip for pagination'),
 });
 
 export const listAgentsTool = new DynamicStructuredTool({
   name: 'list_agents',
-  description: 'List agent configurations with optional filters',
+  description:
+    'List/show/get all agent configurations with optional filtering. Use when user wants to see multiple agents, all agents, or find agents matching certain criteria.',
   schema: ListAgentsSchema,
   func: async (input) => {
     try {

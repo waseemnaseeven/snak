@@ -5,24 +5,36 @@ import { logger } from '@snakagent/core';
 import { AgentConfig } from '../../configAgent.js';
 
 const DeleteAgentSchema = z.object({
-  identifier: z.string().describe('Agent ID or name to delete'),
+  identifier: z
+    .string()
+    .describe(
+      'The agent ID or name to delete (extract exact name from user request, usually in quotes like "Ethereum RPC Agent")'
+    ),
   searchBy: z
     .enum(['id', 'name'])
-    .default('name')
-    .describe('Search by ID or name'),
+    .optional()
+    .nullable()
+    .describe(
+      'Search by "id" when user provides an ID, or "name" when user provides agent name (default: name)'
+    ),
   confirm: z
     .boolean()
-    .default(false)
-    .describe('Confirmation to delete the agent'),
+    .optional()
+    .nullable()
+    .describe(
+      'Confirmation to proceed with deletion (automatically set to true when user clearly intends to delete)'
+    ),
 });
 
 export const deleteAgentTool = new DynamicStructuredTool({
   name: 'delete_agent',
-  description: 'Delete an agent configuration from the database',
+  description:
+    'Delete/remove/destroy an agent configuration permanently. Use when user wants to delete, remove, or destroy an agent completely.',
   schema: DeleteAgentSchema,
   func: async (input) => {
     try {
-      if (!input.confirm) {
+      const confirm = input.confirm ?? true;
+      if (!confirm) {
         return JSON.stringify({
           success: false,
           message:
@@ -32,7 +44,8 @@ export const deleteAgentTool = new DynamicStructuredTool({
 
       // First, find the agent
       let findQuery: Postgres.Query;
-      if (input.searchBy === 'id') {
+      const searchBy = input.searchBy || 'name';
+      if (searchBy === 'id') {
         findQuery = new Postgres.Query('SELECT * FROM agents WHERE id = $1', [
           input.identifier,
         ]);
@@ -46,7 +59,7 @@ export const deleteAgentTool = new DynamicStructuredTool({
       if (existingAgent.length === 0) {
         return JSON.stringify({
           success: false,
-          message: `Agent not found with ${input.searchBy}: ${input.identifier}`,
+          message: `Agent not found with ${searchBy}: ${input.identifier}`,
         });
       }
 

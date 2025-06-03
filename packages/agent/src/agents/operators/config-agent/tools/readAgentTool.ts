@@ -5,22 +5,31 @@ import { logger } from '@snakagent/core';
 import { AgentConfig } from '../../configAgent.js';
 
 const ReadAgentSchema = z.object({
-  identifier: z.string().describe('Agent ID or name to retrieve'),
+  identifier: z
+    .string()
+    .describe(
+      'The agent ID or name to retrieve (extract exact name from user request, usually in quotes like "Ethereum RPC Agent")'
+    ),
   searchBy: z
     .enum(['id', 'name'])
-    .default('name')
-    .describe('Search by ID or name'),
+    .optional()
+    .nullable()
+    .describe(
+      'Search by "id" when user provides an ID, or "name" when user provides agent name (default: name)'
+    ),
 });
 
 export const readAgentTool = new DynamicStructuredTool({
   name: 'read_agent',
-  description: 'Get details of a specific agent by ID or name',
+  description:
+    'Get/retrieve/show/view/find details and configuration of a specific agent by ID or name. Use when user wants to see information about a particular agent.',
   schema: ReadAgentSchema,
   func: async (input) => {
     try {
       let query: Postgres.Query;
+      const searchBy = input.searchBy || 'name';
 
-      if (input.searchBy === 'id') {
+      if (searchBy === 'id') {
         query = new Postgres.Query('SELECT * FROM agents WHERE id = $1', [
           input.identifier,
         ]);
@@ -41,7 +50,7 @@ export const readAgentTool = new DynamicStructuredTool({
       } else {
         return JSON.stringify({
           success: false,
-          message: `Agent not found with ${input.searchBy}: ${input.identifier}`,
+          message: `Agent not found with ${searchBy}: ${input.identifier}`,
         });
       }
     } catch (error) {

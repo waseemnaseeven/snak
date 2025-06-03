@@ -10,6 +10,7 @@ import { logger } from '@snakagent/core';
 import { OperatorRegistry } from '../operatorRegistry.js';
 import { getConfigAgentTools } from './configAgentTools.js';
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
+import { configurationAgentSystemPrompt } from '../../../prompt/configAgentPrompts.js';
 
 // Keep existing interfaces but simplify the implementation
 export interface AgentConfig {
@@ -86,23 +87,7 @@ export class ConfigurationAgent extends BaseAgent {
       this.reactAgent = createReactAgent({
         llm: this.llm,
         tools: this.tools,
-        stateModifier: `You are a Configuration Agent specialized in managing agent configurations.
-        
-Available operations:
-- CREATE: Create new agents (use create_agent tool)
-- READ: Get agent details (use read_agent tool)  
-- UPDATE: Modify existing agents (use update_agent tool)
-- DELETE: Remove agents (use delete_agent tool)
-- LIST: Show multiple agents (use list_agents tool)
-
-Instructions:
-1. Analyze the user's request to understand what they want to do
-2. Select the appropriate tool(s) to fulfill their request
-3. Use the tools intelligently based on the context
-4. Provide clear, helpful responses about the operations performed
-5. If information is missing, ask for clarification
-
-Always be specific about what you're doing and provide useful feedback about the results.`,
+        stateModifier: configurationAgentSystemPrompt(),
       });
 
       // Register with operator registry
