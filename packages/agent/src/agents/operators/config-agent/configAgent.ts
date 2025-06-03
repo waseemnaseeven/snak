@@ -3,7 +3,6 @@ import {
   BaseMessage,
   AIMessage,
   HumanMessage,
-  SystemMessage,
 } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 import { logger } from '@snakagent/core';
@@ -12,7 +11,9 @@ import { getConfigAgentTools } from './configAgentTools.js';
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { configurationAgentSystemPrompt } from '../../../prompt/configAgentPrompts.js';
 
-// Keep existing interfaces but simplify the implementation
+/**
+ * Interface defining the configuration structure for an agent
+ */
 export interface AgentConfig {
   id?: string;
   name: string;
@@ -29,6 +30,9 @@ export interface AgentConfig {
   max_iterations?: number;
 }
 
+/**
+ * Interface defining the configuration options for the ConfigurationAgent
+ */
 export interface ConfigurationAgentConfig {
   debug?: boolean;
   llmConfig?: {
@@ -48,6 +52,16 @@ export class ConfigurationAgent extends BaseAgent {
   private reactAgent: any;
   private tools: any[];
 
+  /**
+   * Creates a new instance of ConfigurationAgent
+   * @param {ConfigurationAgentConfig} config - Configuration options for the agent
+   * @param {boolean} config.debug - Enable debug mode for verbose logging
+   * @param {Object} config.llmConfig - Configuration for the language model
+   * @param {string} config.llmConfig.modelName - Name of the model to use
+   * @param {number} config.llmConfig.temperature - Temperature setting for the model
+   * @param {string} config.llmConfig.apiKey - OpenAI API key
+   * @param {string} config.llmConfig.baseURL - Base URL for API requests
+   */
   constructor(config: ConfigurationAgentConfig = {}) {
     super(
       'configuration-agent',
@@ -79,7 +93,9 @@ export class ConfigurationAgent extends BaseAgent {
   }
 
   /**
-   * Initialize the ConfigurationAgent with React agent and tools
+   * Initializes the ConfigurationAgent by setting up the React agent and registering with the operator registry
+   * @throws {Error} If initialization fails
+   * @returns {Promise<void>}
    */
   public async init(): Promise<void> {
     try {
@@ -104,7 +120,11 @@ export class ConfigurationAgent extends BaseAgent {
   }
 
   /**
-   * Execute configuration operations using React agent and tools
+   * Executes configuration operations using the React agent and tools
+   * @param {string | BaseMessage | BaseMessage[]} input - The input message(s) to process
+   * @param {Record<string, any>} config - Additional configuration options
+   * @returns {Promise<AIMessage>} The agent's response as an AIMessage
+   * @throws {Error} If execution fails or the agent is not initialized
    */
   public async execute(
     input: string | BaseMessage | BaseMessage[],
@@ -170,8 +190,11 @@ export class ConfigurationAgent extends BaseAgent {
   }
 
   /**
-   * Extract original user content from various input sources
-   * This method prioritizes the original user query over intermediate agent responses
+   * Extracts the original user content from various input sources
+   * @private
+   * @param {string | BaseMessage | BaseMessage[]} input - The input to extract content from
+   * @param {Record<string, any>} config - Additional configuration containing potential original user query
+   * @returns {string} The extracted user content
    */
   private extractOriginalUserContent(
     input: string | BaseMessage | BaseMessage[],
@@ -278,7 +301,10 @@ export class ConfigurationAgent extends BaseAgent {
   }
 
   /**
-   * Extract content from various input types (fallback method)
+   * Extracts content from various input types (fallback method)
+   * @private
+   * @param {string | BaseMessage | BaseMessage[]} input - The input to extract content from
+   * @returns {string} The extracted content
    */
   private extractContent(input: string | BaseMessage | BaseMessage[]): string {
     if (Array.isArray(input)) {
@@ -296,14 +322,16 @@ export class ConfigurationAgent extends BaseAgent {
   }
 
   /**
-   * Get available tools
+   * Returns the list of available tools for the configuration agent
+   * @returns {any[]} Array of available tools
    */
   public getTools() {
     return this.tools;
   }
 
   /**
-   * Cleanup method
+   * Cleans up resources and unregisters the agent from the operator registry
+   * @returns {Promise<void>}
    */
   public async dispose(): Promise<void> {
     try {
