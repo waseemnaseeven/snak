@@ -146,7 +146,7 @@ export const updateAgentTool = new DynamicStructuredTool({
       const result = await Postgres.query<AgentConfig>(updateQuery);
 
       if (result.length > 0) {
-        logger.info(`✅ Updated agent "${agent.name}" successfully`);
+        logger.info(`Updated agent "${agent.name}" successfully`);
         return JSON.stringify({
           success: true,
           message: `Agent "${agent.name}" updated successfully`,
