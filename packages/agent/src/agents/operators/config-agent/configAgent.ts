@@ -1,9 +1,5 @@
 import { BaseAgent, AgentType } from '../../core/baseAgent.js';
-import {
-  BaseMessage,
-  AIMessage,
-  HumanMessage,
-} from '@langchain/core/messages';
+import { BaseMessage, AIMessage, HumanMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 import { logger } from '@snakagent/core';
 import { OperatorRegistry } from '../operatorRegistry.js';
