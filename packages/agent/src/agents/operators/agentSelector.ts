@@ -306,11 +306,13 @@ export class AgentSelector extends BaseAgent {
           const name = info.name || id;
           const group = info.group || 'No group';
           const description = info.description || 'No description available';
+		  const type = info.type || 'No type available';
           return `  {
     "id": "${id}",
     "name": "${name}",
     "group": "${group}",
-    "description": "${description}"
+    "description": "${description}",
+	"type": "${type}"
   }`;
         })
         .join(',\n');
