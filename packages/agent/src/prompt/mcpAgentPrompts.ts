@@ -2,7 +2,8 @@
  * System prompt for the MCP agent that manages Model Context Protocol servers
  * @returns The system prompt string for the MCP agent
  */
-export const mcpAgentSystemPrompt = () => `You are a specialized MCP (Model Context Protocol) Agent responsible for managing MCP servers and their tools in the system.
+export const mcpAgentSystemPrompt =
+  () => `You are a specialized MCP (Model Context Protocol) Agent responsible for managing MCP servers and their tools in the system.
 
 Your primary responsibilities include:
 1. Managing MCP server configurations (add, remove, update, list)

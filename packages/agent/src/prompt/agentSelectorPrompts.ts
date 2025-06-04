@@ -9,7 +9,6 @@ export interface ClarificationData {
   clarificationQuestion: string;
 }
 
-
 export const agentSelectionSystemPrompt = (
   agentDescriptions: string
 ): string => {
@@ -24,8 +23,9 @@ export const agentSelectionSystemPrompt = (
     const formatAgents = (type: string) => {
       return agents
         .filter((agent: any) => agent.type === type)
-        .map((agent: any) =>
-          `ID: ${agent.id}
+        .map(
+          (agent: any) =>
+            `ID: ${agent.id}
 Name: ${agent.name}
 Description: ${agent.description}
 `

@@ -23,6 +23,7 @@ import { RpcProvider } from 'starknet';
 import { AgentSelector } from '../operators/agentSelector.js';
 import { OperatorRegistry } from '../operators/operatorRegistry.js';
 import { ConfigurationAgent } from '../operators/config-agent/configAgent.js';
+import { MCPAgent } from '../operators/mcp-agent/mcpAgent.js';
 
 /**
  * Represents an agent to be registered
@@ -54,6 +55,7 @@ export class SupervisorAgent extends BaseAgent {
   private memoryAgent: MemoryAgent | null = null;
   private workflowController: WorkflowController | null = null;
   private configAgent: ConfigurationAgent | null = null;
+  private mcpAgent: MCPAgent | null = null;
   private config: SupervisorAgentConfig;
   private operators: Map<string, IAgent> = new Map();
   private debug: boolean = false;
@@ -117,6 +119,7 @@ export class SupervisorAgent extends BaseAgent {
 
       this.updateAgentSelectorRegistry();
       await this.initializeConfigAgent();
+      await this.initializeMCPAgent();
 
       await this.initializeWorkflowController(true);
 
@@ -135,6 +138,12 @@ export class SupervisorAgent extends BaseAgent {
     logger.debug('SupervisorAgent: Initializing ConfigAgent...');
     this.configAgent = new ConfigurationAgent({ debug: this.debug });
     await this.configAgent.init();
+  }
+
+  private async initializeMCPAgent(): Promise<void> {
+    logger.debug('SupervisorAgent: Initializing MCPAgent...');
+    this.mcpAgent = new MCPAgent({ debug: this.debug });
+    await this.mcpAgent.init();
   }
 
   /**

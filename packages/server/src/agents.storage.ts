@@ -353,7 +353,7 @@ export class AgentStorage implements OnModuleInit {
         agent_config.memory.shortTermMemorySize || 5,
         agent_config.mode,
         15,
-        agent_config.mcpServers || '{}'
+        agent_config.mcpServers || '{}',
       ]
     );
     const q_res = await Postgres.query<AgentConfigSQL>(q);
