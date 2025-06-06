@@ -1,4 +1,4 @@
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TYPE memory AS (
     enabled BOOLEAN,
@@ -26,13 +26,6 @@ CREATE TABLE IF NOT EXISTS agents (
     mode VARCHAR(50) NOT NULL DEFAULT 'interactive',
     max_iterations INTEGER NOT NULL DEFAULT 15
 );
-
-CREATE TABLE IF NOT EXISTS agent_iterations (
-            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-            data JSONB NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-
-            );
 
 CREATE TABLE IF NOT EXISTS message (
             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

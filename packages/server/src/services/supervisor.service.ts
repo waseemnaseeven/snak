@@ -790,8 +790,9 @@ export class SupervisorService implements OnModuleInit {
         `SupervisorService: Executing request with config: ${JSON.stringify(config)}`
       );
       for await (const chunk of this.supervisor.execute(input, config)) {
-        if (chunk.last === true) {
+        if (chunk.final === true) {
           this.logger.debug('SupervisorService: Execution completed');
+          
           return chunk;
         }
         this.logger.debug(
@@ -819,9 +820,10 @@ export class SupervisorService implements OnModuleInit {
         `SupervisorService: Executing request with config: ${JSON.stringify(config)}`
       );
       for await (const chunk of this.supervisor.execute(input, config)) {
-        if (chunk.last === true) {
+        if (chunk.final === true) {
           this.logger.debug('SupervisorService: Execution completed');
-          return chunk;
+          yield chunk;
+          return ;
         }
         this.logger.debug(
           `SupervisorService: Received chunk: ${JSON.stringify(chunk)}`

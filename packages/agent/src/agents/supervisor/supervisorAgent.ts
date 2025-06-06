@@ -210,6 +210,14 @@ export class SupervisorAgent extends BaseAgent {
     }
   }
 
+  public async *executeAsyncGenerator(
+    input: BaseMessage[] | any,
+    config?: Record<string, any>
+  ): AsyncGenerator<any> {
+    console.log(`Execute : 7}`, input, config);
+    throw new Error('Method not implemented.');
+  }
+
   /**
    * Initializes the ModelSelector component
    * @private
@@ -581,8 +589,9 @@ export class SupervisorAgent extends BaseAgent {
         callPath,
         depthIndent
       )) {
-        if (chunk.last === true) {
-          return chunk;
+        if (chunk.final === true) {
+          yield chunk;
+          return;
         }
         yield chunk;
       }
@@ -594,8 +603,9 @@ export class SupervisorAgent extends BaseAgent {
         callPath,
         depthIndent
       )) {
-        if (chunk.last === true) {
-          return chunk;
+        if (chunk.final === true) {
+          yield chunk;
+          return;
         }
         yield chunk;
       }
@@ -757,8 +767,9 @@ export class SupervisorAgent extends BaseAgent {
         callPath,
         depthIndent
       )) {
-        if (chunk.last === true) {
-          return chunk;
+        if (chunk.final === true) {
+          yield chunk;
+          return;
         }
         yield chunk;
       }
@@ -957,9 +968,12 @@ export class SupervisorAgent extends BaseAgent {
         initialMessagesForWorkflow[0],
         workflowConfig
       )) {
-        if (chunk.last === true) {
-          return chunk;
+        if (chunk.final === true) {
+          logger.warn('FINAL CHUNK:');
+          yield chunk;
+          return;
         }
+        console.log(JSON.stringify(chunk));
         yield chunk;
       }
 

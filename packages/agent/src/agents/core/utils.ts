@@ -11,6 +11,12 @@ import {
   DynamicStructuredTool,
   StructuredTool,
 } from '@langchain/core/tools';
+import {
+  AgentIterationEvent,
+  FormattedOnChatModelEnd,
+  FormattedOnChatModelStart,
+  FormattedOnChatModelStream,
+} from './snakAgent.js';
 
 let databaseConnectionPromise: Promise<void> | null = null;
 let isConnected = false;
@@ -56,6 +62,112 @@ export async function initializeToolsList(
 
   return toolsList;
 }
+
+export interface ToolsChunk {
+  name: string;
+  args: string;
+  id: string;
+  index: number;
+  type: string;
+}
+
+export interface TokenChunk {
+  input: number;
+  output: number;
+  total: number;
+}
+
+export const FormatChunkIteration = (
+  chunk: any
+):
+  | FormattedOnChatModelStream
+  | FormattedOnChatModelEnd
+  | FormattedOnChatModelStart
+  | undefined => {
+  if (chunk.event === AgentIterationEvent.ON_CHAT_MODEL_STREAM) {
+    const tool = extractToolsFromIteration(chunk);
+    // if (!tool) {
+    //   logger.debug('No tool found in chunk iteration');
+    // } else {
+    //   console.log('tool found');
+    // }
+    const iteration: FormattedOnChatModelStream = {
+      chunk: {
+        content: chunk.data.chunk.content as string,
+        tools: tool,
+      },
+    };
+    return iteration;
+  }
+  if (chunk.event === AgentIterationEvent.ON_CHAT_MODEL_END) {
+    const content = chunk.data?.output?.kwargs?.content;
+    const iteration: FormattedOnChatModelEnd = {
+      iteration: {
+        name: chunk.name,
+        result: {
+          output: {
+            content: content || '',
+          },
+          input: {
+            messages: chunk.data.input.messages,
+          },
+        },
+      },
+    };
+    return iteration;
+  }
+  if (chunk.event === AgentIterationEvent.ON_CHAT_MODEL_START) {
+    const iteration: FormattedOnChatModelStart = {
+      iteration: {
+        name: chunk.name,
+        messages: chunk.data.input.messages,
+        metadata: chunk.data.input.metadata,
+      },
+    };
+    return iteration;
+  }
+  return undefined;
+};
+
+export const extractTokenChunkFromIteration = (
+  iteration: any
+): TokenChunk | undefined => {
+  if (!iteration || !iteration.data || !iteration.data.chunk) {
+    // logger.debug('No data found in iteration');
+    return undefined;
+  }
+  const token_chunk = iteration.data.chunk.kwargs.token_chunk as TokenChunk;
+  if (!token_chunk || !token_chunk.input) {
+    logger.debug('No token chunk found in iteration');
+    return undefined;
+  }
+  return {
+    input: token_chunk.input,
+    output: token_chunk.output || 0,
+    total: token_chunk.total || 0,
+  };
+};
+
+export const extractToolsFromIteration = (
+  iteration: any
+): ToolsChunk | undefined => {
+  const toolCallChunks = iteration?.data?.chunk?.tool_call_chunks;
+
+  if (!Array.isArray(toolCallChunks)) {
+    logger.debug('No valid tool_call_chunks found in iteration');
+    return undefined;
+  }
+
+  console.log(JSON.stringify(toolCallChunks, null, 2));
+  const lastTool = toolCallChunks[0] as ToolsChunk;
+
+  if (!lastTool?.name) {
+    // logger.debug('No name found in last tool chunk');
+    return undefined;
+  }
+  console.log('SAVED', lastTool.name);
+  return lastTool;
+};
 
 /**
  * Initializes database connection with singleton pattern to prevent duplicate connections

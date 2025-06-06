@@ -257,7 +257,7 @@ export class AgentSystem {
         typeof message === 'string' ? message : message.user_request;
       const response = 'ok';
       for await (const chunk of this.supervisorAgent.execute(content, config)) {
-        if (chunk.chunk.last === true) {
+        if (chunk.chunk.final === true) {
           logger.warn('LAST ITERATIONS IS SAVED!');
           await this.insert_message_into_db(message as Message, chunk.chunk);
         }

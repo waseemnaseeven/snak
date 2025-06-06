@@ -26,7 +26,7 @@ export interface IAgentService {
   handleUserRequest(
     agent: AgentSystem,
     userRequest: MessageRequest
-  ): Promise<AgentExecutionResponse>;
+  ): Promise<any>;
   getAgentStatus(agent: IAgent): Promise<{
     isReady: boolean;
     walletConnected: boolean;

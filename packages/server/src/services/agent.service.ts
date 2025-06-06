@@ -31,14 +31,6 @@ export class AgentService implements IAgentService {
   constructor(private readonly config: ConfigurationService) {}
 
   async handleUserRequest(
-    agent: AgentSystem,
-    userRequest: MessageRequest
-  ): Promise<AgentExecutionResponse>;
-  async handleUserRequest(
-    agent: any,
-    userRequest: MessageRequest
-  ): Promise<AgentExecutionResponse>;
-  async handleUserRequest(
     agent: AgentSystem | any,
     userRequest: MessageRequest
   ): Promise<AgentExecutionResponse> {
@@ -57,6 +49,66 @@ export class AgentService implements IAgentService {
         }
       } else {
         throw new Error('Invalid agent: missing execute method');
+      }
+
+      this.logger.debug({
+        message: 'Agent request processed successfully',
+        result: result,
+      });
+
+      return {
+        status: 'success',
+        data: result,
+      };
+    } catch (error: any) {
+      this.logger.error('Error processing agent request', {
+        error: {
+          message: error.message,
+          name: error.name,
+          stack: error.stack,
+        },
+        request: userRequest.user_request,
+      });
+
+      if (error instanceof AgentValidationError) {
+        throw error;
+      }
+
+      if (error.message?.includes('transaction')) {
+        throw new StarknetTransactionError('Failed to execute transaction', {
+          originalError: error.message,
+          cause: error,
+        });
+      }
+
+      throw new AgentExecutionError('Failed to process agent request', {
+        originalError: error.message,
+        cause: error,
+      });
+    }
+  }
+
+  async *handleUserRequestWebsocket(
+    agent: AgentSystem | any,
+    userRequest: MessageRequest
+  ): AsyncGenerator<any> {
+    this.logger.debug({
+      message: 'Processing agent request',
+      request: userRequest.user_request,
+    });
+    try {
+      let result: any;
+
+      for await (const chunk of agent.executeAsyncGenerator(userRequest.user_request)) {
+        if (chunk.final === true) {
+          this.logger.debug('SupervisorService: Execution completed');
+          yield chunk;
+          return;
+        }
+        this.logger.debug(
+          `SupervisorService: Received chunk: ${JSON.stringify(chunk)}`
+        );
+        yield chunk;
       }
 
       this.logger.debug({

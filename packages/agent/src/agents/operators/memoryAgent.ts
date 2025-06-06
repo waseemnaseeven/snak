@@ -22,6 +22,11 @@ export interface MemoryConfig {
  * Operator agent that manages memory and knowledge
  */
 export class MemoryAgent extends BaseAgent {
+
+    execute_from_supervisor(input: BaseMessage[] | any, config?: Record<string, any>): AsyncGenerator<any> {
+    console.log(input, config);
+    throw new Error('Method not implemented.');
+  }
   private config: MemoryConfig;
   private embeddings: CustomHuggingFaceEmbeddings;
   private memoryTools: any[] = [];

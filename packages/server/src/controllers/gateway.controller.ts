@@ -21,6 +21,7 @@ import {
   WebsocketGetAgentsConfigRequestDTO,
   WebsocketGetMessagesRequestDTO,
 } from '@snakagent/core';
+import { Postgres } from '@snakagent/database';
 
 // TODO remove this is for mock
 
@@ -87,14 +88,23 @@ export class MyGateway implements OnModuleInit {
         logger.error('Client not found');
         throw new ServerError('E01TA400');
       }
-      for await (const chunk of this.supervisorService.WebsocketexecuteRequest(
-        userRequest.request.user_request
+
+      for await (const chunk of this.agentService.handleUserRequestWebsocket(
+        agent,
+        userRequest.request
       )) {
+        if (chunk.final === true) {
+        const q= new Postgres.Query('INSERT INTO message (agent_id,user_request,agent_iteration)  VALUES($1, $2, $3)', [userRequest.request.agent_id, userRequest.request.user_request, chunk.chunk])
+        await Postgres.query(q);
+        logger.info("Message Saved in DB");
+
+        }
         const response: AgentResponse = {
           status: 'success',
           data: {
-            chunk: chunk.chunk,
-            isLastChunk: chunk.last,
+            ...chunk.chunk,
+            iteration_number: chunk.iteration_number,
+            isLastChunk: chunk.final,
           },
         };
         client.emit('onAgentRequest', response);

@@ -263,7 +263,8 @@ export class WorkflowController {
               logger.debug(
                 `WorkflowController[Exec:${execId}]: Node[${agentId}] - Calling agent.execute()...`
               );
-              const result = await agent.execute(state.messages, {
+
+              const result = agent.execute(state.messages, {
                 ...config,
                 isWorkflowNodeCall: true,
               });
@@ -921,10 +922,14 @@ export class WorkflowController {
           version: 'v2' as const,
         }
       )) {
+        console.log(iteration_number);
         if (i_count === 0) {
           langraph_run_id = chunk.run_id;
         }
-        if (chunk.name === 'Branch<agent>' && chunk.event === 'on_chain_start') {
+        if (
+          chunk.name === 'Branch<agent>' &&
+          chunk.event === 'on_chain_start'
+        ) {
           iteration_number++;
         }
         if (chunk.name === 'Branch<agent>' && chunk.event === 'on_chain_end') {
@@ -934,33 +939,45 @@ export class WorkflowController {
           iteration.push(chunk);
         }
         i_count++;
-        // ...
         console.log(chunk.event);
-        if (chunk.event === 'on_chat_model_stream') {
+        if (
+          chunk.event === 'on_chat_model_stream' ||
+          chunk.event === 'on_chat_model_start' ||
+          chunk.event === 'on_chat_model_end'
+        ) {
           // console.log(`${chunk.data.chunk.content}`);
-          yield { chunk: chunk.data.chunk.content, iteration_number : iteration_number,final: false };
+          yield {
+            chunk,
+            iteration_number: iteration_number,
+            final: false,
+          };
         }
         if (
           chunk.event === 'on_chain_end' &&
           chunk.run_id === langraph_run_id
         ) {
-          logger.warn(`C'EST LA FIN DU WORKFLOW`); 
+          logger.warn(`C'EST LA FIN DU WORKFLOW`);
           logger.warn(JSON.stringify(chunk_to_save));
         }
       }
 
-      try {
-        fs.writeFileSync(
-          'log_iterations.json',
-          JSON.stringify(iteration, null, 2),
-          { encoding: 'utf-8' }
-        );
-      } catch (err) {
-        logger.error(
-          "Erreur lors de l'écriture de log_iterations.json : " + err
-        );
-      }
-      return { chunk_to_save, iteration_number : iteration_number,  final: true };
+      // try {
+      //   fs.writeFileSync(
+      //     'log_iterations.json',
+      //     JSON.stringify(iteration, null, 2),
+      //     { encoding: 'utf-8' }
+      //   );
+      // } catch (err) {
+      //   logger.error(
+      //     "Erreur lors de l'écriture de log_iterations.json : " + err
+      //   );
+      // }
+      yield {
+        chunk: chunk_to_save,
+        iteration_number: iteration_number,
+        final: true,
+      };
+      return;
     } catch (error) {
       logger.error(
         `WorkflowController[Exec:${this.executionId}]: Workflow execution failed: ${error}`

@@ -37,6 +37,7 @@ export interface ModelSelectionOptions {
  * Represents an operator agent responsible for selecting the appropriate model for different tasks.
  */
 export class ModelSelector extends BaseAgent implements IModelAgent {
+  
   private models: Record<string, BaseChatModel> = {};
   private debugMode: boolean;
   private useModelSelector: boolean;
