@@ -122,7 +122,9 @@ export class ConfigurationAgent extends BaseAgent {
             ? lastMessage.content
             : JSON.stringify(lastMessage.content);
       } else {
-        responseContent = 'Configuration operation completed.';
+        throw new Error(
+          'No content found in the last message from the configuration agent.'
+        );
       }
 
       return new AIMessage({

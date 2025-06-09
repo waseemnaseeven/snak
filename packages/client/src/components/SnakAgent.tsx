@@ -450,11 +450,6 @@ const SnakAgent = () => {
       if (!text_response) {
         throw new Error('No text response');
       }
-      if (data.output[0].status === 'failure') {
-        text_response = text_response;
-      } else {
-        text_response = text_response;
-      }
       typeResponse({ ...newResponse, text: text_response });
 
       // If file is detected we send delete request to the server
