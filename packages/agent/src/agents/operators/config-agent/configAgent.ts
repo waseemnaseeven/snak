@@ -16,6 +16,11 @@ export interface ConfigurationAgentConfig {
   modelType?: 'fast' | 'smart' | 'cheap';
 }
 
+interface ExecuteConfig {
+  originalUserQuery: string;
+  [key: string]: unknown;
+}
+
 /**
  * Enhanced Configuration Agent using LangChain Tools for intelligent operation selection
  */
@@ -85,7 +90,7 @@ export class ConfigurationAgent extends BaseAgent {
    */
   public async execute(
     input: string | BaseMessage | BaseMessage[],
-    config?: Record<string, any>
+    config?: ExecuteConfig
   ): Promise<AIMessage> {
     try {
       const content = this.extractOriginalUserContent(input, config);
@@ -152,7 +157,7 @@ export class ConfigurationAgent extends BaseAgent {
    */
   private extractOriginalUserContent(
     input: string | BaseMessage | BaseMessage[],
-    config?: Record<string, any>
+    config?: ExecuteConfig
   ): string {
     if (
       config?.originalUserQuery &&

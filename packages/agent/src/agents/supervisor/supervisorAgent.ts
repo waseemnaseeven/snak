@@ -138,12 +138,14 @@ export class SupervisorAgent extends BaseAgent {
     logger.debug('SupervisorAgent: Initializing ConfigAgent...');
     this.configAgent = new ConfigurationAgent({ debug: this.debug });
     await this.configAgent.init();
+    this.operators.set(this.configAgent.id, this.configAgent);
   }
 
   private async initializeMCPAgent(): Promise<void> {
     logger.debug('SupervisorAgent: Initializing MCPAgent...');
     this.mcpAgent = new MCPAgent({ debug: this.debug });
     await this.mcpAgent.init();
+    this.operators.set(this.mcpAgent.id, this.mcpAgent);
   }
 
   /**

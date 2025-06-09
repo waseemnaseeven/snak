@@ -313,7 +313,12 @@ export function getMcpAgentTools(): DynamicStructuredTool[] {
             );
           }
 
-          const smitheryConfig: any = {
+          interface SmitheryCliConfig {
+            command: string;
+            args: string[];
+          }
+
+          const smitheryConfig: SmitheryCliConfig = {
             command: 'npx',
             args: ['-y', '@smithery/cli@latest', 'run', qualifiedName],
           };

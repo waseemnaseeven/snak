@@ -7,6 +7,7 @@ import { getMcpAgentTools } from './mcpAgentTools.js';
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { mcpAgentSystemPrompt } from '../../../prompt/mcpAgentPrompts.js';
 import { ModelSelector } from '../modelSelector.js';
+import { DynamicStructuredTool } from '@langchain/core/tools';
 
 /**
  * Interface defining the configuration options for the MCPAgent
@@ -22,8 +23,8 @@ export interface MCPAgentConfig {
 export class MCPAgent extends BaseAgent {
   private debug: boolean = false;
   private llm: BaseChatModel;
-  private reactAgent: any;
-  private tools: any[];
+  private reactAgent: ReturnType<typeof createReactAgent>;
+  private tools: DynamicStructuredTool[];
   private modelType: string;
 
   constructor(config: MCPAgentConfig = {}) {
