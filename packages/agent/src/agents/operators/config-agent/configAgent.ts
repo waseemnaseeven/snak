@@ -34,7 +34,7 @@ export class ConfigurationAgent extends BaseAgent {
     );
 
     this.debug = config.debug !== undefined ? config.debug : true;
-    this.modelType = config.modelType || 'smart';
+    this.modelType = config.modelType || 'fast';
     this.tools = getConfigAgentTools();
 
     if (this.debug) {

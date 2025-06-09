@@ -79,21 +79,24 @@ export const createAgentTool = new DynamicStructuredTool({
     try {
       const query = new Postgres.Query(
         `INSERT INTO agents (
-          name, "group", description, lore, objectives, knowledge,
-          system_prompt, interval, plugins, memory, mode, max_iterations
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        RETURNING *`,
+			name, "group", description, lore, objectives, knowledge,
+			system_prompt, interval, plugins, memory, mode, max_iterations
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			RETURNING *`,
         [
           input.name,
           input.group,
           input.description,
-          input.lore || null,
-          input.objectives || null,
-          input.knowledge || null,
+          input.lore || '',
+          input.objectives || '',
+          input.knowledge || '',
           input.system_prompt || null,
           input.interval || 5,
           input.plugins || null,
-          null, // memory - will be set to default
+          JSON.stringify({
+            enabled: true,
+            shortTermMemorySize: 5,
+          }),
           input.mode || 'interactive',
           input.max_iterations || 15,
         ]
