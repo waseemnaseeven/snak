@@ -258,10 +258,13 @@ export class WorkflowController {
                 ...(runnable_config || {}),
                 ...updatedMetadata,
                 toolCalls: state.toolCalls,
+                // Ensure originalUserQuery is always available in config
+                originalUserQuery:
+                  originalUserQuery || updatedMetadata.originalUserQuery,
               };
 
               logger.debug(
-                `WorkflowController[Exec:${execId}]: Node[${agentId}] - Calling agent.execute()...`
+                `WorkflowController[Exec:${execId}]: Node[${agentId}] - Calling agent.execute() with config containing originalUserQuery...`
               );
 
               const result = agent.execute(state.messages, {

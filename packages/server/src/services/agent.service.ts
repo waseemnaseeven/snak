@@ -31,7 +31,7 @@ export class AgentService implements IAgentService {
   constructor(private readonly config: ConfigurationService) {}
 
   async handleUserRequest(
-    agent: AgentSystem | any,
+    agent: AgentSystem | IAgent,
     userRequest: MessageRequest
   ): Promise<AgentExecutionResponse> {
     this.logger.debug({
@@ -110,16 +110,6 @@ export class AgentService implements IAgentService {
         );
         yield chunk;
       }
-
-      this.logger.debug({
-        message: 'Agent request processed successfully',
-        result: result,
-      });
-
-      return {
-        status: 'success',
-        data: result,
-      };
     } catch (error: any) {
       this.logger.error('Error processing agent request', {
         error: {
@@ -146,6 +136,8 @@ export class AgentService implements IAgentService {
         cause: error,
       });
     }
+
+
   }
 
   async getAllAgents(): Promise<AgentConfigSQL[]> {
