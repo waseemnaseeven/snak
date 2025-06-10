@@ -446,7 +446,7 @@ const SnakAgent = () => {
       if (!data || typeof data !== 'object') {
         throw new Error('Invalid response format from server');
       }
-      let text_response = data.output[0].text;
+      const text_response = data.output[0].text;
       if (!text_response) {
         throw new Error('No text response');
       }
