@@ -690,17 +690,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       let responseContent: string | any;
 
       const app = this.agentReactExecutor;
-      // console.log(`Execute : 11`);
-      // for await (const chunk of app.streamEvents(graphState, {
-      //   ...runnableConfig,
-      //   version: 'v2' as const,
-      // })) {
-      //   console.log('chunk : ', chunk.event);
-      //   if (chunk.event === 'on_chat_model_stream') {
-      //     console.log(`chunk_model_stream :${JSON.stringify(chunk.data)}`);
-      //   }
-      // }
-      // console.log("finito")
       const result = await app.invoke(graphState, runnableConfig);
       console.log(`Execute : 12`);
       if (result?.messages?.length > 0) {
