@@ -20,21 +20,9 @@ import {
   WebsocketAgentRequestDTO,
   WebsocketGetAgentsConfigRequestDTO,
   WebsocketGetMessagesRequestDTO,
+  WebsocketSupervisorRequestDTO,
 } from '@snakagent/core';
 import { Postgres } from '@snakagent/database';
-
-// TODO remove this is for mock
-
-function divideString(str: string, parts: number): string[] {
-  const partLength = Math.ceil(str.length / parts);
-  const result: string[] = [];
-
-  for (let i = 0; i < str.length; i += partLength) {
-    result.push(str.substring(i, i + partLength));
-  }
-
-  return result;
-}
 @WebSocketGateway({
   cors: {
     origin: 'http://localhost:4000',
@@ -58,13 +46,61 @@ export class MyGateway implements OnModuleInit {
 
   onModuleInit() {
     this.server.on('connection', (socket) => {
-      logger.info('Client connected:', socket.id);
+      logger.info(`Client connected: ${socket.id}`);
       this.clients.set(socket.id, socket);
       socket.on('disconnect', () => {
         logger.error('Client disconnected:', socket.id);
         this.clients.delete(socket.id);
       });
     });
+  }
+
+  @SubscribeMessage('supervisor_request')
+  async handleSupervisorRequest(
+    @MessageBody() userRequest: WebsocketSupervisorRequestDTO
+  ): Promise<void> {
+    try {
+      if (!this.supervisorService.isInitialized()) {
+        throw new ServerError('E07TA110');
+      }
+
+      const config: Record<string, any> = {};
+      if (userRequest.request.agentId) {
+        config.agentId = userRequest.request.agentId;
+      }
+
+      const client = this.clients.get(userRequest.socket_id);
+      if (!client) {
+        logger.error('Client not found');
+        throw new ServerError('E01TA400');
+      }
+
+      console.log(`User request: ${JSON.stringify(userRequest)}`);
+      for await (const chunk of this.supervisorService.websocketExecuteRequest(
+        userRequest.request.content,
+        config
+      )) {
+        const response: AgentResponse = {
+          status: 'success',
+          data: {
+            ...chunk.chunk,
+            iteration_number: chunk.iteration_number,
+            isLastChunk: chunk.final,
+          },
+        };
+
+        client.emit('onSupervisorRequest', response);
+
+        if (chunk.final === true) {
+          break;
+        }
+      }
+
+      logger.debug(`Supervisor request processed successfully`);
+    } catch (error) {
+      logger.error('Error in handleSupervisorRequest:', error);
+      throw new ServerError('E03TA100');
+    }
   }
 
   @SubscribeMessage('agents_request')
@@ -74,7 +110,7 @@ export class MyGateway implements OnModuleInit {
     try {
       logger.info('handleUserRequest called');
       const route = this.reflector.get('path', this.handleUserRequest);
-      logger.debug('handleUserRequest:', userRequest);
+      logger.debug(`handleUserRequest: ${JSON.stringify(userRequest)}`);
 
       const agent = this.supervisorService.getAgentInstance(
         userRequest.request.agent_id
@@ -94,10 +130,16 @@ export class MyGateway implements OnModuleInit {
         userRequest.request
       )) {
         if (chunk.final === true) {
-        const q= new Postgres.Query('INSERT INTO message (agent_id,user_request,agent_iteration)  VALUES($1, $2, $3)', [userRequest.request.agent_id, userRequest.request.user_request, chunk.chunk])
-        await Postgres.query(q);
-        logger.info("Message Saved in DB");
-
+          const q = new Postgres.Query(
+            'INSERT INTO message (agent_id,user_request,agent_iteration)  VALUES($1, $2, $3)',
+            [
+              userRequest.request.agent_id,
+              userRequest.request.user_request,
+              chunk.chunk,
+            ]
+          );
+          await Postgres.query(q);
+          logger.info('Message Saved in DB');
         }
         const response: AgentResponse = {
           status: 'success',
@@ -109,32 +151,6 @@ export class MyGateway implements OnModuleInit {
         };
         client.emit('onAgentRequest', response);
       }
-      // const response_metrics = await metrics.metricsAgentResponseTime(
-      //   userRequest.request.agent_id.toString(),
-      //   'key',
-      //   route,
-      //   action
-      // );
-
-      // const storyChunks = divideString(response_metrics.data as string, 5);
-
-      // if (!client) {
-      //   logger.error('Client not found');
-      //   throw new ServerError('E01TA400');
-      // }
-
-      // for (let i = 0; i < storyChunks.length; i++) {
-      //   await new Promise((resolve) => setTimeout(resolve, 100));
-      //   logger.debug('Sending chunk:', storyChunks[i]);
-      //   const response: AgentResponse = {
-      //     status: 'success',
-      //     data: {
-      //       chunk: storyChunks[i],
-      //       isLastChunk: i === storyChunks.length - 1,
-      //     },
-      //   };
-      //   client.emit('onAgentRequest', response);
-      // }
     } catch (error) {
       const client = this.clients.get(userRequest.socket_id);
       if (!client) {
@@ -158,17 +174,14 @@ export class MyGateway implements OnModuleInit {
         logger.error('Client not found');
         throw new ServerError('E01TA400');
       }
-      await this.agentFactory.addAgent(userRequest.agent);
+      const newAgentConfig = await this.agentFactory.addAgent(
+        userRequest.agent
+      );
 
-      const agentConfigs = this.agentFactory.getAllAgentConfigs();
-      const newAgentConfig = agentConfigs[agentConfigs.length - 1];
-
-      if (newAgentConfig) {
-        await this.supervisorService.addAgentInstance(
-          newAgentConfig.id,
-          newAgentConfig
-        );
-      }
+      await this.supervisorService.addAgentInstance(
+        newAgentConfig.id,
+        newAgentConfig
+      );
 
       const response: AgentResponse = {
         status: 'success',
@@ -221,6 +234,10 @@ export class MyGateway implements OnModuleInit {
   ): Promise<void> {
     try {
       logger.info('getAgents called');
+
+            console.log(this.clients);
+
+            console.log(userRequest.socket_id);
       const client = this.clients.get(userRequest.socket_id);
       if (!client) {
         logger.error('Client not found');

@@ -5,7 +5,8 @@ import { IAgent } from '../core/baseAgent.js';
 import { RunnableConfig } from '@langchain/core/runnables';
 import crypto from 'crypto';
 import { AgentType } from '../core/baseAgent.js';
-import fs from 'fs';
+import { AgentIterationEvent, IterationResponse } from '../../agents/core/snakAgent.js';
+import { FormatChunkIteration } from '../../agents/core/utils.js';
 
 export interface LangChainResponse {
   supervisor: {
@@ -263,7 +264,6 @@ export class WorkflowController {
               logger.debug(
                 `WorkflowController[Exec:${execId}]: Node[${agentId}] - Calling agent.execute()...`
               );
-
               const result = agent.execute(state.messages, {
                 ...config,
                 isWorkflowNodeCall: true,
@@ -752,7 +752,6 @@ export class WorkflowController {
     input: string | BaseMessage,
     config?: Record<string, any>
   ): AsyncGenerator<any> {
-    console.log(`Execute : 10`);
     this.executionId = crypto.randomUUID().substring(0, 8);
     logger.debug(
       `WorkflowController[Exec:${this.executionId}]: Starting execution`
@@ -783,7 +782,7 @@ export class WorkflowController {
         `WorkflowController[Exec:${this.executionId}]: Input message type: ${message._getType()}`
       );
 
-      const threadId = config?.threadId || this.executionId;
+      const threadId = config?.threadId || this.executionId || "default";
       const runConfig: any = {
         configurable: {
           thread_id: threadId,
@@ -904,81 +903,67 @@ export class WorkflowController {
       );
 
       const iteration: Array<any> = [];
-      let chunk_to_save;
-      let i_count = 0;
       let iteration_number = 0;
-      let langraph_run_id;
+      console.log('JE SUIS LA');
+      console.log(message)
+
+          const graphState = {
+      messages: message,
+    };
       for await (const chunk of await this.workflow.streamEvents(
-        {
-          messages: [message],
-          currentAgent: initialAgent,
-          metadata: initialMetadata,
-          toolCalls: [],
-          error: undefined,
-          iterationCount: 0,
-        },
+        graphState,
         {
           ...runConfig,
           version: 'v2' as const,
         }
       )) {
         console.log(iteration_number);
-        if (i_count === 0) {
-          langraph_run_id = chunk.run_id;
-        }
-        if (
-          chunk.name === 'Branch<agent>' &&
-          chunk.event === 'on_chain_start'
-        ) {
-          iteration_number++;
-        }
-        if (chunk.name === 'Branch<agent>' && chunk.event === 'on_chain_end') {
-          chunk_to_save = chunk;
-        }
-        if (chunk.event != 'on_chat_model_stream') {
-          iteration.push(chunk);
-        }
-        i_count++;
-        console.log(chunk.event);
-        if (
-          chunk.event === 'on_chat_model_stream' ||
-          chunk.event === 'on_chat_model_start' ||
-          chunk.event === 'on_chat_model_end'
-        ) {
-          // console.log(`${chunk.data.chunk.content}`);
+        iteration.push(chunk);
+        // if (
+        //   chunk.name === 'Branch<agent>' &&
+        //   chunk.event === 'on_chain_start'
+        // ) {
+        //   iteration_number++;
+        // }
+        // if (chunk.name === 'Branch<agent>' && chunk.event === 'on_chain_end') {
+        //   chunk_to_save = chunk;
+        // }
+
+        // i_count++;
+        // console.log(chunk.event);
+        // if (
+        //   chunk.event === 'on_chat_model_stream' ||
+        //   chunk.event === 'on_chat_model_start' ||
+        //   chunk.event === 'on_chat_model_end'
+        // ) {
+        //   const formatted = FormatChunkIteration(chunk);
+        //   if (!formatted) {
+        //     throw new Error(
+        //       `SnakAgent: Failed to format chunk: ${JSON.stringify(chunk)}`
+        //     );
+        //   }
+        //   const formattedChunk: IterationResponse = {
+        //     event: chunk.event as AgentIterationEvent,
+        //     kwargs: formatted,
+        //   };
           yield {
-            chunk,
+            chunk: chunk,
             iteration_number: iteration_number,
             final: false,
           };
         }
-        if (
-          chunk.event === 'on_chain_end' &&
-          chunk.run_id === langraph_run_id
-        ) {
-          logger.warn(`C'EST LA FIN DU WORKFLOW`);
-          logger.warn(JSON.stringify(chunk_to_save));
-        }
-      }
-
-      // try {
-      //   fs.writeFileSync(
-      //     'log_iterations.json',
-      //     JSON.stringify(iteration, null, 2),
-      //     { encoding: 'utf-8' }
-      //   );
-      // } catch (err) {
-      //   logger.error(
-      //     "Erreur lors de l'écriture de log_iterations.json : " + err
-      //   );
-      // }
-      yield {
-        chunk: chunk_to_save,
-        iteration_number: iteration_number,
-        final: true,
-      };
+      // yield {
+      //   chunk: {
+      //     event: chunk_to_save.event,
+      //     kwargs: {
+      //       iteration: chunk_to_save,
+      //     },
+      //   },
+      //   iteration_number: iteration_number,
+      //   final: true,
+      // };
       return;
-    } catch (error) {
+        } catch (error) {
       logger.error(
         `WorkflowController[Exec:${this.executionId}]: Workflow execution failed: ${error}`
       );

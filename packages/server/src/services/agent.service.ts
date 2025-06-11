@@ -31,7 +31,7 @@ export class AgentService implements IAgentService {
   constructor(private readonly config: ConfigurationService) {}
 
   async handleUserRequest(
-    agent: AgentSystem | any,
+    agent: AgentSystem | IAgent,
     userRequest: MessageRequest
   ): Promise<AgentExecutionResponse> {
     this.logger.debug({
@@ -99,27 +99,16 @@ export class AgentService implements IAgentService {
     try {
       let result: any;
 
-      for await (const chunk of agent.executeAsyncGenerator(userRequest.user_request)) {
+      for await (const chunk of agent.executeAsyncGenerator(
+        userRequest.user_request
+      )) {
         if (chunk.final === true) {
           this.logger.debug('SupervisorService: Execution completed');
           yield chunk;
           return;
         }
-        this.logger.debug(
-          `SupervisorService: Received chunk: ${JSON.stringify(chunk)}`
-        );
         yield chunk;
       }
-
-      this.logger.debug({
-        message: 'Agent request processed successfully',
-        result: result,
-      });
-
-      return {
-        status: 'success',
-        data: result,
-      };
     } catch (error: any) {
       this.logger.error('Error processing agent request', {
         error: {

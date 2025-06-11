@@ -37,7 +37,6 @@ export interface ModelSelectionOptions {
  * Represents an operator agent responsible for selecting the appropriate model for different tasks.
  */
 export class ModelSelector extends BaseAgent implements IModelAgent {
-  
   private models: Record<string, BaseChatModel> = {};
   private debugMode: boolean;
   private useModelSelector: boolean;
@@ -625,7 +624,6 @@ export class ModelSelector extends BaseAgent implements IModelAgent {
     input: string | BaseMessage | BaseMessage[],
     config?: Record<string, any>
   ): Promise<AIMessage> {
-    console.log(`Execute : 5`);
     // Determine messages array from input
     const messages: BaseMessage[] = Array.isArray(input)
       ? input

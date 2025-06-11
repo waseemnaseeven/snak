@@ -174,11 +174,7 @@ export class AgentSystem {
           group: this.agentConfig.group || 'snak',
         };
 
-        this.supervisorAgent.registerSnakAgent(
-          agentId,
-          this.snakAgent,
-          metadata
-        );
+        this.supervisorAgent.registerSnakAgent(this.snakAgent, metadata);
 
         await this.supervisorAgent.refreshWorkflowController();
         logger.debug(`AgentSystem: SnakAgent registered with ID: ${agentId}`);

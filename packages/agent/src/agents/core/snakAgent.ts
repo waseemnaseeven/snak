@@ -471,20 +471,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
     );
 
     try {
-      if (config?.enableStreaming) {
-        try {
-          const app = this.agentReactExecutor;
-          const stream = await app.stream(graphState, runnableConfig);
-          const chunks = [];
-          for await (const chunk of stream) {
-            chunks.push(chunk);
-            logger.debug(`Stream chunk: ${chunk.content}|`);
-          }
-        } catch (streamError) {
-          logger.error(`Streaming error: ${streamError}`);
-        }
-      }
-
       const app = this.agentReactExecutor;
       let chunk_to_save;
       let i_count = 0;
@@ -532,13 +518,13 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         }
       }
 
-      console.log(chunk_to_save)
+      console.log(chunk_to_save);
       yield {
         chunk: {
-          event : chunk_to_save.event,
+          event: chunk_to_save.event,
           kwargs: {
-            iteration: chunk_to_save
-          }
+            iteration: chunk_to_save,
+          },
         },
         iteration_number: iteration_number,
         final: true,
@@ -690,19 +676,8 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       let responseContent: string | any;
 
       const app = this.agentReactExecutor;
-      // console.log(`Execute : 11`);
-      // for await (const chunk of app.streamEvents(graphState, {
-      //   ...runnableConfig,
-      //   version: 'v2' as const,
-      // })) {
-      //   console.log('chunk : ', chunk.event);
-      //   if (chunk.event === 'on_chat_model_stream') {
-      //     console.log(`chunk_model_stream :${JSON.stringify(chunk.data)}`);
-      //   }
-      // }
-      // console.log("finito")
-      const result = await app.invoke(graphState, runnableConfig);
       console.log(`Execute : 12`);
+      const result = await app.invoke(graphState, runnableConfig);
       if (result?.messages?.length > 0) {
         for (let i = result.messages.length - 1; i >= 0; i--) {
           const msg = result.messages[i];
@@ -754,7 +729,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   private async executeSimpleFallback(
     input: string | BaseMessage
   ): Promise<AIMessage> {
-    console.log(`Execute : 2`);
     logger.debug('SnakAgent: Using simple fallback execution.');
 
     let queryContent = 'Unavailable';
