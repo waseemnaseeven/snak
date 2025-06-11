@@ -493,7 +493,9 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         }
 
         i_count++;
-        logger.debug(`WorkflowController : ${chunk.event}, iteration : ${iteration_number}`);
+        logger.debug(
+          `WorkflowController : ${chunk.event}, iteration : ${iteration_number}`
+        );
         if (
           chunk.event === 'on_chat_model_stream' ||
           chunk.event === 'on_chat_model_start' ||

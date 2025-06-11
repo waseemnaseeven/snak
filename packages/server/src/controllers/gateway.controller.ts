@@ -235,9 +235,9 @@ export class MyGateway implements OnModuleInit {
     try {
       logger.info('getAgents called');
 
-            console.log(this.clients);
+      console.log(this.clients);
 
-            console.log(userRequest.socket_id);
+      console.log(userRequest.socket_id);
       const client = this.clients.get(userRequest.socket_id);
       if (!client) {
         logger.error('Client not found');

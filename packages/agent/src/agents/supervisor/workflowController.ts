@@ -7,7 +7,10 @@ import crypto from 'crypto';
 import { AgentType } from '../core/baseAgent.js';
 import fs from 'fs';
 import { FormatChunkIteration } from '../../agents/core/utils.js';
-import { AgentIterationEvent, IterationResponse } from '../../agents/core/snakAgent.js';
+import {
+  AgentIterationEvent,
+  IterationResponse,
+} from '../../agents/core/snakAgent.js';
 
 export interface LangChainResponse {
   supervisor: {
@@ -922,53 +925,53 @@ export class WorkflowController {
           version: 'v2' as const,
         }
       )) {
-         console.log(iteration_number);
-                iteration.push(chunk);
-                if (
-                  chunk.name === 'Branch<agent>' &&
-                  chunk.event === 'on_chain_start'
-                ) {
-                  iteration_number++;
-                }
-                if (chunk.name === 'Branch<agent>' && chunk.event === 'on_chain_end') {
-                  chunk_to_save = chunk;
-                }
-        
-                i_count++;
-                console.log(chunk.event);
-                if (
-                  chunk.event === 'on_chat_model_stream' ||
-                  chunk.event === 'on_chat_model_start' ||
-                  chunk.event === 'on_chat_model_end'
-                ) {
-                  const formatted = FormatChunkIteration(chunk);
-                  if (!formatted) {
-                    throw new Error(
-                      `SnakAgent: Failed to format chunk: ${JSON.stringify(chunk)}`
-                    );
-                  }
-                  const formattedChunk: IterationResponse = {
-                    event: chunk.event as AgentIterationEvent,
-                    kwargs: formatted,
-                  };
-                  yield {
-                    chunk: formattedChunk,
-                    iteration_number: iteration_number,
-                    final: false,
-                  };
-                }
-              }
-              yield {
-                chunk: {
-                  event: chunk_to_save.event,
-                  kwargs: {
-                    iteration: chunk_to_save,
-                  },
-                },
-                iteration_number: iteration_number,
-                final: true,
-              };
-              return;
+        console.log(iteration_number);
+        iteration.push(chunk);
+        if (
+          chunk.name === 'Branch<agent>' &&
+          chunk.event === 'on_chain_start'
+        ) {
+          iteration_number++;
+        }
+        if (chunk.name === 'Branch<agent>' && chunk.event === 'on_chain_end') {
+          chunk_to_save = chunk;
+        }
+
+        i_count++;
+        console.log(chunk.event);
+        if (
+          chunk.event === 'on_chat_model_stream' ||
+          chunk.event === 'on_chat_model_start' ||
+          chunk.event === 'on_chat_model_end'
+        ) {
+          const formatted = FormatChunkIteration(chunk);
+          if (!formatted) {
+            throw new Error(
+              `SnakAgent: Failed to format chunk: ${JSON.stringify(chunk)}`
+            );
+          }
+          const formattedChunk: IterationResponse = {
+            event: chunk.event as AgentIterationEvent,
+            kwargs: formatted,
+          };
+          yield {
+            chunk: formattedChunk,
+            iteration_number: iteration_number,
+            final: false,
+          };
+        }
+      }
+      yield {
+        chunk: {
+          event: chunk_to_save.event,
+          kwargs: {
+            iteration: chunk_to_save,
+          },
+        },
+        iteration_number: iteration_number,
+        final: true,
+      };
+      return;
     } catch (error) {
       logger.error(
         `WorkflowController[Exec:${this.executionId}]: Workflow execution failed: ${error}`
