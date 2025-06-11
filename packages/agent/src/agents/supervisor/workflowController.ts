@@ -167,7 +167,6 @@ export class WorkflowController {
         workflow.addNode(
           agentId,
           async (state: WorkflowState, runnable_config?: RunnableConfig) => {
-            console.log('I GET COMPILE');
             if (this.debug) {
               const lastAgents = (state.metadata.agentHistory || [])
                 .slice(-3)
@@ -756,7 +755,6 @@ export class WorkflowController {
     input: string | BaseMessage,
     config?: Record<string, any>
   ): AsyncGenerator<any> {
-    console.log(`Execute : 10`);
     this.executionId = crypto.randomUUID().substring(0, 8);
     logger.debug(
       `WorkflowController[Exec:${this.executionId}]: Starting execution`
@@ -865,7 +863,6 @@ export class WorkflowController {
         };
 
         try {
-          console.log('JE SUIS DEDANS');
           const result = await targetAgent.execute([message], agentConfig);
 
           let finalResult;
@@ -925,8 +922,10 @@ export class WorkflowController {
           version: 'v2' as const,
         }
       )) {
-        console.log(iteration_number);
         iteration.push(chunk);
+        logger.debug(
+          `WorkflowController : ${chunk.event}, iteration : ${iteration_number}`
+        );
         if (
           chunk.name === 'Branch<agent>' &&
           chunk.event === 'on_chain_start'
@@ -938,7 +937,6 @@ export class WorkflowController {
         }
 
         i_count++;
-        console.log(chunk.event);
         if (
           chunk.event === 'on_chat_model_stream' ||
           chunk.event === 'on_chat_model_start' ||
@@ -947,7 +945,7 @@ export class WorkflowController {
           const formatted = FormatChunkIteration(chunk);
           if (!formatted) {
             throw new Error(
-              `SnakAgent: Failed to format chunk: ${JSON.stringify(chunk)}`
+              `WorkflowController: Failed to format chunk: ${JSON.stringify(chunk)}`
             );
           }
           const formattedChunk: IterationResponse = {

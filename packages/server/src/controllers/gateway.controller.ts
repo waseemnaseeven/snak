@@ -75,7 +75,6 @@ export class MyGateway implements OnModuleInit {
         throw new ServerError('E01TA400');
       }
 
-      console.log(`User request: ${JSON.stringify(userRequest)}`);
       for await (const chunk of this.supervisorService.websocketExecuteRequest(
         userRequest.request.content,
         config
@@ -234,10 +233,6 @@ export class MyGateway implements OnModuleInit {
   ): Promise<void> {
     try {
       logger.info('getAgents called');
-
-      console.log(this.clients);
-
-      console.log(userRequest.socket_id);
       const client = this.clients.get(userRequest.socket_id);
       if (!client) {
         logger.error('Client not found');

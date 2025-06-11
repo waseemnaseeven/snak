@@ -286,8 +286,6 @@ export const createInteractiveAgent = async (
      * @returns An object containing an array with a single formatted AIMessage.
      */
     function formatAIMessageResult(result: any): { messages: BaseMessage[] } {
-      // logger.info('The format');
-      // console.log(result);
       let finalResult = result;
       if (!(finalResult instanceof AIMessage)) {
         finalResult = new AIMessage({
@@ -343,18 +341,12 @@ ${formatAgentResponse(content)}`);
     function shouldContinue(state: typeof GraphState.State) {
       const messages = state.messages;
       const lastMessage = messages[messages.length - 1] as AIMessage;
-
-      // logger.info('state : ');
-      // console.log(state);
       if (lastMessage.tool_calls?.length) {
         logger.debug(
           `Detected ${lastMessage.tool_calls.length} tool calls, routing to tools node.`
         );
         return 'tools';
       }
-      console.log(
-        `No tool calls detected in the last message, ending execution.`
-      );
       return 'end';
     }
 
