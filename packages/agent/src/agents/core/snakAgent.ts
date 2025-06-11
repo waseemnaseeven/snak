@@ -473,15 +473,12 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
     try {
       const app = this.agentReactExecutor;
       let chunk_to_save;
-      let i_count = 0;
       let iteration_number = 0;
-      let iteration: Array<any> = [];
 
       for await (const chunk of await app.streamEvents(
         graphState,
         runnableConfig
       )) {
-        iteration.push(chunk);
         if (
           chunk.name === 'Branch<agent>' &&
           chunk.event === 'on_chain_start'
@@ -492,7 +489,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
           chunk_to_save = chunk;
         }
 
-        i_count++;
         logger.debug(
           `SnakAgent : ${chunk.event}, iteration : ${iteration_number}`
         );

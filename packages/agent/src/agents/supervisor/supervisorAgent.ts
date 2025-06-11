@@ -29,14 +29,6 @@ import { MCPAgent } from '../operators/mcp-agent/mcpAgent.js';
  * Represents an agent to be registered
  */
 interface AgentRegistration {
-  agent: SnakAgent;
-  metadata?: any;
-}
-
-/**
- * Represents an agent to be registered
- */
-interface AgentRegistration {
   id: string;
   agent: SnakAgent;
   metadata?: any;
@@ -671,7 +663,7 @@ export class SupervisorAgent extends BaseAgent {
     }
 
     logger.warn(
-      `${depthIndent}SupervisorAgent: Unrecognized input type for ${callPath}: ${typeof input}. Wrapping as HumanMessage 'Unrecognized input format'.`
+      `${depthIndent}SupervisorAgent: Unrecognized input type for ${callPath}: ${typeof input}. Wrapping as HumanMessage '  '.`
     );
     return new HumanMessage('Unrecognized input format');
   }
@@ -1753,7 +1745,6 @@ export class SupervisorAgent extends BaseAgent {
   /**
    * Unregisters a SnakAgent from the system
    * @param id - The unique identifier of the agent to unregister
-   * @param options - Unregistration options
    */
   public unregisterSnakAgent(id: string): void {
     if (!this.snakAgents[id]) {
