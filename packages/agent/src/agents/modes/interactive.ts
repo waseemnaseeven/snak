@@ -193,7 +193,6 @@ export const createInteractiveAgent = async (
               ? modelForThisTask.bindTools(toolsList)
               : modelForThisTask;
 
-          logger.debug('test : ', JSON.stringify(currentFormattedPrompt));
           const result = await boundModel.invoke(currentMessages);
           logger.debug(result);
           TokenTracker.trackCall(result, selectedModelType);
