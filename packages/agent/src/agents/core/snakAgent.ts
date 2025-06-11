@@ -481,7 +481,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         graphState,
         runnableConfig
       )) {
-        console.log(iteration_number);
         iteration.push(chunk);
         if (
           chunk.name === 'Branch<agent>' &&
@@ -494,7 +493,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         }
 
         i_count++;
-        console.log(chunk.event);
+        logger.debug(`WorkflowController : ${chunk.event}, iteration : ${iteration_number}`);
         if (
           chunk.event === 'on_chat_model_stream' ||
           chunk.event === 'on_chat_model_start' ||
@@ -517,8 +516,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
           };
         }
       }
-
-      console.log(chunk_to_save);
       yield {
         chunk: {
           event: chunk_to_save.event,
@@ -676,7 +673,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       let responseContent: string | any;
 
       const app = this.agentReactExecutor;
-      console.log(`Execute : 12`);
       const result = await app.invoke(graphState, runnableConfig);
       if (result?.messages?.length > 0) {
         for (let i = result.messages.length - 1; i >= 0; i--) {

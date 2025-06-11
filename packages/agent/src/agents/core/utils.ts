@@ -43,7 +43,6 @@ export async function initializeToolsList(
     );
     toolsList = [...allowedTools];
   }
-
   if (
     agentConfig.mcpServers &&
     Object.keys(agentConfig.mcpServers).length > 0
@@ -59,7 +58,6 @@ export async function initializeToolsList(
       logger.error(`Failed to initialize MCP tools: ${error}`);
     }
   }
-
   return toolsList;
 }
 
@@ -86,11 +84,6 @@ export const FormatChunkIteration = (
   | undefined => {
   if (chunk.event === AgentIterationEvent.ON_CHAT_MODEL_STREAM) {
     const tool = extractToolsFromIteration(chunk);
-    // if (!tool) {
-    //   logger.debug('No tool found in chunk iteration');
-    // } else {
-    //   console.log('tool found');
-    // }
     const iteration: FormattedOnChatModelStream = {
       chunk: {
         content: chunk.data.chunk.content as string,
@@ -133,16 +126,14 @@ export const extractTokenChunkFromIteration = (
   iteration: any
 ): TokenChunk | undefined => {
   if (!iteration || !iteration.data || !iteration.data.chunk) {
-    // logger.debug('No data found in iteration');
     return undefined;
   }
   const token_chunk = iteration.data.chunk.kwargs.token_chunk as TokenChunk;
   if (!token_chunk || !token_chunk.input) {
-    logger.debug('No token chunk found in iteration');
     return undefined;
   }
   return {
-    input: token_chunk.input,
+    input: token_chunk.input || 0,
     output: token_chunk.output || 0,
     total: token_chunk.total || 0,
   };
@@ -157,15 +148,10 @@ export const extractToolsFromIteration = (
     logger.debug('No valid tool_call_chunks found in iteration');
     return undefined;
   }
-
-  console.log(JSON.stringify(toolCallChunks, null, 2));
   const lastTool = toolCallChunks[0] as ToolsChunk;
-
   if (!lastTool?.name) {
-    // logger.debug('No name found in last tool chunk');
     return undefined;
   }
-  console.log('SAVED', lastTool.name);
   return lastTool;
 };
 
