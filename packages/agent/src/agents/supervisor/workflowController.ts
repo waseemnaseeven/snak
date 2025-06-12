@@ -903,8 +903,6 @@ export class WorkflowController {
       logger.debug(
         `WorkflowController[Exec:${this.executionId}]: Invoking workflow with initial state`
       );
-
-      const iteration: Array<any> = [];
       let chunk_to_save;
       let i_count = 0;
       let iteration_number = 0;
@@ -922,10 +920,6 @@ export class WorkflowController {
           version: 'v2' as const,
         }
       )) {
-        iteration.push(chunk);
-        logger.debug(
-          `WorkflowController : ${chunk.event}, iteration : ${iteration_number}`
-        );
         if (
           chunk.name === 'Branch<agent>' &&
           chunk.event === 'on_chain_start'

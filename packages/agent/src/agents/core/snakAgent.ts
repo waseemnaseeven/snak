@@ -488,10 +488,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         if (chunk.name === 'Branch<agent>' && chunk.event === 'on_chain_end') {
           chunk_to_save = chunk;
         }
-
-        logger.debug(
-          `SnakAgent : ${chunk.event}, iteration : ${iteration_number}`
-        );
         if (
           chunk.event === 'on_chat_model_stream' ||
           chunk.event === 'on_chat_model_start' ||
