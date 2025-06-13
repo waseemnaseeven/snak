@@ -336,40 +336,13 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   }
 
   public async *executeAsyncGenerator(
-    input: BaseMessage[] | any,
+    input: string,
     config?: Record<string, any>
   ): AsyncGenerator<any> {
     logger.debug(`SnakAgent executing with mode: ${this.currentMode}`);
+   try {
     if (!this.agentReactExecutor) {
-      logger.warn(
-        'SnakAgent: Agent executor not available. Attempting to recreate.'
-      );
-      try {
-        await this.createAgentReactExecutor();
-        if (!this.agentReactExecutor) {
-          logger.error(
-            'SnakAgent: Failed to recreate agent executor. Cannot proceed.'
-          );
-          const fallbackInput =
-            Array.isArray(input) && input.length > 0
-              ? input[input.length - 1]
-              : input;
-          return this.executeSimpleFallback(
-            fallbackInput as string | BaseMessage
-          );
-        }
-      } catch (recreateError) {
-        logger.error(
-          `SnakAgent: Critical error recreating agent executor: ${recreateError}`
-        );
-        const fallbackInput =
-          Array.isArray(input) && input.length > 0
-            ? input[input.length - 1]
-            : input;
-        return this.executeSimpleFallback(
-          fallbackInput as string | BaseMessage
-        );
-      }
+      throw new Error("Agent executor is not initialized. Cannot execute.");
     }
 
     let messagesForGraph: BaseMessage[];
@@ -378,7 +351,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       Array.isArray(input) &&
       input.every((msg) => msg instanceof BaseMessage)
     ) {
-      messagesForGraph = input;
+      messagesForGraph = [new HumanMessage(input)];
       if (messagesForGraph.length === 0) {
         logger.warn(
           'SnakAgent: Received empty message array for execution. Initializing with a placeholder.'
@@ -386,62 +359,13 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         messagesForGraph = [new HumanMessage('Starting interaction...')];
       }
     } else {
-      logger.warn(
-        `SnakAgent: Unexpected input type for 'messages'. Expected BaseMessage[], received ${typeof input}. Attempting to convert.`
-      );
-
-      if (input instanceof BaseMessage) {
-        messagesForGraph = [input];
-      } else if (typeof input === 'string') {
-        messagesForGraph = [new HumanMessage(input)];
-      } else if (
-        typeof input === 'object' &&
-        input &&
-        'content' in input &&
-        typeof input.content === 'string'
-      ) {
-        messagesForGraph = [new HumanMessage(input.content)];
-      } else {
-        logger.error(
-          'SnakAgent: Could not convert input to BaseMessage[]. Using simple fallback.'
-        );
-        let fallbackContent = 'Unprocessable input for agent execution';
-
-        try {
-          if (typeof input === 'string') fallbackContent = input;
-          else if (
-            input instanceof BaseMessage &&
-            typeof input.content === 'string'
-          )
-            fallbackContent = input.content;
-          else if (
-            input &&
-            typeof input.toString === 'function' &&
-            input.toString() !== '[object Object]'
-          )
-            fallbackContent = input.toString();
-          else if (input && input.content && typeof input.content === 'string')
-            fallbackContent = input.content;
-        } catch {}
-
-        return this.executeSimpleFallback(new HumanMessage(fallbackContent));
-      }
+      
     }
 
-    const originalUserQuery = config?.originalUserQuery;
-    let currentMessages = messagesForGraph;
+      console.log(`SnakAgent: Input type is ${typeof input}, checking conversion.`);
 
-    if (
-      originalUserQuery &&
-      currentMessages.length > 0 &&
-      currentMessages[0].additional_kwargs?.from === 'model-selector'
-    ) {
-      logger.debug(
-        `SnakAgent: Using original user query "${originalUserQuery}" instead of model-selector message.`
-      );
-      currentMessages = [new HumanMessage(originalUserQuery)];
-    }
 
+    const currentMessages:
     const graphState = {
       messages: currentMessages,
     };
@@ -488,6 +412,10 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         if (chunk.name === 'Branch<agent>' && chunk.event === 'on_chain_end') {
           chunk_to_save = chunk;
         }
+
+        logger.debug(
+          `SnakAgent : ${chunk.event}, iteration : ${iteration_number}`
+        );
         if (
           chunk.event === 'on_chat_model_stream' ||
           chunk.event === 'on_chat_model_start' ||
@@ -524,6 +452,8 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
     } catch (agentExecError: any) {
       throw new Error(`SnakAgent: Agent execution failed: ${agentExecError}`);
     }
+  } catch (error) {
+  }
   }
   /**
    * Execute the agent with the given input
@@ -536,16 +466,28 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
     config?: Record<string, any>
   ): Promise<any> {
     logger.debug(`SnakAgent executing with mode: ${this.currentMode}`);
-
-    if (!this.agentReactExecutor) {
-      logger.warn(
-        'SnakAgent: Agent executor not available. Attempting to recreate.'
-      );
-      try {
-        await this.createAgentReactExecutor();
-        if (!this.agentReactExecutor) {
+    try {
+      if (!this.agentReactExecutor) {
+        logger.warn(
+          'SnakAgent: Agent executor not available. Attempting to recreate.'
+        );
+        try {
+          await this.createAgentReactExecutor();
+          if (!this.agentReactExecutor) {
+            logger.error(
+              'SnakAgent: Failed to recreate agent executor. Cannot proceed.'
+            );
+            const fallbackInput =
+              Array.isArray(input) && input.length > 0
+                ? input[input.length - 1]
+                : input;
+            return this.executeSimpleFallback(
+              fallbackInput as string | BaseMessage
+            );
+          }
+        } catch (recreateError) {
           logger.error(
-            'SnakAgent: Failed to recreate agent executor. Cannot proceed.'
+            `SnakAgent: Critical error recreating agent executor: ${recreateError}`
           );
           const fallbackInput =
             Array.isArray(input) && input.length > 0
@@ -555,74 +497,62 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
             fallbackInput as string | BaseMessage
           );
         }
-      } catch (recreateError) {
-        logger.error(
-          `SnakAgent: Critical error recreating agent executor: ${recreateError}`
-        );
-        const fallbackInput =
-          Array.isArray(input) && input.length > 0
-            ? input[input.length - 1]
-            : input;
-        return this.executeSimpleFallback(
-          fallbackInput as string | BaseMessage
-        );
       }
-    }
 
-    let messagesForGraph: BaseMessage[];
+      let messagesForGraph: BaseMessage[];
 
-    if (
-      Array.isArray(input) &&
-      input.every((msg) => msg instanceof BaseMessage)
-    ) {
-      messagesForGraph = input;
-      if (messagesForGraph.length === 0) {
-        logger.warn(
-          'SnakAgent: Received empty message array for execution. Initializing with a placeholder.'
-        );
-        messagesForGraph = [new HumanMessage('Starting interaction...')];
-      }
-    } else {
-      logger.warn(
-        `SnakAgent: Unexpected input type for 'messages'. Expected BaseMessage[], received ${typeof input}. Attempting to convert.`
-      );
-
-      if (input instanceof BaseMessage) {
-        messagesForGraph = [input];
-      } else if (typeof input === 'string') {
-        messagesForGraph = [new HumanMessage(input)];
-      } else if (
-        typeof input === 'object' &&
-        input &&
-        'content' in input &&
-        typeof input.content === 'string'
+      if (
+        Array.isArray(input) &&
+        input.every((msg) => msg instanceof BaseMessage)
       ) {
-        messagesForGraph = [new HumanMessage(input.content)];
+        messagesForGraph = input;
+        if (messagesForGraph.length === 0) {
+          logger.warn(
+            'SnakAgent: Received empty message array for execution. Initializing with a placeholder.'
+          );
+          messagesForGraph = [new HumanMessage('Starting interaction...')];
+        }
       } else {
-        logger.error(
-          'SnakAgent: Could not convert input to BaseMessage[]. Using simple fallback.'
+        logger.warn(
+          `SnakAgent: Unexpected input type for 'messages'. Expected BaseMessage[], received ${typeof input}. Attempting to convert.`
         );
-        let fallbackContent = 'Unprocessable input for agent execution';
 
-        try {
-          if (typeof input === 'string') fallbackContent = input;
-          else if (
-            input instanceof BaseMessage &&
-            typeof input.content === 'string'
-          )
-            fallbackContent = input.content;
-          else if (
-            input &&
-            typeof input.toString === 'function' &&
-            input.toString() !== '[object Object]'
-          )
-            fallbackContent = input.toString();
-          else if (input && input.content && typeof input.content === 'string')
-            fallbackContent = input.content;
-        } catch {}
+        if (input instanceof BaseMessage) {
+          messagesForGraph = [input];
+        } else if (typeof input === 'string') {
+          messagesForGraph = [new HumanMessage(input)];
+        } else if (
+          typeof input === 'object' &&
+          input &&
+          'content' in input &&
+          typeof input.content === 'string'
+        ) {
+          messagesForGraph = [new HumanMessage(input.content)];
+        } else {
+          logger.error(
+            'SnakAgent: Could not convert input to BaseMessage[]. Using simple fallback.'
+          );
+          let fallbackContent = 'Unprocessable input for agent execution';
 
-        return this.executeSimpleFallback(new HumanMessage(fallbackContent));
-      }
+          try {
+            if (typeof input === 'string') fallbackContent = input;
+            else if (
+              input instanceof BaseMessage &&
+              typeof input.content === 'string'
+            )
+              fallbackContent = input.content;
+            else if (
+              input &&
+              typeof input.toString === 'function' &&
+              input.toString() !== '[object Object]' //WHYYYYYY
+            )
+              fallbackContent = input.toString();
+            else if (input && input.content && typeof input.content === 'string')
+              fallbackContent = input.content;
+          } catch {}
+
+          return this.executeSimpleFallback(new HumanMessage(fallbackContent));
+        }
     }
 
     const originalUserQuery = config?.originalUserQuery;
@@ -708,7 +638,9 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       );
       return this.executeSimpleFallback(input as string | BaseMessage);
     }
+  } catch (error) {
   }
+}
 
   /**
    * Simple fallback execution mode when main executor fails
