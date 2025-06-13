@@ -212,7 +212,7 @@ export const createAutonomousAgent = async (
         );
         const modelForThisTask = await modelSelector.getModelForTask(
           filteredMessages,
-          selectedModelType
+          selectedModelType.model
         );
 
         const boundModel =
@@ -224,7 +224,7 @@ export const createAutonomousAgent = async (
           `Autonomous agent invoking model (${selectedModelType}) with ${filteredMessages.length} messages.`
         );
         const result = await boundModel.invoke(formattedPrompt);
-        const token = TokenTracker.trackCall(result, selectedModelType);
+        TokenTracker.trackCall(result, selectedModelType.model);
 
         let finalResultMessages: BaseMessage[];
 
@@ -241,7 +241,7 @@ export const createAutonomousAgent = async (
             msg.additional_kwargs = {
               ...msg.additional_kwargs,
               from: msg.additional_kwargs?.from || 'starknet-autonomous',
-              token_model_selector: token,
+              token_model_selector: selectedModelType.token,
             };
           } else {
             throw new Error(

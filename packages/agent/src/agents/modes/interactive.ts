@@ -160,11 +160,6 @@ export const createInteractiveAgent = async (
         });
 
         if (modelSelector) {
-          const stateModelType =
-            typeof state.memories === 'object' && state.memories
-              ? (state.memories as any).modelType
-              : null;
-
           // Extract originalUserQuery from first HumanMessage if available
           const originalUserMessage = currentMessages.find(
             (msg): msg is HumanMessage => msg instanceof HumanMessage
@@ -175,18 +170,17 @@ export const createInteractiveAgent = async (
               : JSON.stringify(originalUserMessage.content)
             : '';
 
-          const selectedModelType =
-            stateModelType ||
-            (await modelSelector.selectModelForMessages(currentMessages, {
-              originalUserQuery,
-            }));
+          const selectedModelType = await modelSelector.selectModelForMessages(
+            filteredMessages,
+            { originalUserQuery }
+          );
 
           logger.debug(
             `Using dynamically selected model: ${selectedModelType}`
           );
           const modelForThisTask = await modelSelector.getModelForTask(
             currentMessages,
-            selectedModelType
+            selectedModelType.model
           );
 
           const boundModel =
@@ -196,7 +190,7 @@ export const createInteractiveAgent = async (
 
           const result = await boundModel.invoke(currentMessages);
           logger.debug(result);
-          TokenTracker.trackCall(result, selectedModelType);
+          TokenTracker.trackCall(result, selectedModelType.model);
           return formatAIMessageResult(result);
         } else {
           const existingModelSelector = ModelSelector.getInstance();
