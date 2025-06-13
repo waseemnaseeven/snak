@@ -8,6 +8,7 @@ import { ModelSelector } from '../operators/modelSelector.js';
 import { SnakAgent, SnakAgentConfig } from '../core/snakAgent.js';
 import { ToolsOrchestrator } from '../operators/toolOrchestratorAgent.js';
 import { MemoryAgent } from '../operators/memoryAgent.js';
+import { DocumentAgent } from '../operators/documentAgent.js';
 import { WorkflowController } from './workflowController.js';
 import {
   DatabaseCredentials,
@@ -24,6 +25,8 @@ import { AgentSelector } from '../operators/agentSelector.js';
 import { OperatorRegistry } from '../operators/operatorRegistry.js';
 import { ConfigurationAgent } from '../operators/config-agent/configAgent.js';
 import { MCPAgent } from '../operators/mcp-agent/mcpAgent.js';
+import { documents } from '@snakagent/database/queries';
+
 
 /**
  * Represents an agent to be registered
@@ -53,6 +56,7 @@ export class SupervisorAgent extends BaseAgent {
   private snakAgent: SnakAgent | null = null;
   private toolsOrchestrator: ToolsOrchestrator | null = null;
   private memoryAgent: MemoryAgent | null = null;
+  private documentAgent: DocumentAgent | null = null;
   private workflowController: WorkflowController | null = null;
   private configAgent: ConfigurationAgent | null = null;
   private mcpAgent: MCPAgent | null = null;
@@ -114,6 +118,7 @@ export class SupervisorAgent extends BaseAgent {
     try {
       await this.initializeModelSelector();
       await this.initializeMemoryAgent(agentConfig);
+      await this.initializeDocumentAgent(agentConfig);
       await this.initializeToolsOrchestrator(agentConfig);
       await this.initializeAgentSelector();
 
@@ -189,6 +194,30 @@ export class SupervisorAgent extends BaseAgent {
     }
   }
 
+  /**
+   * Initializes the DocumentAgent component if enabled
+   * @param agentConfig - Agent configuration
+   * @private
+   */
+  private async initializeDocumentAgent(
+    agentConfig: AgentConfig | undefined,
+  ): Promise<void> {
+    const docCfg = (agentConfig as any)?.documents;
+    if (docCfg?.enabled === false) {
+      logger.info(
+        'SupervisorAgent: DocumentAgent initialization skipped (disabled in config)',
+      );
+      return;
+    }
+    logger.debug('SupervisorAgent: Initializing DocumentAgent...');
+    this.documentAgent = new DocumentAgent({
+      topK: docCfg?.topK,
+      embeddingModel: docCfg?.embeddingModel,
+    });
+    await this.documentAgent.init();
+    this.operators.set(this.documentAgent.id, this.documentAgent);
+    logger.debug('SupervisorAgent: DocumentAgent initialized');
+  }
   /**
    * Initializes the ToolsOrchestrator component
    * @param agentConfig - Agent configuration
@@ -502,6 +531,11 @@ export class SupervisorAgent extends BaseAgent {
       depthIndent
     );
 
+    let enriched = currentMessage;
+
+    let memoryResults: any[] = [];
+    let documentResults: documents.SearchResult[] = [];
+
     if (
       this.config.starknetConfig.agentConfig?.memory?.enabled !== false &&
       this.memoryAgent
@@ -509,19 +543,43 @@ export class SupervisorAgent extends BaseAgent {
       logger.debug(
         `${depthIndent}SupervisorAgent: Enriching message with memory context for ${callPath}.`
       );
-      const enrichedMessage =
-        await this.enrichWithMemoryContext(currentMessage);
-      return await this.executeWithMessage(
-        enrichedMessage,
-        config,
-        isNodeCall,
-        callPath,
-        depthIndent
+      const memRes = await this.enrichWithMemoryContext(currentMessage);
+      enriched = memRes.message;
+      memoryResults = memRes.memories;
+    }
+
+    if (this.documentAgent) {
+      logger.debug(
+        `${depthIndent}SupervisorAgent: Enriching message with document context for ${callPath}.`,
       );
+      const docRes = await this.enrichWithDocumentContext(enriched);
+      enriched = docRes.message;
+      documentResults = docRes.documents;
+    }
+
+    const globalContext = this.formatGlobalContext(
+      memoryResults,
+      documentResults,
+      (this.config.starknetConfig.agentConfig as any)?.globalContextTopK ?? 6,
+    );
+
+    if (globalContext) {
+      const originalContent =
+        typeof enriched.content === 'string'
+          ? enriched.content
+          : JSON.stringify(enriched.content);
+      enriched = new HumanMessage({
+        content: originalContent,
+        additional_kwargs: {
+          ...enriched.additional_kwargs,
+          global_context: globalContext,
+        },
+      });
+      
     }
 
     return await this.executeWithMessage(
-      currentMessage,
+      enriched,
       config,
       isNodeCall,
       callPath,
@@ -1216,6 +1274,14 @@ export class SupervisorAgent extends BaseAgent {
   }
 
   /**
+   * Gets the DocumentAgent instance
+   * @returns The DocumentAgent instance, or null if not initialized
+   */
+  public getDocumentAgent(): DocumentAgent | null {
+    return this.documentAgent;
+  }
+
+  /**
    * Gets all available tools from the ToolsOrchestrator and MemoryAgent
    * @returns An array of Tool instances
    */
@@ -1293,6 +1359,7 @@ export class SupervisorAgent extends BaseAgent {
     const agentsToDispose = [
       this.modelSelector,
       this.memoryAgent,
+      this.documentAgent,
       this.toolsOrchestrator,
       this.workflowController,
     ];
@@ -1307,6 +1374,7 @@ export class SupervisorAgent extends BaseAgent {
     this.snakAgent = null;
     this.toolsOrchestrator = null;
     this.memoryAgent = null;
+    this.documentAgent = null;
     this.agentSelector = null;
     this.workflowController = null;
     this.operators.clear();
@@ -1329,13 +1397,13 @@ export class SupervisorAgent extends BaseAgent {
    * @private
    */
   private async enrichWithMemoryContext(
-    message: BaseMessage
-  ): Promise<BaseMessage> {
+    message: BaseMessage,
+  ): Promise<{ message: BaseMessage; memories: any[] }> {
     if (!this.memoryAgent) {
       logger.debug(
         'SupervisorAgent: MemoryAgent not available, skipping context enrichment.'
       );
-      return message;
+      return { message, memories: [] };
     }
 
     try {
@@ -1345,10 +1413,8 @@ export class SupervisorAgent extends BaseAgent {
       );
 
       if (memories.length === 0) {
-        logger.debug(
-          'SupervisorAgent: No relevant memories found for context.'
-        );
-        return message;
+        logger.debug('SupervisorAgent: No relevant memories found for context.');
+        return { message, memories: [] };
       }
 
       const memoryContext = this.memoryAgent.formatMemoriesForContext(memories);
@@ -1361,19 +1427,106 @@ export class SupervisorAgent extends BaseAgent {
           ? message.content
           : JSON.stringify(message.content);
 
-      return new HumanMessage({
+      const enriched = new HumanMessage({
         content: originalContent,
         additional_kwargs: {
           ...message.additional_kwargs,
           memory_context: memoryContext,
         },
       });
+
+      return { message: enriched, memories };
     } catch (error) {
       logger.error(
         `SupervisorAgent: Error enriching message with memory context: ${error}`
       );
-      return message;
+      return { message, memories: [] };
     }
+  }
+
+  private async enrichWithDocumentContext(
+    message: BaseMessage,
+  ): Promise<{ message: BaseMessage; documents: documents.SearchResult[] }> {
+    if (!this.documentAgent) {
+      logger.debug(
+        'SupervisorAgent: DocumentAgent not available, skipping context enrichment.',
+      );
+      return { message, documents: [] };
+    }
+
+    try {
+      const docs = await this.documentAgent.retrieveRelevantDocuments(
+        message,
+        (this.config.starknetConfig.agentConfig as any)?.documents?.topK,
+      );
+
+      if (!docs.length) {
+        logger.debug('SupervisorAgent: No relevant document chunks found for context.');
+        return { message, documents: [] };
+      }
+
+      const docContext = this.documentAgent.formatDocumentsForContext(docs);
+      logger.debug(
+        `SupervisorAgent: Formatted document context (first 100 chars): "${docContext.substring(0, 100)}..."`,
+      );
+
+      const originalContent =
+        typeof message.content === 'string'
+          ? message.content
+          : JSON.stringify(message.content);
+
+      const enriched = new HumanMessage({
+        content: originalContent,
+        additional_kwargs: {
+          ...message.additional_kwargs,
+          document_context: docContext,
+        },
+      });
+
+      return { message: enriched, documents: docs };
+    } catch (error) {
+      logger.error(
+        `SupervisorAgent: Error enriching message with document context: ${error}`,
+      );
+      return { message, documents: [] };
+    }
+  }
+
+  private formatGlobalContext(
+    memories: any[],
+    docs: documents.SearchResult[],
+    topK = 6,
+  ): string {
+    const combined = [
+      ...memories.map((m) => ({
+        type: 'memory' as const,
+        similarity: m.similarity,
+        content: m.content,
+        id: m.id,
+      })),
+      ...docs.map((d) => ({
+        type: 'document' as const,
+        similarity: d.similarity,
+        content: d.content,
+        document_id: d.document_id,
+        chunk_index: d.chunk_index,
+      })),
+    ];
+
+    combined.sort((a, b) => b.similarity - a.similarity);
+    const selected = combined.slice(0, topK);
+
+    if (!selected.length) return '';
+
+    const formatted = selected
+      .map((item) =>
+        item.type === 'memory'
+          ? `Memory [id: ${item.id}, similarity: ${item.similarity.toFixed(4)}]: ${item.content}`
+          : `Document [id: ${item.document_id}, chunk: ${item.chunk_index}, similarity: ${item.similarity.toFixed(4)}]: ${item.content}`,
+      )
+      .join('\n\n');
+
+    return `### Global Context ###\n${formatted}\n\n`;
   }
 
   /**
