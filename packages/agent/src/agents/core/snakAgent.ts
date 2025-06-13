@@ -96,7 +96,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   private readonly agentMode: string;
   private readonly agentConfig: AgentConfig;
   private readonly db_credentials: DatabaseCredentials;
-  private memory: MemoryConfig;
+  // private memory: MemoryConfig;
   private currentMode: string;
   private agentReactExecutor: any;
   private modelSelector: ModelSelector | null = null;
@@ -113,7 +113,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
     this.currentMode =
       AGENT_MODES[config.agentConfig?.mode || AgentMode.INTERACTIVE];
     this.agentConfig = config.agentConfig;
-    this.memory = config.memory || {};
+    // this.memory = config.memory || {};
     this.modelSelector = config.modelSelector || null;
 
     if (!config.accountPrivateKey) {
@@ -340,61 +340,43 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
     config?: Record<string, any>
   ): AsyncGenerator<any> {
     logger.debug(`SnakAgent executing with mode: ${this.currentMode}`);
-   try {
-    if (!this.agentReactExecutor) {
-      throw new Error("Agent executor is not initialized. Cannot execute.");
-    }
-
-    let messagesForGraph: BaseMessage[];
-
-    if (
-      Array.isArray(input) &&
-      input.every((msg) => msg instanceof BaseMessage)
-    ) {
-      messagesForGraph = [new HumanMessage(input)];
-      if (messagesForGraph.length === 0) {
-        logger.warn(
-          'SnakAgent: Received empty message array for execution. Initializing with a placeholder.'
-        );
-        messagesForGraph = [new HumanMessage('Starting interaction...')];
-      }
-    } else {
-      
-    }
-
-      console.log(`SnakAgent: Input type is ${typeof input}, checking conversion.`);
-
-
-    const currentMessages:
-    const graphState = {
-      messages: currentMessages,
-    };
-
-    const runnableConfig: Record<string, any> = {};
-    // Error no threadId
-    const threadId =
-      config?.threadId || config?.metadata?.threadId || 'default';
-
-    if (threadId) {
-      runnableConfig.configurable = { thread_id: threadId };
-    }
-
-    runnableConfig.version = 'v2';
-
-    if (config?.recursionLimit) {
-      runnableConfig.recursionLimit = config.recursionLimit;
-    }
-
-    if (config?.originalUserQuery) {
-      if (!runnableConfig.configurable) runnableConfig.configurable = {};
-      runnableConfig.configurable.originalUserQuery = config.originalUserQuery;
-    }
-
-    logger.debug(
-      `SnakAgent: Invoking agent executor with ${currentMessages.length} messages. Thread ID: ${threadId || 'N/A'}`
-    );
-
     try {
+      if (!this.agentReactExecutor) {
+        throw new Error('Agent executor is not initialized. Cannot execute.');
+      }
+
+      console.log(
+        `SnakAgent: Input type is ${typeof input}, checking conversion.`
+      );
+
+      const graphState = {
+        messages: [new HumanMessage(input)],
+      };
+
+      const runnableConfig: Record<string, any> = {};
+      const threadId =
+        config?.threadId || config?.metadata?.threadId || 'default';
+
+      if (threadId) {
+        runnableConfig.configurable = { thread_id: threadId };
+      }
+
+      runnableConfig.version = 'v2';
+
+      if (config?.recursionLimit) {
+        runnableConfig.recursionLimit = config.recursionLimit;
+      }
+
+      if (config?.originalUserQuery) {
+        if (!runnableConfig.configurable) runnableConfig.configurable = {};
+        runnableConfig.configurable.originalUserQuery =
+          config.originalUserQuery;
+      }
+
+      logger.debug(
+        `SnakAgent: Invoking agent executor with ${input.length} messages. Thread ID: ${threadId || 'N/A'}`
+      );
+
       const app = this.agentReactExecutor;
       let chunk_to_save;
       let iteration_number = 0;
@@ -449,11 +431,9 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         final: true,
       };
       return;
-    } catch (agentExecError: any) {
-      throw new Error(`SnakAgent: Agent execution failed: ${agentExecError}`);
+    } catch (error) {
+      console.error('ExecuteAsyncGenerator :', error);
     }
-  } catch (error) {
-  }
   }
   /**
    * Execute the agent with the given input
@@ -462,225 +442,90 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
    * @returns Promise resolving to the agent response
    */
   public async execute(
-    input: BaseMessage[] | any,
+    input: string,
     config?: Record<string, any>
   ): Promise<any> {
     logger.debug(`SnakAgent executing with mode: ${this.currentMode}`);
     try {
       if (!this.agentReactExecutor) {
-        logger.warn(
-          'SnakAgent: Agent executor not available. Attempting to recreate.'
-        );
-        try {
-          await this.createAgentReactExecutor();
-          if (!this.agentReactExecutor) {
-            logger.error(
-              'SnakAgent: Failed to recreate agent executor. Cannot proceed.'
-            );
-            const fallbackInput =
-              Array.isArray(input) && input.length > 0
-                ? input[input.length - 1]
-                : input;
-            return this.executeSimpleFallback(
-              fallbackInput as string | BaseMessage
-            );
-          }
-        } catch (recreateError) {
-          logger.error(
-            `SnakAgent: Critical error recreating agent executor: ${recreateError}`
-          );
-          const fallbackInput =
-            Array.isArray(input) && input.length > 0
-              ? input[input.length - 1]
-              : input;
-          return this.executeSimpleFallback(
-            fallbackInput as string | BaseMessage
-          );
-        }
+        throw new Error('Agent executor is not initialized. Cannot execute.');
       }
 
-      let messagesForGraph: BaseMessage[];
-
-      if (
-        Array.isArray(input) &&
-        input.every((msg) => msg instanceof BaseMessage)
-      ) {
-        messagesForGraph = input;
-        if (messagesForGraph.length === 0) {
-          logger.warn(
-            'SnakAgent: Received empty message array for execution. Initializing with a placeholder.'
-          );
-          messagesForGraph = [new HumanMessage('Starting interaction...')];
-        }
-      } else {
-        logger.warn(
-          `SnakAgent: Unexpected input type for 'messages'. Expected BaseMessage[], received ${typeof input}. Attempting to convert.`
-        );
-
-        if (input instanceof BaseMessage) {
-          messagesForGraph = [input];
-        } else if (typeof input === 'string') {
-          messagesForGraph = [new HumanMessage(input)];
-        } else if (
-          typeof input === 'object' &&
-          input &&
-          'content' in input &&
-          typeof input.content === 'string'
-        ) {
-          messagesForGraph = [new HumanMessage(input.content)];
-        } else {
-          logger.error(
-            'SnakAgent: Could not convert input to BaseMessage[]. Using simple fallback.'
-          );
-          let fallbackContent = 'Unprocessable input for agent execution';
-
-          try {
-            if (typeof input === 'string') fallbackContent = input;
-            else if (
-              input instanceof BaseMessage &&
-              typeof input.content === 'string'
-            )
-              fallbackContent = input.content;
-            else if (
-              input &&
-              typeof input.toString === 'function' &&
-              input.toString() !== '[object Object]' //WHYYYYYY
-            )
-              fallbackContent = input.toString();
-            else if (input && input.content && typeof input.content === 'string')
-              fallbackContent = input.content;
-          } catch {}
-
-          return this.executeSimpleFallback(new HumanMessage(fallbackContent));
-        }
-    }
-
-    const originalUserQuery = config?.originalUserQuery;
-    let currentMessages = messagesForGraph;
-
-    if (
-      originalUserQuery &&
-      currentMessages.length > 0 &&
-      currentMessages[0].additional_kwargs?.from === 'model-selector'
-    ) {
-      logger.debug(
-        `SnakAgent: Using original user query "${originalUserQuery}" instead of model-selector message.`
+      console.log(
+        `SnakAgent: Input type is ${typeof input}, checking conversion.`
       );
-      currentMessages = [new HumanMessage(originalUserQuery)];
-    }
 
-    const graphState = {
-      messages: currentMessages,
-    };
+      const graphState = {
+        messages: [new HumanMessage(input)],
+      };
 
-    const runnableConfig: Record<string, any> = {};
-    const threadId = config?.threadId || config?.metadata?.threadId;
+      const runnableConfig: Record<string, any> = {};
+      const threadId = config?.threadId || config?.metadata?.threadId;
 
-    if (threadId) {
-      runnableConfig.configurable = { thread_id: threadId };
-    }
+      if (threadId) {
+        runnableConfig.configurable = { thread_id: threadId };
+      }
 
-    if (config?.recursionLimit) {
-      runnableConfig.recursionLimit = config.recursionLimit;
-    }
+      if (config?.recursionLimit) {
+        runnableConfig.recursionLimit = config.recursionLimit;
+      }
 
-    if (config?.originalUserQuery) {
-      if (!runnableConfig.configurable) runnableConfig.configurable = {};
-      runnableConfig.configurable.originalUserQuery = config.originalUserQuery;
-    }
+      if (config?.originalUserQuery) {
+        if (!runnableConfig.configurable) runnableConfig.configurable = {};
+        runnableConfig.configurable.originalUserQuery =
+          config.originalUserQuery;
+      }
 
-    logger.debug(
-      `SnakAgent: Invoking agent executor with ${currentMessages.length} messages. Thread ID: ${threadId || 'N/A'}`
-    );
+      logger.debug(
+        `SnakAgent: Invoking agent executor with ${input.length} messages. Thread ID: ${threadId || 'N/A'}`
+      );
 
-    try {
-      let responseContent: string | any;
+      try {
+        let responseContent: string | any;
 
-      const app = this.agentReactExecutor;
-      const result = await app.invoke(graphState, runnableConfig);
-      if (result?.messages?.length > 0) {
-        for (let i = result.messages.length - 1; i >= 0; i--) {
-          const msg = result.messages[i];
-          if (msg instanceof AIMessage && msg.content) {
-            if (typeof msg.content === 'string' && msg.content.trim() !== '') {
-              responseContent = msg.content;
-              break;
-            } else if (Array.isArray(msg.content) && msg.content.length > 0) {
-              responseContent = msg.content;
-              break;
+        const app = this.agentReactExecutor;
+        const result = await app.invoke(graphState, runnableConfig);
+        if (result?.messages?.length > 0) {
+          for (let i = result.messages.length - 1; i >= 0; i--) {
+            const msg = result.messages[i];
+            if (msg instanceof AIMessage && msg.content) {
+              if (
+                typeof msg.content === 'string' &&
+                msg.content.trim() !== ''
+              ) {
+                responseContent = msg.content;
+                break;
+              } else if (Array.isArray(msg.content) && msg.content.length > 0) {
+                responseContent = msg.content;
+                break;
+              }
             }
           }
         }
+
+        if (!responseContent) {
+          const lastMsg = result.messages[result.messages.length - 1];
+          responseContent =
+            lastMsg?.content ||
+            "I couldn't generate a specific response for this request.";
+        }
+
+        return new AIMessage({
+          content: responseContent,
+          additional_kwargs: {
+            from: 'snak',
+            final: true,
+            agent_mode: this.currentMode,
+          },
+        });
+      } catch (error: any) {
+        logger.error(`SnakAgent: Agent execution failed: ${error}`);
+        if (this.isTokenRelatedError(error)) {
+          logger.warn('Token related error detected during execution.');
+        }
+        throw error;
       }
-
-      if (!responseContent) {
-        const lastMsg = result.messages[result.messages.length - 1];
-        responseContent =
-          lastMsg?.content ||
-          "I couldn't generate a specific response for this request.";
-      }
-
-      return new AIMessage({
-        content: responseContent,
-        additional_kwargs: {
-          from: 'snak',
-          final: true,
-          agent_mode: this.currentMode,
-        },
-      });
-    } catch (agentExecError: any) {
-      logger.error(`SnakAgent: Agent execution failed: ${agentExecError}`);
-      if (this.isTokenRelatedError(agentExecError)) {
-        logger.warn('Token related error detected during execution.');
-      }
-      logger.error(
-        `SnakAgent: Catastrophic error in execute, using fallback: ${agentExecError}`
-      );
-      return this.executeSimpleFallback(input as string | BaseMessage);
-    }
-  } catch (error) {
-  }
-}
-
-  /**
-   * Simple fallback execution mode when main executor fails
-   * @private
-   * @param input - The original input received by the execute method
-   * @returns AIMessage indicating fallback mode
-   */
-  private async executeSimpleFallback(
-    input: string | BaseMessage
-  ): Promise<AIMessage> {
-    logger.debug('SnakAgent: Using simple fallback execution.');
-
-    let queryContent = 'Unavailable';
-    try {
-      if (typeof input === 'string') {
-        queryContent = input;
-      } else if (
-        input instanceof BaseMessage &&
-        typeof input.content === 'string'
-      ) {
-        queryContent = input.content;
-      } else if (input && typeof input.toString === 'function') {
-        queryContent = input.toString();
-      }
-    } catch (e) {
-      logger.error(`Error extracting content in fallback mode: ${e}`);
-    }
-
-    const truncatedQuery =
-      queryContent.substring(0, 100) + (queryContent.length > 100 ? '...' : '');
-    const responseMessage = `I cannot process your request completely as I am in fallback mode. Your query was: "${truncatedQuery}"`;
-
-    return new AIMessage({
-      content: responseMessage,
-      additional_kwargs: {
-        from: 'snak',
-        final: true,
-        error: 'fallback_mode_activated',
-      },
-    });
+    } catch (error) {}
   }
 
   /**
@@ -701,114 +546,14 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   }
 
   /**
-   * Executes a call data request in agent mode, typically for signature requests
-   * Requires the agent to be in interactive mode
-   * @param input - The input string for the call data execution
-   * @returns Promise resolving to the parsed JSON response or an error object
-   */
-  public async execute_call_data(input: string): Promise<unknown> {
-    try {
-      if (this.currentMode !== AGENT_MODES[AgentMode.INTERACTIVE]) {
-        throw new Error(
-          `Must be in interactive mode to execute call_data (current mode: ${this.currentMode}).`
-        );
-      }
-
-      if (!this.agentReactExecutor) {
-        throw new Error('Agent executor is not initialized.');
-      }
-
-      const invokeOptions: any = {};
-
-      if (this.memory.enabled !== false) {
-        const maxIterations =
-          this.agentConfig?.maxIterations ??
-          this.memory.maxIterations ??
-          this.memory.shortTermMemorySize ??
-          15;
-
-        if (maxIterations !== 0) {
-          invokeOptions.maxIterations = maxIterations;
-          invokeOptions.messageHandler = (messages: BaseMessage[]) => {
-            if (messages.length > maxIterations) {
-              logger.debug(
-                `Call data - message pruning: ${messages.length} messages exceeds limit ${maxIterations}.`
-              );
-              const prunedMessages = [
-                messages[0],
-                ...messages.slice(-(maxIterations - 1)),
-              ];
-              logger.debug(
-                `Call data - pruned from ${messages.length} to ${prunedMessages.length} messages.`
-              );
-              return prunedMessages;
-            }
-            return messages;
-          };
-          logger.debug(
-            `execute_call_data: Configured with maxIterations=${maxIterations}.`
-          );
-        } else {
-          logger.debug(`execute_call_data: Running without recursion limit.`);
-        }
-      }
-
-      logger.debug('execute_call_data: Invoking agent with input message.');
-      const app = this.agentReactExecutor;
-      const result = await app.invoke(
-        {
-          messages: [new HumanMessage({ content: input })],
-        },
-        invokeOptions
-      );
-      logger.debug('execute_call_data: Agent invocation complete.');
-
-      try {
-        if (!result?.messages?.length) {
-          throw new Error('No messages returned from call data execution.');
-        }
-
-        const lastAiMessage = result.messages
-          .slice()
-          .reverse()
-          .find((m: BaseMessage) => m instanceof AIMessage);
-
-        if (!lastAiMessage || typeof lastAiMessage.content !== 'string') {
-          throw new Error(
-            'Could not find valid AIMessage content in the result.'
-          );
-        }
-
-        return JSON.parse(lastAiMessage.content);
-      } catch (parseError) {
-        const lastMessageContent =
-          result?.messages?.[result.messages.length - 1]?.content;
-        logger.error(
-          `Failed to parse observation JSON: ${parseError}. Content was: ${lastMessageContent}`
-        );
-        return {
-          status: 'failure',
-          error: `Failed to parse observation: ${parseError instanceof Error ? parseError.message : String(parseError)}. Raw content: ${lastMessageContent}`,
-        };
-      }
-    } catch (error) {
-      logger.error(`execute_call_data error: ${error}`);
-      return {
-        status: 'failure',
-        error: `Execution error: ${error instanceof Error ? error.message : String(error)}`,
-      };
-    }
-  }
-
-  /**
    * Executes the agent in autonomous mode
    * This mode allows the agent to operate continuously based on an initial goal or prompt
    * @returns Promise resolving to the result of the autonomous execution
    */
   public async execute_autonomous(): Promise<unknown> {
     let responseContent: string | any;
-    let errorCount = 0;
-    const maxErrors = 3;
+    // let errorCount = 0;
+    // const maxErrors = 3;
     let fallbackAttempted = false;
     let originalMode = this.currentMode;
     let iterationCount = 0;
@@ -832,100 +577,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       }
 
       if (!this.agentReactExecutor) {
-        logger.debug(
-          'SnakAgent (autonomous): No executor exists, attempting to create one.'
-        );
-        try {
-          await this.createAgentReactExecutor();
-        } catch (initError) {
-          logger.error(
-            `SnakAgent (autonomous): Initial attempt to initialize executor failed: ${initError}`
-          );
-          errorCount++;
-
-          if (errorCount >= maxErrors) {
-            logger.warn(
-              'SnakAgent (autonomous): Maximum initialization attempts reached, using fallback mode.'
-            );
-            fallbackAttempted = true;
-            return this.executeSimpleFallback(
-              'Autonomous execution initialization failed'
-            );
-          } else {
-            return new AIMessage({
-              content: `Cannot start autonomous execution: agent initialization failed. Error: ${initError}`,
-              additional_kwargs: {
-                from: 'snak',
-                final: true,
-                error: 'initialization_failed_autonomous',
-              },
-            });
-          }
-        }
-      }
-
-      while (!this.agentReactExecutor && errorCount < maxErrors) {
-        errorCount++;
-        logger.warn(
-          `SnakAgent (autonomous): Attempt ${errorCount} to initialize executor, trying again...`
-        );
-        try {
-          await this.createAgentReactExecutor();
-        } catch (retryError) {
-          logger.error(
-            `SnakAgent (autonomous): Retry attempt ${errorCount} failed: ${retryError}`
-          );
-        }
-        if (this.agentReactExecutor) {
-          logger.debug(
-            `SnakAgent (autonomous): Executor successfully created on attempt ${errorCount}.`
-          );
-          break;
-        }
-      }
-
-      if (
-        !this.agentReactExecutor &&
-        errorCount >= maxErrors &&
-        !fallbackAttempted
-      ) {
-        logger.warn(
-          'SnakAgent (autonomous): Maximum initialization attempts after retries, using fallback mode.'
-        );
-        fallbackAttempted = true;
-        return this.executeSimpleFallback(
-          'Autonomous execution initialization failed after retries'
-        );
-      }
-
-      if (!this.agentReactExecutor) {
-        logger.error(
-          'SnakAgent (autonomous): Failed to create a valid executor after multiple attempts.'
-        );
-        return new AIMessage({
-          content:
-            'Failed to initialize the autonomous execution agent after multiple attempts. Please try again or contact an administrator.',
-          additional_kwargs: {
-            from: 'snak',
-            final: true,
-            error: 'executor_creation_failed_retries_autonomous',
-          },
-        });
-      }
-
-      if (!this.agentReactExecutor?.app) {
-        logger.error(
-          'SnakAgent (autonomous): Executor created, but the app is missing.'
-        );
-        return new AIMessage({
-          content:
-            'Failed to initialize autonomous execution: agent structure is incomplete.',
-          additional_kwargs: {
-            from: 'snak',
-            final: true,
-            error: 'executor_app_missing_autonomous',
-          },
-        });
+        throw new Error('Agent executor is not initialized. Cannot execute.');
       }
 
       const app = this.agentReactExecutor.app;
@@ -1019,9 +671,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         logger.error(
           `SnakAgent (autonomous): Catastrophic error, using fallback: ${graphExecError}`
         );
-        return this.executeSimpleFallback(
-          'Autonomous execution failed during graph processing'
-        );
       }
 
       return new AIMessage({
@@ -1040,7 +689,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         logger.error(
           `SnakAgent (autonomous): Catastrophic error, using fallback: ${error}`
         );
-        return this.executeSimpleFallback('Autonomous execution failed');
+        // return this.executeSimpleFallback('Autonomous execution failed');
       }
 
       return new AIMessage({
@@ -1133,9 +782,9 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
               'SnakAgent (hybrid): Maximum initialization attempts reached, using fallback mode.'
             );
             fallbackAttempted = true;
-            return this.executeSimpleFallback(
-              'Hybrid execution initialization failed'
-            );
+            // return this.executeSimpleFallback(
+            //   'Hybrid execution initialization failed'
+            // );
           } else {
             throw initError;
           }
@@ -1207,7 +856,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         logger.error(
           `SnakAgent (hybrid): Catastrophic error, using fallback: ${error}`
         );
-        return this.executeSimpleFallback('Hybrid execution failed');
+        // return this.executeSimpleFallback('Hybrid execution failed');
       }
 
       return new AIMessage({
