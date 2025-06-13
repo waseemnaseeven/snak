@@ -42,10 +42,24 @@ export class AgentService implements IAgentService {
       let result: any;
 
       if (agent && typeof agent.execute === 'function') {
-        if ('getSnakAgent' in agent) {
-          result = await agent.execute(userRequest);
+        const executionResult = agent.execute(userRequest.user_request);
+
+        function isAsyncGenerator(obj: any): obj is AsyncGenerator<any, any, any> {
+          return obj && typeof obj === 'object' && typeof obj[Symbol.asyncIterator] === 'function';
+        }
+
+        if (isAsyncGenerator(executionResult)) {
+          for await (const chunk of executionResult) {
+            if (chunk.final === true) {
+              this.logger.debug('SupervisorService: Execution completed');
+              result = chunk;
+              break;
+            }
+            result = chunk;
+          }
         } else {
-          result = await agent.execute(userRequest.user_request);
+          // If it's a Promise, just await the result
+          result = await executionResult;
         }
       } else {
         throw new Error('Invalid agent: missing execute method');
@@ -99,9 +113,7 @@ export class AgentService implements IAgentService {
     try {
       let result: any;
 
-      for await (const chunk of agent.executeAsyncGenerator(
-        userRequest.user_request
-      )) {
+      for await (const chunk of agent.execute(userRequest.user_request)) {
         if (chunk.final === true) {
           this.logger.debug('SupervisorService: Execution completed');
           yield chunk;

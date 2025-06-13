@@ -8,7 +8,7 @@ import { DatabaseCredentials } from '../../tools/types/database.js';
 import { AgentMode, AGENT_MODES } from '../../config/agentConfig.js';
 import { MemoryConfig } from '../operators/memoryAgent.js';
 import { createInteractiveAgent } from '../modes/interactive.js';
-import { createAutonomousAgent } from '../modes/autonomous.js';
+import { AgentReturn, createAutonomousAgent } from '../modes/autonomous.js';
 import { createHybridAgent } from '../modes/hybrid.js';
 import { Command } from '@langchain/langgraph';
 import { FormatChunkIteration, ToolsChunk } from './utils.js';
@@ -98,7 +98,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
   private readonly db_credentials: DatabaseCredentials;
   // private memory: MemoryConfig;
   private currentMode: string;
-  private agentReactExecutor: any;
+  private agentReactExecutor: AgentReturn;
   private modelSelector: ModelSelector | null = null;
 
   constructor(config: SnakAgentConfig) {
@@ -107,13 +107,10 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
     this.provider = config.provider;
     this.accountPrivateKey = config.accountPrivateKey;
     this.accountPublicKey = config.accountPublicKey;
-    this.agentMode =
-      AGENT_MODES[config.agentConfig?.mode || AgentMode.INTERACTIVE];
+    this.agentMode = AGENT_MODES[config.agentConfig.mode];
     this.db_credentials = config.db_credentials;
-    this.currentMode =
-      AGENT_MODES[config.agentConfig?.mode || AgentMode.INTERACTIVE];
+    this.currentMode = AGENT_MODES[config.agentConfig.mode];
     this.agentConfig = config.agentConfig;
-    // this.memory = config.memory || {};
     this.modelSelector = config.modelSelector || null;
 
     if (!config.accountPrivateKey) {
@@ -146,14 +143,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         this.agentConfig.plugins = this.agentConfig.plugins || [];
       } else {
         logger.warn('SnakAgent: No agent configuration available.');
-      }
-
-      if (
-        this.agentConfig?.mode === AgentMode.HYBRID ||
-        (this.agentMode === AGENT_MODES[AgentMode.AUTONOMOUS] &&
-          this.agentConfig?.mode === AgentMode.AUTONOMOUS)
-      ) {
-        this.currentMode = AGENT_MODES[AgentMode.HYBRID];
       }
 
       try {
@@ -196,6 +185,9 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
             this,
             this.modelSelector
           );
+          console.log(
+            JSON.stringify(this.agentReactExecutor.agent_config, null, 2)
+          );
           break;
         case AGENT_MODES[AgentMode.INTERACTIVE]:
           this.agentReactExecutor = await createInteractiveAgent(
@@ -203,12 +195,12 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
             this.modelSelector
           );
           break;
-        case AGENT_MODES[AgentMode.HYBRID]:
-          this.agentReactExecutor = await createHybridAgent(
-            this,
-            this.modelSelector
-          );
-          break;
+        // case AGENT_MODES[AgentMode.HYBRID]:
+        // this.agentReactExecutor = await createHybridAgent(
+        //   this,
+        //   this.modelSelector
+        // );
+        // break;
         default:
           throw new Error(`Invalid mode: ${this.currentMode}`);
       }
@@ -374,10 +366,10 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       }
 
       logger.debug(
-        `SnakAgent: Invoking agent executor with ${input.length} messages. Thread ID: ${threadId || 'N/A'}`
+        `SnakAgent: Invoking agent executor with ${graphState.messages.length} messages. Thread ID: ${threadId || 'N/A'}`
       );
 
-      const app = this.agentReactExecutor;
+      const app = this.agentReactExecutor.app;
       let chunk_to_save;
       let iteration_number = 0;
 
@@ -441,91 +433,35 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
    * @param config - Optional configuration for execution
    * @returns Promise resolving to the agent response
    */
-  public async execute(
+  public async *execute(
     input: string,
     config?: Record<string, any>
-  ): Promise<any> {
-    logger.debug(`SnakAgent executing with mode: ${this.currentMode}`);
+  ): AsyncGenerator<any> | Promise<any> {
     try {
+      console.log(
+        `Execute called with input type: ${typeof input}, value: ${input}`
+      );
       if (!this.agentReactExecutor) {
         throw new Error('Agent executor is not initialized. Cannot execute.');
       }
-
-      console.log(
-        `SnakAgent: Input type is ${typeof input}, checking conversion.`
-      );
-
-      const graphState = {
-        messages: [new HumanMessage(input)],
-      };
-
-      const runnableConfig: Record<string, any> = {};
-      const threadId = config?.threadId || config?.metadata?.threadId;
-
-      if (threadId) {
-        runnableConfig.configurable = { thread_id: threadId };
-      }
-
-      if (config?.recursionLimit) {
-        runnableConfig.recursionLimit = config.recursionLimit;
-      }
-
-      if (config?.originalUserQuery) {
-        if (!runnableConfig.configurable) runnableConfig.configurable = {};
-        runnableConfig.configurable.originalUserQuery =
-          config.originalUserQuery;
-      }
-
-      logger.debug(
-        `SnakAgent: Invoking agent executor with ${input.length} messages. Thread ID: ${threadId || 'N/A'}`
-      );
-
-      try {
-        let responseContent: string | any;
-
-        const app = this.agentReactExecutor;
-        const result = await app.invoke(graphState, runnableConfig);
-        if (result?.messages?.length > 0) {
-          for (let i = result.messages.length - 1; i >= 0; i--) {
-            const msg = result.messages[i];
-            if (msg instanceof AIMessage && msg.content) {
-              if (
-                typeof msg.content === 'string' &&
-                msg.content.trim() !== ''
-              ) {
-                responseContent = msg.content;
-                break;
-              } else if (Array.isArray(msg.content) && msg.content.length > 0) {
-                responseContent = msg.content;
-                break;
-              }
-            }
+      if (this.currentMode == AGENT_MODES[AgentMode.INTERACTIVE]) {
+        for await (const chunk of this.executeAsyncGenerator(input, config)) {
+          if (chunk.final) {
+            yield chunk;
+            return;
           }
+          yield chunk;
         }
-
-        if (!responseContent) {
-          const lastMsg = result.messages[result.messages.length - 1];
-          responseContent =
-            lastMsg?.content ||
-            "I couldn't generate a specific response for this request.";
-        }
-
-        return new AIMessage({
-          content: responseContent,
-          additional_kwargs: {
-            from: 'snak',
-            final: true,
-            agent_mode: this.currentMode,
-          },
-        });
-      } catch (error: any) {
-        logger.error(`SnakAgent: Agent execution failed: ${error}`);
-        if (this.isTokenRelatedError(error)) {
-          logger.warn('Token related error detected during execution.');
-        }
-        throw error;
+      } else if (this.currentMode == AGENT_MODES[AgentMode.AUTONOMOUS]) {
+        const response = await this.execute_autonomous();
+        yield response;
+        return;
+      } else {
+        return 'Hybrid mode is not supported in this method. Please use execute_hybrid() instead.';
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error('Execute :', error);
+    }
   }
 
   /**
@@ -563,32 +499,18 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         `SnakAgent starting autonomous execution. Current mode: ${this.currentMode}`
       );
 
-      if (this.currentMode !== AGENT_MODES[AgentMode.AUTONOMOUS]) {
-        if (this.agentConfig?.mode === AgentMode.AUTONOMOUS) {
-          logger.info(
-            `Overriding current mode to '${AGENT_MODES[AgentMode.AUTONOMOUS]}' based on agent configuration for autonomous execution.`
-          );
-          this.currentMode = AGENT_MODES[AgentMode.AUTONOMOUS];
-        } else {
-          throw new Error(
-            `Agent must be in autonomous mode or configured for autonomous execution. Current mode: ${this.currentMode}`
-          );
-        }
-      }
-
       if (!this.agentReactExecutor) {
         throw new Error('Agent executor is not initialized. Cannot execute.');
       }
 
       const app = this.agentReactExecutor.app;
-      const agentJsonConfig = this.agentReactExecutor.json_config;
-      const maxGraphIterations = this.agentReactExecutor.maxIterations;
+      const agentJsonConfig = this.agentReactExecutor.agent_config;
+      const maxGraphIterations = 5;
 
-      const initialHumanMessage = new HumanMessage({
-        content:
-          agentJsonConfig?.prompt?.initial_goal ||
-          'Start executing the primary objective defined in your system prompt.',
-      });
+      console.log(JSON.stringify(agentJsonConfig, null, 2));
+      const initialHumanMessage = new HumanMessage(
+        'Start executing the primary objective defined in your system prompt.'
+      );
       let conversationHistory: BaseMessage[] = [initialHumanMessage];
 
       const threadConfig = {
@@ -600,7 +522,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
       logger.info(
         `Starting autonomous graph execution with max iterations: ${maxGraphIterations}.`
       );
-
       try {
         let finalState: any = null;
 
@@ -608,56 +529,9 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
           { messages: conversationHistory },
           { ...threadConfig, recursionLimit: maxGraphIterations }
         );
-
         logger.debug('Autonomous graph invocation complete.');
         iterationCount = finalState?.iterations || iterationCount;
-
-        if (finalState?.messages?.length > 0) {
-          const lastMsg = finalState.messages[finalState.messages.length - 1];
-          if (
-            lastMsg instanceof AIMessage &&
-            lastMsg.additional_kwargs?.error
-          ) {
-            logger.error(
-              `Autonomous Agent: Error detected in final graph state: ${lastMsg.additional_kwargs.error}`
-            );
-            responseContent =
-              lastMsg.content ||
-              `Execution stopped due to error: ${lastMsg.additional_kwargs.error}`;
-            if (!lastMsg.additional_kwargs.final) {
-              if (!lastMsg.additional_kwargs) lastMsg.additional_kwargs = {};
-              lastMsg.additional_kwargs.final = true;
-            }
-          }
-        }
-
-        logger.info(
-          `Autonomous session finished. Iteration count from graph: ${iterationCount}.`
-        );
-
-        if (!responseContent) {
-          if (finalState?.messages?.length > 0) {
-            const lastMessage =
-              finalState.messages[finalState.messages.length - 1];
-            if (lastMessage instanceof AIMessage) {
-              responseContent = lastMessage.content;
-              if (!lastMessage.additional_kwargs?.final) {
-                if (!lastMessage.additional_kwargs)
-                  lastMessage.additional_kwargs = {};
-                lastMessage.additional_kwargs.final = true;
-              }
-            } else {
-              logger.warn(
-                `Autonomous execution ended with a non-AI message: ${lastMessage._getType()}`
-              );
-              responseContent =
-                'Autonomous execution finished, but the final message was not from the AI.';
-            }
-          } else {
-            responseContent =
-              'Autonomous execution completed, but no final state or messages were found.';
-          }
-        }
+        console.log('iterationCount : ', iterationCount);
       } catch (graphExecError: any) {
         logger.error(
           `Error during autonomous graph execution: ${graphExecError}`
@@ -665,8 +539,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         if (this.isTokenRelatedError(graphExecError)) {
           responseContent =
             'Error: Token limit likely exceeded during autonomous execution.';
-        } else {
-          responseContent = `Error during autonomous execution: ${graphExecError.message}`;
         }
         logger.error(
           `SnakAgent (autonomous): Catastrophic error, using fallback: ${graphExecError}`
@@ -689,7 +561,6 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         logger.error(
           `SnakAgent (autonomous): Catastrophic error, using fallback: ${error}`
         );
-        // return this.executeSimpleFallback('Autonomous execution failed');
       }
 
       return new AIMessage({
@@ -811,7 +682,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         configurable: {
           thread_id: threadId,
         },
-        recursionLimit: this.agentReactExecutor.maxIterations,
+        recursionLimit: this.agentReactExecutor.agent_config.maxIterations,
       };
 
       const initialHumanMessage = new HumanMessage({
@@ -898,7 +769,7 @@ export class SnakAgent extends BaseAgent implements IModelAgent {
         configurable: {
           thread_id: threadId,
         },
-        recursionLimit: this.agentReactExecutor.maxIterations,
+        recursionLimit: this.agentReactExecutor.agent_config.maxIterations,
       };
 
       const state = await app.invoke(

@@ -2,14 +2,6 @@ import { RpcProvider } from 'starknet';
 
 export interface IAgent {
   /**
-   * Executes the user request and returns the result
-   * @param input The user's request string
-   * @returns Promise resolving to the execution result
-   * @throws AgentExecutionError if execution fails
-   */
-  execute(input: string): Promise<unknown>;
-
-  /**
    * Executes agent autonomous the user request and returns the result
    * @param input The user's request string
    * @returns Promise resolving to the execution result
@@ -17,6 +9,10 @@ export interface IAgent {
    */
   execute_autonomous(): Promise<unknown>;
 
+  execute(
+    input: string,
+    config?: Record<string, any>
+  ): Promise<unknown> | AsyncGenerator<any>;
   /**
    * Validates the user request before execution
    * @param request The user's request string

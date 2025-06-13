@@ -17,6 +17,7 @@ import { ModelSelector } from '../operators/modelSelector.js';
 import { SupervisorAgent } from '../supervisor/supervisorAgent.js';
 import { interactiveRules } from '../../prompt/prompts.js';
 import { TokenTracker } from '../../token/tokenTracking.js';
+import { AgentReturn } from './autonomous.js';
 
 /**
  * Retrieves the memory agent instance from the SupervisorAgent.
@@ -46,7 +47,7 @@ const getMemoryAgent = async () => {
 export const createInteractiveAgent = async (
   snakAgent: SnakAgentInterface,
   modelSelector: ModelSelector | null
-) => {
+): Promise<AgentReturn> => {
   try {
     const agent_config: AgentConfig = snakAgent.getAgentConfig();
     if (!agent_config) {
@@ -375,7 +376,10 @@ ${formatAgentResponse(content)}`);
           }
         : {}),
     });
-    return app;
+    return {
+      app,
+      agent_config,
+    };
   } catch (error) {
     logger.error('Failed to create an interactive agent:', error);
     throw error;
