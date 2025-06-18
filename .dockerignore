@@ -1,0 +1,14 @@
+packages/database/data
+packages/database/log
+
+node_modules
+pnpm-lock.yaml
+*.log
+dist
+packages/**/node_modules
+packages/**/dist
+
+.git
+.turbo
+.github
+
