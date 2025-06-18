@@ -51,8 +51,8 @@
     }
   },
   "dependencies": {
-    "pg": "^8.14.1",
-    "@snakagent/core": "workspace:*"
+    "@snakagent/core": "workspace:*",
+    "pg": "^8.14.1"
   },
   "devDependencies": {
     "@types/pg": "^8.11.13",
