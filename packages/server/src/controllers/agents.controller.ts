@@ -11,12 +11,6 @@ import {
 } from '@nestjs/common';
 import { AgentService } from '../services/agent.service.js';
 import { AgentStorage } from '../agents.storage.js';
-import {
-  AgentDeleteRequestDTO,
-  AgentRequestDTO,
-  getMessagesFromAgentsDTO,
-  AgentDeletesRequestDTO,
-} from '../dto/agents.js';
 import { Reflector } from '@nestjs/core';
 import { ServerError } from '../utils/error.js';
 import {
@@ -29,12 +23,17 @@ import {
   logger,
   MessageFromAgentIdDTO,
   AgentAddRequestDTO,
+  AgentRequestDTO,
+  AgentConfig,
   AgentResponse,
+  AgentDeleteRequestDTO,
+  AgentDeletesRequestDTO,
+  getMessagesFromAgentsDTO,
+  MessageRequest,
 } from '@snakagent/core';
 import { metrics } from '@snakagent/metrics';
 import { FastifyRequest } from 'fastify';
 import { Postgres } from '@snakagent/database';
-import { AgentConfigSQL } from '../interfaces/sql_interfaces.js';
 import { SnakAgent } from '@snakagent/agents';
 
 export interface SupervisorRequestDTO {
@@ -51,8 +50,7 @@ export interface AgentAvatarResponseDTO {
 
 interface UpdateAgentMcpDTO {
   id: string;
-  plugins: string[];
-  mcpServers: Record<string, any>;
+  mcp_servers: Record<string, any>;
 }
 
 interface AgentMcpResponseDTO {
@@ -82,25 +80,28 @@ export class AgentsController {
     @Body() updateData: UpdateAgentMcpDTO,
     @Req() req: FastifyRequest
   ) {
-    const { id, mcpServers } = updateData;
+    logger.info('update_agent_mcp called');
+    const userId = ControllerHelpers.getUserId(req);
+    const { id, mcp_servers } = updateData;
 
     if (!id) {
       throw new BadRequestException('Agent ID is required');
     }
 
-    if (!mcpServers || typeof mcpServers !== 'object') {
+    if (!mcp_servers || typeof mcp_servers !== 'object') {
       throw new BadRequestException('MCP servers must be an object');
     }
-
-    const userId = ControllerHelpers.getUserId(req);
-
+    const agent = this.agentFactory.getAgentInstance(id, userId);
+    if (!agent) {
+      throw new BadRequestException('Agent not found or access denied');
+    }
     // Update agent MCP configuration in database
     const q = new Postgres.Query(
       `UPDATE agents
-       SET "mcpServers" = $1::jsonb
+       SET "mcp_servers" = $1::jsonb
        WHERE id = $2 AND user_id = $3
-       RETURNING id, "mcpServers"`,
-      [mcpServers, id, userId]
+       RETURNING id, "mcp_servers"`,
+      [mcp_servers, id, userId]
     );
 
     const result = await Postgres.query<AgentMcpResponseDTO>(q);
@@ -119,118 +120,75 @@ export class AgentsController {
   @Post('update_agent_config')
   @HandleWithBadRequestPreservation('Update failed')
   async updateAgentConfig(
-    @Body() config: AgentConfigSQL,
+    @Body() config: AgentConfig.WithOptionalParam,
     @Req() req: FastifyRequest
-  ): Promise<any> {
+  ): Promise<AgentResponse> {
+    logger.info('update_agent_config called');
     const userId = ControllerHelpers.getUserId(req);
 
-    if (!config || !config.id) {
+    if (!config || typeof config !== 'object') {
+      throw new BadRequestException('Configuration object is required');
+    }
+    const id = config.id;
+    if (!id) {
       throw new BadRequestException('Agent ID is required');
     }
+    try {
+      // Use the existing update_agent_complete function
+      const query = `
+  SELECT success, message, updated_agent_id
+  FROM update_agent_complete($1::UUID, $2::UUID, $3::JSONB)
+`;
 
-    const updateFields: string[] = [];
-    const values: any[] = [];
-    let paramIndex = 1;
+      const result = await Postgres.query(
+        new Postgres.Query(query, [
+          id,
+          userId,
+          JSON.stringify(config), // Pass entire config as JSONB
+        ])
+      );
 
-    const updatableFields: (keyof AgentConfigSQL)[] = [
-      'name',
-      'group',
-      'description',
-      'lore',
-      'objectives',
-      'knowledge',
-      'system_prompt',
-      'interval',
-      'plugins',
-      'memory',
-      'mode',
-      'max_iterations',
-      'mcpServers',
-    ];
-
-    updatableFields.forEach((field) => {
-      if (config[field] !== undefined && config[field] !== null) {
-        if (field === 'memory') {
-          let memoryData;
-
-          if (typeof config[field] === 'string') {
-            const fieldValue = config[field] as string;
-            if (fieldValue.startsWith('(') && fieldValue.endsWith(')')) {
-              const content = fieldValue.slice(1, -1);
-              const parts = content.split(',');
-              memoryData = {
-                enabled: parts[0] === 't' || parts[0] === 'true',
-                shortTermMemorySize: parseInt(parts[1], 10),
-                memorySize: parseInt(parts[2], 10),
-              };
-            } else {
-              try {
-                memoryData = JSON.parse(fieldValue);
-              } catch (jsonError) {
-                throw new BadRequestException(
-                  `Invalid memory format: ${fieldValue}. Expected JSON or PostgreSQL composite type format.`
-                );
-              }
-            }
-          } else {
-            memoryData = config[field];
-          }
-
-          const enabled =
-            memoryData.enabled === 'true' ||
-            memoryData.enabled === true ||
-            memoryData.enabled === 't';
-          const parsedShortTerm = Number.parseInt(
-            String(memoryData.shortTermMemorySize ?? ''),
-            10
-          );
-          if (Number.isNaN(parsedShortTerm)) {
-            throw new BadRequestException(
-              'memory.shortTermMemorySize must be a valid integer'
-            );
-          }
-
-          const memorySize = parseInt(memoryData.memorySize) || 20;
-
-          updateFields.push(
-            `"memory" = ROW($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2})::memory`
-          );
-          values.push(enabled, parsedShortTerm, memorySize);
-          paramIndex += 3;
-        } else {
-          updateFields.push(`"${String(field)}" = $${paramIndex}`);
-          values.push(config[field]);
-          paramIndex++;
-        }
+      const updateResult = result[0];
+      if (!updateResult.success) {
+        throw new BadRequestException(updateResult.message);
       }
-    });
 
-    if (updateFields.length === 0) {
-      throw new BadRequestException('No valid fields to update');
+      // Fetch updated agent
+      const fetchQuery = new Postgres.Query(
+        `SELECT
+          id,
+          row_to_json(profile) as profile,
+          mcp_servers,
+          prompts_id,
+          row_to_json(graph) as graph,
+          row_to_json(memory) as memory,
+          row_to_json(rag) as rag,
+          created_at,
+          updated_at,
+          avatar_image,
+          avatar_mime_type
+        FROM agents WHERE id = $1 AND user_id = $2`,
+        [id, userId]
+      );
+      const agent =
+        await Postgres.query<AgentConfig.OutputWithoutUserId>(fetchQuery);
+
+      return {
+        status: 'success',
+        data: agent[0],
+      };
+    } catch (error) {
+      logger.error('Error in updateAgentConfig:', {
+        agentId: id,
+        error: error.message,
+      });
+
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      throw new BadRequestException(`Update failed: ${error.message}`);
     }
-
-    values.push(config.id);
-    values.push(userId);
-
-    const query = `
-		UPDATE agents
-		SET ${updateFields.join(', ')}
-		WHERE id = $${paramIndex} AND user_id = $${paramIndex + 1}
-		RETURNING *
-	  `;
-
-    const q = new Postgres.Query(query, values);
-    const result = await Postgres.query<AgentConfigSQL>(q);
-
-    if (result.length === 0) {
-      throw new BadRequestException('Agent not found');
-    }
-
-    return {
-      status: 'success',
-      data: result[0],
-      message: 'Agent configuration updated successfully',
-    };
   }
 
   @Post('upload-avatar')
@@ -239,6 +197,7 @@ export class AgentsController {
     @Headers('x-api-key') apiKey: string,
     @Req() req: FastifyRequest
   ) {
+    logger.info('upload_avatar called');
     const userId = ControllerHelpers.getUserId(req);
 
     const data = await (req as any).file();
@@ -311,6 +270,7 @@ export class AgentsController {
     @Body() userRequest: AgentRequestDTO,
     @Req() req: FastifyRequest
   ): Promise<AgentResponse> {
+    logger.info('request called');
     const userId = ControllerHelpers.getUserId(req);
 
     const route = this.reflector.get('path', this.handleUserRequest);
@@ -320,10 +280,14 @@ export class AgentsController {
         'Agent ID not provided in request, Using agent Selector to select agent'
       );
 
+      if (
+        !userRequest.request.content ||
+        userRequest.request.content?.length === 0
+      ) {
+        throw new ServerError('E01TA400'); // Bad request if no content
+      }
       const agentSelector = this.agentFactory.getAgentSelector();
-      agent = await agentSelector.execute(userRequest.request.content, false, {
-        userId,
-      });
+      agent = await agentSelector.execute(userRequest.request.content);
       if (agent) {
         const agentId = agent.getAgentConfig().id;
         ControllerHelpers.verifyAgentConfigOwnership(
@@ -343,9 +307,9 @@ export class AgentsController {
       throw new ServerError('E01TA400');
     }
 
-    const messageRequest = {
+    const messageRequest: MessageRequest = {
       agent_id: agent.getAgentConfig().id.toString(),
-      user_request: userRequest.request.content,
+      request: userRequest.request.content ?? '',
     };
 
     const action = this.agentService.handleUserRequest(agent, messageRequest);
@@ -367,6 +331,7 @@ export class AgentsController {
     @Body() userRequest: { agent_id: string },
     @Req() req: FastifyRequest
   ): Promise<AgentResponse> {
+    logger.info('stop_agent called');
     const { userId, agent } = ControllerHelpers.getUserAndVerifyAgentOwnership(
       req,
       this.agentFactory,
@@ -390,17 +355,18 @@ export class AgentsController {
     @Body() userRequest: AgentAddRequestDTO,
     @Req() req: FastifyRequest
   ): Promise<AgentResponse> {
+    logger.info('init_agent called');
     const userId = ControllerHelpers.getUserId(req);
 
-    const newAgentConfig = await this.agentFactory.addAgent({
-      ...userRequest.agent,
-      user_id: userId,
-    });
+    const newAgentConfig = await this.agentFactory.addAgent(
+      userRequest.agent,
+      userId
+    );
 
     metrics.agentConnect();
 
     return ResponseFormatter.success(
-      `Agent ${newAgentConfig.name} added and registered with supervisor`
+      `Agent ${newAgentConfig.profile.name} added and registered with supervisor`
     );
   }
 
@@ -415,6 +381,7 @@ export class AgentsController {
     @Body() userRequest: MessageFromAgentIdDTO,
     @Req() req: FastifyRequest
   ): Promise<AgentResponse> {
+    logger.info('get_messages_from_agent called');
     const { userId } = ControllerHelpers.getUserAndVerifyAgentConfigOwnership(
       req,
       this.agentFactory,
@@ -439,6 +406,7 @@ export class AgentsController {
     @Body() userRequest: AgentDeleteRequestDTO,
     @Req() req: FastifyRequest
   ): Promise<AgentResponse> {
+    logger.info('delete_agent called');
     const { userId } = ControllerHelpers.getUserAndVerifyAgentConfigOwnership(
       req,
       this.agentFactory,
@@ -464,6 +432,7 @@ export class AgentsController {
     @Body() userRequest: AgentDeletesRequestDTO,
     @Req() req: FastifyRequest
   ): Promise<AgentResponse[]> {
+    logger.info('delete_agents called');
     const userId = ControllerHelpers.getUserId(req);
     const responses: AgentResponse[] = [];
 
@@ -506,6 +475,7 @@ export class AgentsController {
     @Body() userRequest: getMessagesFromAgentsDTO,
     @Req() req: FastifyRequest
   ): Promise<AgentResponse> {
+    logger.info('get_messages_from_agents called');
     const { userId } = ControllerHelpers.getUserAndVerifyAgentConfigOwnership(
       req,
       this.agentFactory,
@@ -530,6 +500,7 @@ export class AgentsController {
     @Body() userRequest: getMessagesFromAgentsDTO,
     @Req() req: FastifyRequest
   ): Promise<AgentResponse> {
+    logger.info('clear_message called');
     const { userId } = ControllerHelpers.getUserAndVerifyAgentConfigOwnership(
       req,
       this.agentFactory,
@@ -558,6 +529,7 @@ export class AgentsController {
   @Get('get_agents')
   @HandleErrors('E06TA100')
   async getAgents(@Req() req: FastifyRequest): Promise<AgentResponse> {
+    logger.info('get_agents called');
     const userId = ControllerHelpers.getUserId(req);
     const agents = await this.agentService.getAllAgentsOfUser(userId);
     return ResponseFormatter.success(agents);
@@ -569,6 +541,7 @@ export class AgentsController {
   @Get('get_agent_status')
   @HandleErrors('E05TA100')
   async getAgentStatus(@Req() req: FastifyRequest): Promise<AgentResponse> {
+    logger.info('get_agent_status called');
     const userId = ControllerHelpers.getUserId(req);
     const agents = await this.agentService.getAllAgentsOfUser(userId);
 
@@ -586,6 +559,7 @@ export class AgentsController {
   @Get('get_agent_thread')
   @HandleErrors('E05TA100')
   async getAgentThread(@Req() req: FastifyRequest): Promise<AgentResponse> {
+    logger.info('get_agent_thread called');
     const userId = ControllerHelpers.getUserId(req);
     const agents = await this.agentService.getAllAgentsOfUser(userId);
 
@@ -602,6 +576,7 @@ export class AgentsController {
    */
   @Get('health')
   async getAgentHealth(): Promise<AgentResponse> {
+    logger.info('health called');
     const response: AgentResponse = {
       status: 'success',
       data: 'Agent is healthy',

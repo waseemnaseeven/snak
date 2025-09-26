@@ -1,5 +1,5 @@
 import { SystemMessage } from '@langchain/core/messages';
-import { AgentMode, ModelLevelConfig, ModelProviders } from '@snakagent/core';
+import { AgentMode, ModelConfig, ModelProviders } from '@snakagent/core';
 import { Postgres } from '@snakagent/database';
 import { SnakAgent } from '../core/snakAgent.js';
 import {
@@ -156,21 +156,21 @@ async function ensureDbConnection(): Promise<void> {
 
 // Model Configuration
 function getModelSelectorConfig(): ModelSelectorConfig {
-  const fast: ModelLevelConfig = {
+  const fast: ModelConfig = {
     provider: ModelProviders.OpenAI,
-    model_name: 'gpt-4o-mini',
+    modelName: 'gpt-4o-mini',
     description: 'Optimized for speed and simple tasks.',
   };
 
-  const smart: ModelLevelConfig = {
+  const smart: ModelConfig = {
     provider: ModelProviders.OpenAI,
-    model_name: 'gpt-4o-mini',
+    modelName: 'gpt-4o-mini',
     description: 'Optimized for complex reasoning.',
   };
 
-  const cheap: ModelLevelConfig = {
+  const cheap: ModelConfig = {
     provider: ModelProviders.OpenAI,
-    model_name: 'gpt-4o-mini',
+    modelName: 'gpt-4o-mini',
     description: 'Good cost-performance balance.',
   };
 
@@ -217,7 +217,7 @@ export async function createAgentById(agentId: string): Promise<{
 
   // Build system prompt
   const systemPrompt = buildSystemPromptFromConfig({
-    name: agentConfig.name,
+    name: agentConfig.profile.name,
     description: agentConfig.description,
     lore: agentConfig.lore,
     objectives: agentConfig.objectives,
@@ -241,18 +241,18 @@ export async function createAgentById(agentId: string): Promise<{
     },
     agentConfig: {
       id: agentConfig.id,
-      name: agentConfig.name,
+      name: agentConfig.profile.name,
       group: agentConfig.group,
       description: agentConfig.description,
       prompt: systemMessage,
       interval: agentConfig.interval,
-      maxIterations: agentConfig.max_iterations,
+      max_iterations: agentConfig.max_iterations,
       mode: agentConfig.mode,
       chatId: 'test',
       memory: agentConfig.memory,
       rag: agentConfig.rag,
       plugins: agentConfig.plugins,
-      mcpServers: {},
+      mcp_servers: {},
     },
     modelSelectorConfig: modelSelectorConfig,
     memory: agentConfig.memory,
