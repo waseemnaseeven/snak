@@ -88,10 +88,6 @@ export class AgentValidationService {
         this.validateRAG(agent_config.rag);
       }
 
-      if (agent_config.plugins) {
-        this.validatePlugins(agent_config.plugins);
-      }
-
       if (agent_config.mcp_servers) {
         this.validateMCPServers(agent_config.mcp_servers);
       }
@@ -524,16 +520,6 @@ export class AgentValidationService {
     }
   }
 
-  /**
-   * Validate plugins configuration
-   * @param plugins - Plugins configuration to validate
-   * @private
-   */
-  private validatePluginsConfig(plugins: string[]): void {
-    // Note: Plugins validation is not defined in the guards configuration
-    // This method is kept for future implementation
-  }
-
   // ============================================================================
   // PUBLIC VALIDATION METHODS - Individual section validation
   // ============================================================================
@@ -572,15 +558,6 @@ export class AgentValidationService {
    */
   public validateRAG(rag: any): void {
     this.validateRAGConfig(rag);
-  }
-
-  /**
-   * Validate only the plugins configuration section
-   * @param plugins - Plugins configuration to validate
-   * @public
-   */
-  public validatePlugins(plugins: string[]): void {
-    this.validatePluginsConfig(plugins);
   }
 
   /**
@@ -778,15 +755,6 @@ export function validateMemory(memory: any): void {
 export function validateRAG(rag: any): void {
   const validationService = new AgentValidationService();
   validationService.validateRAG(rag);
-}
-
-/**
- * Validate only the plugins configuration section
- * @param plugins - Plugins configuration to validate
- */
-export function validatePlugins(plugins: string[]): void {
-  const validationService = new AgentValidationService();
-  validationService.validatePlugins(plugins);
 }
 
 /**
